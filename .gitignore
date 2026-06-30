@@ -1,0 +1,31 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# Local configuration
+.env
+.env.*
+local.properties
+android/local.properties
+android/key.properties
+
+# Generated and local run output
+coverage/
+firebase-debug.log
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# IDE/OS noise
+.DS_Store
+._.DS_Store
+.idea/
+*.iml
+
+# Dependencies
+node_modules/
+
+.codex-run/
