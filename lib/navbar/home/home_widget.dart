@@ -253,6 +253,10 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         List<MotherRecord> homeMotherRecordList = snapshot.data!;
         final homeMotherRecord =
             homeMotherRecordList.isNotEmpty ? homeMotherRecordList.first : null;
+        final currentMotherRef = homeMotherRecord?.reference;
+        if (FFAppState().motherRef != currentMotherRef) {
+          FFAppState().motherRef = currentMotherRef;
+        }
 
         return GestureDetector(
           onTap: () {

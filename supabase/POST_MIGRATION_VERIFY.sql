@@ -49,6 +49,15 @@ where schemaname = 'public'
 order by tablename, policyname;
 
 select
+  policyname,
+  cmd,
+  with_check
+from pg_policies
+where schemaname = 'public'
+  and tablename = 'encounters'
+  and policyname = 'encounters_insert_patient_appointment';
+
+select
   proname as function_name
 from pg_proc
 join pg_namespace on pg_namespace.oid = pg_proc.pronamespace

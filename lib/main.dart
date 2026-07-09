@@ -98,6 +98,9 @@ class _MyAppState extends State<MyApp> {
     _userStreamSub = dawaMomSupabaseUserStream().listen(
       (user) {
         _authFallbackTimer?.cancel();
+        if (!user.loggedIn) {
+          FFAppState().motherRef = null;
+        }
         _appStateNotifier.update(user);
       },
       onError: (error) {

@@ -1,3 +1,4 @@
+import '/auth/supabase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/shimmer/shimmer_widget.dart';
 import '/flutter_flow/flutter_flow_calendar.dart';
@@ -13,6 +14,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'booking_bottom_sheet_model.dart';
 export 'booking_bottom_sheet_model.dart';
 
@@ -72,6 +74,46 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
           duration: const Duration(milliseconds: 3500),
         ),
       );
+  }
+
+  Future<DocumentReference?> _resolveCurrentMotherRef() async {
+    final userRef = currentUserReference;
+    if (userRef == null || currentUserUid.isEmpty) {
+      debugPrint('Appointment booking blocked: no authenticated user.');
+      FFAppState().motherRef = null;
+      return null;
+    }
+
+    final motherRecords = await queryMotherRecordOnce(
+      queryBuilder: (motherRecord) => motherRecord.where(
+        'user_Id',
+        isEqualTo: userRef,
+      ),
+      singleRecord: true,
+    );
+    final motherRef =
+        motherRecords.isNotEmpty ? motherRecords.first.reference : null;
+    FFAppState().motherRef = motherRef;
+
+    if (motherRef == null) {
+      debugPrint(
+        'Appointment booking blocked: no mother row found for user ${userRef.id}.',
+      );
+    }
+    return motherRef;
+  }
+
+  void _logBookingError(Object error, StackTrace stackTrace) {
+    if (error is PostgrestException) {
+      debugPrint(
+        'Supabase appointment booking failed: '
+        'message=${error.message}, code=${error.code}, '
+        'details=${error.details}, hint=${error.hint}',
+      );
+    } else {
+      debugPrint('Appointment booking failed: $error');
+    }
+    debugPrintStack(stackTrace: stackTrace);
   }
 
   Widget _timeSlotMessage(String message) {
@@ -950,139 +992,161 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                                               _model.dropDownValue2 != '') &&
                                           (_model.choiceChipsValue != null &&
                                               _model.choiceChipsValue != '')) {
-                                        // gets reference of doctor choosen by mother
-                                        _model.doctorRefFound =
-                                            await queryDoctorRecordOnce(
-                                          queryBuilder: (doctorRecord) =>
-                                              doctorRecord.where(
-                                            'id',
-                                            isEqualTo: _model.dropDownValue2,
-                                          ),
-                                          singleRecord: true,
-                                        ).then((s) => s.firstOrNull);
-                                        if (_model.doctorRefFound == null) {
-                                          _showSnackBar(
-                                              'Selected clinician could not be found. Please choose a clinician again.');
-                                          return;
-                                        }
-                                        _model.doctorBooked =
-                                            await queryEncounterRecordOnce(
-                                          queryBuilder: (encounterRecord) =>
-                                              encounterRecord
-                                                  .where(
-                                                    'doctor_id',
-                                                    isEqualTo: _model
-                                                        .doctorRefFound
-                                                        ?.reference,
-                                                  )
-                                                  .where(
-                                                    'date',
-                                                    isEqualTo: _model
-                                                        .calendarSelectedDay
-                                                        ?.start,
-                                                  )
-                                                  .where(
-                                                    'time',
-                                                    isEqualTo:
-                                                        _model.choiceChipsValue,
-                                                  )
-                                                  .where(
-                                                    'status',
-                                                    isNotEqualTo: 'completed',
-                                                  ),
-                                          singleRecord: true,
-                                        ).then((s) => s.firstOrNull);
-                                        _model.motherBooked =
-                                            await queryEncounterRecordOnce(
-                                          queryBuilder: (encounterRecord) =>
-                                              encounterRecord
-                                                  .where(
-                                                    'mother_id',
-                                                    isEqualTo:
-                                                        FFAppState().motherRef,
-                                                  )
-                                                  .where(
-                                                    'date',
-                                                    isEqualTo: _model
-                                                        .calendarSelectedDay
-                                                        ?.start,
-                                                  )
-                                                  .where(
-                                                    'time',
-                                                    isEqualTo:
-                                                        _model.choiceChipsValue,
-                                                  )
-                                                  .where(
-                                                    'status',
-                                                    isNotEqualTo: 'completed',
-                                                  ),
-                                          singleRecord: true,
-                                        ).then((s) => s.firstOrNull);
-                                        // checks to see if either mother or doctor already has an appointment at the time and date selected
-                                        if ((_model.doctorBooked != null) ||
-                                            (_model.motherBooked != null)) {
-                                          await showDialog(
-                                            context: context,
-                                            builder: (alertDialogContext) {
-                                              return AlertDialog(
-                                                title: Text('Unavailable slot'),
-                                                content: Text(
-                                                    'Either the clinician or you are booked at the time entered. Please select another time'),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () =>
-                                                        Navigator.pop(
-                                                            alertDialogContext),
-                                                    child: Text('Ok'),
-                                                  ),
-                                                ],
-                                              );
-                                            },
-                                          );
-                                        } else {
-                                          await EncounterRecord.collection
-                                              .doc()
-                                              .set(createEncounterRecordData(
-                                                doctorId: _model
-                                                    .doctorRefFound?.reference,
-                                                status: 'scheduled',
-                                                motherId:
-                                                    FFAppState().motherRef,
-                                                date: _model
-                                                    .calendarSelectedDay?.start,
-                                                time: _model.choiceChipsValue,
-                                              ));
-                                          Navigator.pop(context);
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'Appointment successfully scheduled',
-                                                style: TextStyle(
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .secondaryBackground,
-                                                ),
-                                              ),
-                                              duration:
-                                                  Duration(milliseconds: 4000),
-                                              backgroundColor:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondary,
-                                            ),
-                                          );
+                                        try {
+                                          final motherRef =
+                                              await _resolveCurrentMotherRef();
+                                          if (motherRef == null) {
+                                            _showSnackBar(
+                                                'We could not book your appointment. Please try again.');
+                                            return;
+                                          }
 
-                                          context.goNamed(
-                                            EncountersWidget.routeName,
-                                            extra: <String, dynamic>{
-                                              kTransitionInfoKey:
-                                                  TransitionInfo(
-                                                hasTransition: true,
-                                                transitionType:
-                                                    PageTransitionType.fade,
+                                          // gets reference of doctor choosen by mother
+                                          _model.doctorRefFound =
+                                              await queryDoctorRecordOnce(
+                                            queryBuilder: (doctorRecord) =>
+                                                doctorRecord.where(
+                                              'id',
+                                              isEqualTo: _model.dropDownValue2,
+                                            ),
+                                            singleRecord: true,
+                                          ).then((s) => s.firstOrNull);
+                                          if (_model.doctorRefFound == null) {
+                                            _showSnackBar(
+                                                'Selected clinician could not be found. Please choose a clinician again.');
+                                            return;
+                                          }
+                                          _model.doctorBooked =
+                                              await queryEncounterRecordOnce(
+                                            queryBuilder: (encounterRecord) =>
+                                                encounterRecord
+                                                    .where(
+                                                      'doctor_id',
+                                                      isEqualTo: _model
+                                                          .doctorRefFound
+                                                          ?.reference,
+                                                    )
+                                                    .where(
+                                                      'date',
+                                                      isEqualTo: _model
+                                                          .calendarSelectedDay
+                                                          ?.start,
+                                                    )
+                                                    .where(
+                                                      'time',
+                                                      isEqualTo: _model
+                                                          .choiceChipsValue,
+                                                    )
+                                                    .where(
+                                                      'status',
+                                                      isNotEqualTo: 'completed',
+                                                    ),
+                                            singleRecord: true,
+                                          ).then((s) => s.firstOrNull);
+                                          _model.motherBooked =
+                                              await queryEncounterRecordOnce(
+                                            queryBuilder: (encounterRecord) =>
+                                                encounterRecord
+                                                    .where(
+                                                      'mother_id',
+                                                      isEqualTo: motherRef,
+                                                    )
+                                                    .where(
+                                                      'date',
+                                                      isEqualTo: _model
+                                                          .calendarSelectedDay
+                                                          ?.start,
+                                                    )
+                                                    .where(
+                                                      'time',
+                                                      isEqualTo: _model
+                                                          .choiceChipsValue,
+                                                    )
+                                                    .where(
+                                                      'status',
+                                                      isNotEqualTo: 'completed',
+                                                    ),
+                                            singleRecord: true,
+                                          ).then((s) => s.firstOrNull);
+                                          // checks to see if either mother or doctor already has an appointment at the time and date selected
+                                          if ((_model.doctorBooked != null) ||
+                                              (_model.motherBooked != null)) {
+                                            await showDialog(
+                                              context: context,
+                                              builder: (alertDialogContext) {
+                                                return AlertDialog(
+                                                  title:
+                                                      Text('Unavailable slot'),
+                                                  content: Text(
+                                                      'Either the clinician or you are booked at the time entered. Please select another time'),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                              alertDialogContext),
+                                                      child: Text('Ok'),
+                                                    ),
+                                                  ],
+                                                );
+                                              },
+                                            );
+                                          } else {
+                                            await EncounterRecord.collection
+                                                .doc()
+                                                .set(createEncounterRecordData(
+                                                  doctorId: _model
+                                                      .doctorRefFound
+                                                      ?.reference,
+                                                  status: 'scheduled',
+                                                  motherId: motherRef,
+                                                  date: _model
+                                                      .calendarSelectedDay
+                                                      ?.start,
+                                                  time: _model.choiceChipsValue,
+                                                ));
+                                            if (!mounted) {
+                                              return;
+                                            }
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Appointment successfully scheduled',
+                                                  style: TextStyle(
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .secondaryBackground,
+                                                  ),
+                                                ),
+                                                duration: Duration(
+                                                    milliseconds: 4000),
+                                                backgroundColor:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondary,
                                               ),
-                                            },
-                                          );
+                                            );
+
+                                            context.goNamed(
+                                              EncountersWidget.routeName,
+                                              extra: <String, dynamic>{
+                                                kTransitionInfoKey:
+                                                    TransitionInfo(
+                                                  hasTransition: true,
+                                                  transitionType:
+                                                      PageTransitionType.fade,
+                                                ),
+                                              },
+                                            );
+                                          }
+                                        } on PostgrestException catch (error, stackTrace) {
+                                          _logBookingError(error, stackTrace);
+                                          _showSnackBar(
+                                              'We could not book your appointment. Please try again.');
+                                        } catch (error, stackTrace) {
+                                          _logBookingError(error, stackTrace);
+                                          _showSnackBar(
+                                              'We could not book your appointment. Please try again.');
                                         }
                                       } else {
                                         await showDialog(
