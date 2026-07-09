@@ -27,5 +27,3 @@ replay_pid*.log
 
 # Dependencies
 node_modules/
-
-.codex-run/

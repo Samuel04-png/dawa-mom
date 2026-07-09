@@ -641,10 +641,11 @@ class _RegisterWidgetState extends State<RegisterWidget> {
                                         }).eq('id', newUserId);
 
                                         await MotherRecord.collection
-                                            .doc()
+                                            .doc(newUserId)
                                             .set(createMotherRecordData(
                                               userId: UserRecord.collection
                                                   .doc(newUserId),
+                                              motherId: newUserId,
                                             ));
 
                                         context.pushNamedAuth(

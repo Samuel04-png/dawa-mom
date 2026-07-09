@@ -16,4 +16,5 @@ export '/navbar/appointments/appointment_details/appointment_details_widget.dart
 export '/auth/welcome/welcome_widget.dart' show WelcomeWidget;
 export '/auth/forgot_password/forgot_password_widget.dart'
     show ForgotPasswordWidget;
-export '/navbar/period_tracker/period_tracker_widget.dart' show PeriodTrackerWidget;    
+export '/navbar/period_tracker/period_tracker_widget.dart'
+    show PeriodTrackerWidget;

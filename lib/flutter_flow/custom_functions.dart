@@ -17,13 +17,15 @@ bool checkIfTimeIsBetween(
   String endTimeStr,
   String selectedTimeStr,
 ) {
-  // Parse the time strings into DateTime objects
-  DateTime startTime = DateTime.parse("2023-09-26T$startTimeStr");
-  DateTime endTime = DateTime.parse("2023-09-26T$endTimeStr");
-  DateTime checkTime = DateTime.parse("2023-09-26T$selectedTimeStr");
+  final startMinutes = _minutesFromTimeString(startTimeStr);
+  final endMinutes = _minutesFromTimeString(endTimeStr);
+  final selectedMinutes = _minutesFromTimeString(selectedTimeStr);
 
-  // Check if the checkTime is between startTime and endTime
-  return checkTime.isAfter(startTime) && checkTime.isBefore(endTime);
+  if (startMinutes == null || endMinutes == null || selectedMinutes == null) {
+    return false;
+  }
+
+  return selectedMinutes > startMinutes && selectedMinutes < endMinutes;
 }
 
 int calculateGestationalAgeInWeeks(DateTime lnmp) {
@@ -148,17 +150,25 @@ List<String> thirtyMinuteIntervals(
 ) {
   List<String> intervals = [];
 
-  int startHour = int.parse(startTime.split(":")[0]);
-  int startMinute = int.parse(startTime.split(":")[1]);
+  final parsedCurrentMinutes = _minutesFromTimeString(startTime);
+  final parsedEndMinutes = _minutesFromTimeString(endTime);
 
-  int endHour = int.parse(endTime.split(":")[0]);
-  int endMinute = int.parse(endTime.split(":")[1]);
+  if (parsedCurrentMinutes == null ||
+      parsedEndMinutes == null ||
+      parsedCurrentMinutes >= parsedEndMinutes) {
+    return intervals;
+  }
 
-  while (startHour < endHour ||
-      (startHour == endHour && startMinute < endMinute)) {
+  var currentMinutes = parsedCurrentMinutes;
+  final int endMinutes = parsedEndMinutes;
+
+  while (currentMinutes < endMinutes) {
+    final startHour = currentMinutes ~/ 60;
+    final startMinute = currentMinutes % 60;
+
     // Skip lunchtime
     if (startHour == 13 && startMinute == 0) {
-      startHour += 1;
+      currentMinutes += 60;
       continue;
     }
 
@@ -167,15 +177,47 @@ List<String> thirtyMinuteIntervals(
 
     intervals.add('$formattedHour:$formattedMinute');
 
-    if (startMinute == 30) {
-      startHour += 1;
-      startMinute = 0;
-    } else {
-      startMinute = 30;
-    }
+    currentMinutes += 30;
   }
 
   return intervals;
+}
+
+int? _minutesFromTimeString(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  final match =
+      RegExp(r'^(\d{1,2})(?::(\d{1,2}))?(?::\d{1,2})?\s*([aApP][mM])?$')
+          .firstMatch(trimmed);
+  if (match == null) {
+    return null;
+  }
+
+  var hour = int.tryParse(match.group(1) ?? '');
+  final minute = int.tryParse(match.group(2) ?? '0');
+  if (hour == null || minute == null || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  final meridiem = match.group(3)?.toLowerCase();
+  if (meridiem != null) {
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+    if (meridiem == 'pm' && hour != 12) {
+      hour += 12;
+    }
+    if (meridiem == 'am' && hour == 12) {
+      hour = 0;
+    }
+  } else if (hour < 0 || hour > 23) {
+    return null;
+  }
+
+  return hour * 60 + minute;
 }
 
 DocumentReference stringToRef(String docID) {

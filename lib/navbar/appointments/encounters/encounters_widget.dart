@@ -107,8 +107,7 @@ class _EncountersWidgetState extends State<EncountersWidget> {
                 return ListView.separated(
                   padding: EdgeInsets.zero,
                   itemCount: listViewEncounterRecordList.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: 10.0),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10.0),
                   itemBuilder: (context, listViewIndex) {
                     final encounter =
                         listViewEncounterRecordList[listViewIndex];
@@ -154,8 +153,7 @@ class _EncountersWidgetState extends State<EncountersWidget> {
                               key: Key(
                                 'Key_${encounter.reference.id}',
                               ),
-                              date: dateTimeFormat(
-                                  "MMMEd", encounter.date!),
+                              date: dateTimeFormat("MMMEd", encounter.date!),
                               time: encounter.time,
                               name: doctor.name,
                               status: encounter.status,

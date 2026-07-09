@@ -8,13 +8,20 @@ class CreateAccountModel extends FlutterFlowModel<CreateAccountWidget> {
 
   final formKey = GlobalKey<FormState>();
   DateTime? datePicked;
+  String? dateOfBirthError;
+  bool hasSubmitted = false;
+  bool isSaving = false;
   // State field(s) for TextField widget.
   FocusNode? textFieldFocusNode1;
   TextEditingController? textController1;
   String? Function(BuildContext, String?)? textController1Validator;
   String? _textController1Validator(BuildContext context, String? val) {
-    if (val == null || val.isEmpty) {
-      return 'Field is required';
+    final value = val?.trim() ?? '';
+    if (value.isEmpty) {
+      return 'Please enter your full name.';
+    }
+    if (value.length < 2 || !RegExp(r'[A-Za-z]').hasMatch(value)) {
+      return 'Please enter a valid name.';
     }
 
     return null;
@@ -25,12 +32,16 @@ class CreateAccountModel extends FlutterFlowModel<CreateAccountWidget> {
   TextEditingController? textController2;
   String? Function(BuildContext, String?)? textController2Validator;
   String? _textController2Validator(BuildContext context, String? val) {
-    if (val == null || val.isEmpty) {
-      return 'Field is required';
+    final value = val?.trim() ?? '';
+    if (value.isEmpty) {
+      return 'Please enter your mobile number.';
     }
 
-    if (val.length < 10) {
-      return 'Phone number must have a minimum of 10 characters';
+    final normalized = value.replaceAll(RegExp(r'[\s-]'), '');
+    final isLocalNumber = RegExp(r'^0\d{9}$').hasMatch(normalized);
+    final isInternationalNumber = RegExp(r'^\+260\d{9}$').hasMatch(normalized);
+    if (!isLocalNumber && !isInternationalNumber) {
+      return 'Enter a valid phone number, e.g. 0977123456.';
     }
 
     return null;
@@ -41,8 +52,12 @@ class CreateAccountModel extends FlutterFlowModel<CreateAccountWidget> {
   TextEditingController? textController3;
   String? Function(BuildContext, String?)? textController3Validator;
   String? _textController3Validator(BuildContext context, String? val) {
-    if (val == null || val.isEmpty) {
-      return 'Field is required';
+    final value = val?.trim() ?? '';
+    if (value.isEmpty) {
+      return 'Please enter your occupation.';
+    }
+    if (value.length < 2) {
+      return 'Please enter a valid occupation.';
     }
 
     return null;
@@ -53,8 +68,12 @@ class CreateAccountModel extends FlutterFlowModel<CreateAccountWidget> {
   TextEditingController? textController4;
   String? Function(BuildContext, String?)? textController4Validator;
   String? _textController4Validator(BuildContext context, String? val) {
-    if (val == null || val.isEmpty) {
-      return 'Field is required';
+    final value = val?.trim() ?? '';
+    if (value.isEmpty) {
+      return 'Please enter your address.';
+    }
+    if (value.length < 5) {
+      return 'Please enter a complete address.';
     }
 
     return null;

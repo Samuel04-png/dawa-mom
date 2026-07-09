@@ -183,8 +183,8 @@ class _LoginWidgetState extends State<LoginWidget> {
                       letterSpacing: 0.0,
                     ),
                 keyboardType: TextInputType.emailAddress,
-                validator:
-                    _model.emailAddressTextControllerValidator.asValidator(context),
+                validator: _model.emailAddressTextControllerValidator
+                    .asValidator(context),
               ),
             ),
 
@@ -241,7 +241,8 @@ class _LoginWidgetState extends State<LoginWidget> {
                   ),
                   suffixIcon: InkWell(
                     onTap: () => safeSetState(
-                      () => _model.passwordVisibility = !_model.passwordVisibility,
+                      () => _model.passwordVisibility =
+                          !_model.passwordVisibility,
                     ),
                     focusNode: FocusNode(skipTraversal: true),
                     child: Icon(
@@ -288,7 +289,8 @@ class _LoginWidgetState extends State<LoginWidget> {
                   width: double.infinity,
                   height: 50.0,
                   padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-                  iconPadding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                  iconPadding:
+                      EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
                   color: FlutterFlowTheme.of(context).primary,
                   textStyle: FlutterFlowTheme.of(context).titleSmall.override(
                         font: GoogleFonts.poppins(),
@@ -407,7 +409,8 @@ class _LoginWidgetState extends State<LoginWidget> {
                     ),
                     alignment: AlignmentDirectional(-1.0, 0.0),
                     child: Padding(
-                      padding: EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
+                      padding:
+                          EdgeInsetsDirectional.fromSTEB(20.0, 0.0, 0.0, 0.0),
                       child: Stack(
                         children: [
                           if (Theme.of(context).brightness == Brightness.light)
@@ -585,14 +588,12 @@ class _LoginWidgetState extends State<LoginWidget> {
                                                   .fontStyle,
                                         ),
                                         letterSpacing: 0.0,
-                                        fontWeight:
-                                            FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .fontWeight,
-                                        fontStyle:
-                                            FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .fontStyle,
+                                        fontWeight: FlutterFlowTheme.of(context)
+                                            .bodyMedium
+                                            .fontWeight,
+                                        fontStyle: FlutterFlowTheme.of(context)
+                                            .bodyMedium
+                                            .fontStyle,
                                       ),
                                   keyboardType: TextInputType.emailAddress,
                                   validator: _model
@@ -680,8 +681,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                                         () => _model.passwordVisibility =
                                             !_model.passwordVisibility,
                                       ),
-                                      focusNode:
-                                          FocusNode(skipTraversal: true),
+                                      focusNode: FocusNode(skipTraversal: true),
                                       child: Icon(
                                         _model.passwordVisibility
                                             ? Icons.visibility_outlined
@@ -706,14 +706,12 @@ class _LoginWidgetState extends State<LoginWidget> {
                                                   .fontStyle,
                                         ),
                                         letterSpacing: 0.0,
-                                        fontWeight:
-                                            FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .fontWeight,
-                                        fontStyle:
-                                            FlutterFlowTheme.of(context)
-                                                .bodyMedium
-                                                .fontStyle,
+                                        fontWeight: FlutterFlowTheme.of(context)
+                                            .bodyMedium
+                                            .fontWeight,
+                                        fontStyle: FlutterFlowTheme.of(context)
+                                            .bodyMedium
+                                            .fontStyle,
                                       ),
                                   validator: _model
                                       .passwordTextControllerValidator
@@ -752,8 +750,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                                       0.0, 0.0, 0.0, 0.0),
                                   iconPadding: EdgeInsetsDirectional.fromSTEB(
                                       0.0, 0.0, 0.0, 0.0),
-                                  color:
-                                      FlutterFlowTheme.of(context).primary,
+                                  color: FlutterFlowTheme.of(context).primary,
                                   textStyle: FlutterFlowTheme.of(context)
                                       .titleSmall
                                       .override(
@@ -796,12 +793,11 @@ class _LoginWidgetState extends State<LoginWidget> {
                                 hoverColor: Colors.transparent,
                                 highlightColor: Colors.transparent,
                                 onTap: () async {
-                                  context
-                                      .pushNamed(ForgotPasswordWidget.routeName);
+                                  context.pushNamed(
+                                      ForgotPasswordWidget.routeName);
                                 },
                                 child: RichText(
-                                  textScaler:
-                                      MediaQuery.of(context).textScaler,
+                                  textScaler: MediaQuery.of(context).textScaler,
                                   text: TextSpan(
                                     children: [
                                       TextSpan(
@@ -851,8 +847,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                                   context.pushNamed(RegisterWidget.routeName);
                                 },
                                 child: RichText(
-                                  textScaler:
-                                      MediaQuery.of(context).textScaler,
+                                  textScaler: MediaQuery.of(context).textScaler,
                                   text: TextSpan(
                                     children: [
                                       TextSpan(
@@ -871,8 +866,9 @@ class _LoginWidgetState extends State<LoginWidget> {
                                                         .bodyMedium
                                                         .fontStyle,
                                               ),
-                                              color: FlutterFlowTheme.of(context)
-                                                  .primary,
+                                              color:
+                                                  FlutterFlowTheme.of(context)
+                                                      .primary,
                                               letterSpacing: 0.0,
                                               fontWeight: FontWeight.w600,
                                               fontStyle:

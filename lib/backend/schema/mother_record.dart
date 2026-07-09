@@ -94,8 +94,6 @@ class MotherRecord extends FirestoreRecord {
   @override
   int get hashCode => reference.path.hashCode;
 
-  get email => null;
-
   get age => null;
 
   @override

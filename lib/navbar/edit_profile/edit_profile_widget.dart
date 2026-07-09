@@ -174,10 +174,10 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                                 },
                                 text: () {
                                   if ((dateTimeFormat(
-                                                  "yMMMd",
-                                                  editProfileMotherRecord
-                                                      .dateOfBirth) !=
-                                              '') &&
+                                              "yMMMd",
+                                              editProfileMotherRecord
+                                                  .dateOfBirth) !=
+                                          '') &&
                                       (_model.datePicked == null)) {
                                     return dateTimeFormat("yMMMd",
                                         editProfileMotherRecord.dateOfBirth!);
