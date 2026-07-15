@@ -70,6 +70,16 @@ Migration docs and SQL live in `supabase/`. Some migration files still use legac
 - `rudo-chat` Edge Function invocation and chat history persistence
 - RLS policies for patient, doctor, and admin roles
 
+Patient appointment requests are stored in `public.appointments`; `public.encounters` is retained for legacy and clinician-owned clinical observations. New Dawa Mom bookings use `status = pending`, `source = dawa_mom`, and owner-scoped RLS. Apply all migrations before testing booking:
+
+```powershell
+supabase db push --linked
+```
+
+The clinician selector uses the booking-safe `get_bookable_clinicians` RPC over Dawa Mom's imported cache rows. The optional authenticated `clinician-directory` Edge Function is the adapter for the future authoritative Dawa Clinician endpoint; see `docs/dawa-clinician-integration-contract.md`.
+
+After applying migrations, run `supabase/POST_MIGRATION_VERIFY.sql` and the transactional owner/non-owner/anonymous checks in `supabase/APPOINTMENTS_RLS_VERIFY.sql`.
+
 `rudo-chat` stores chat history in Supabase, calls the configured Rudo backend, and falls back to Gemini from the Edge Function when the configured/backend fallback returns demo greeting data. Set the secret before deploying:
 
 ```powershell

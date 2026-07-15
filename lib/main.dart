@@ -10,7 +10,12 @@ import 'auth/supabase_auth/supabase_user_provider.dart';
 import 'auth/supabase_auth/auth_util.dart';
 
 import 'backend/supabase/supabase_config.dart';
+import '/components/responsive/dawa_mom_responsive_shell.dart';
+import '/features/onboarding/app_walkthrough_service.dart';
+import '/features/onboarding/dawa_mom_walkthrough.dart';
+import '/features/settings/dawa_mom_settings_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
+import '/navbar/home/home_widget.dart' show AIChatModal;
 import 'flutter_flow/flutter_flow_util.dart';
 import 'index.dart';
 import 'dawa_splash_screen.dart';
@@ -193,92 +198,120 @@ class NavBarPage extends StatefulWidget {
   _NavBarPageState createState() => _NavBarPageState();
 }
 
-/// This is the private State class that goes with NavBarPage.
 class _NavBarPageState extends State<NavBarPage> {
-  String _currentPageName = 'Home';
-  late Widget? _currentPage;
+  static const _destinations = <DawaMomShellDestination>[
+    DawaMomShellDestination(
+      label: 'Home',
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home_rounded,
+    ),
+    DawaMomShellDestination(
+      label: 'Appointments',
+      icon: Icons.calendar_today_outlined,
+      selectedIcon: Icons.calendar_month_rounded,
+    ),
+    DawaMomShellDestination(
+      label: 'Period Tracker',
+      icon: Icons.water_drop_outlined,
+      selectedIcon: Icons.water_drop_rounded,
+    ),
+    DawaMomShellDestination(
+      label: 'Settings',
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings_rounded,
+    ),
+  ];
+
+  int _currentIndex = 0;
+  Widget? _overridePage;
+  bool _walkthroughChecked = false;
 
   @override
   void initState() {
     super.initState();
-    _currentPageName = widget.initialPage ?? _currentPageName;
-    _currentPage = widget.page;
+    _currentIndex = _indexForPage(widget.initialPage);
+    _overridePage = widget.page;
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _maybeShowWalkthrough());
+  }
+
+  Future<void> _maybeShowWalkthrough() async {
+    if (_walkthroughChecked) return;
+    _walkthroughChecked = true;
+    final shouldShow = await AppWalkthroughService().shouldShow();
+    if (shouldShow && mounted) await showDawaMomWalkthrough(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final tabs = {
-      'Home': HomeWidget(),
-      'Appointments':
-          EncountersWidget(), // Changed from 'Encounters' to match label
-      'PeriodTracker': PeriodTrackerWidget(), // Add PeriodTrackerWidget here
-    };
+    context.watch<FFAppState>();
+    final pages = <Widget>[
+      HomeWidget(),
+      EncountersWidget(),
+      PeriodTrackerWidget(),
+      const DawaMomSettingsPage(),
+    ];
+    final child = _overridePage ?? pages[_currentIndex];
 
-    // Map the current page name to the tabs keys
-    String pageKey = _currentPageName;
-    if (_currentPageName == 'Period Tracker') {
-      pageKey = 'PeriodTracker'; // Map the label to the key
+    return DawaMomResponsiveShell(
+      currentIndex: _currentIndex,
+      destinations: _destinations,
+      onDestinationSelected: (index) => safeSetState(() {
+        _overridePage = null;
+        _currentIndex = index;
+      }),
+      onLogout: _confirmAndLogout,
+      rudoChatBuilder: (rudoContext, rudoController) => AIChatModal(
+        userPhoneNumber: currentPhoneNumber,
+        userName: currentUserDisplayName.trim().isEmpty
+            ? 'Dawa Mom member'
+            : currentUserDisplayName.trim(),
+        onClose: rudoController.close,
+        onMinimize: rudoController.minimize,
+      ),
+      child: child,
+    );
+  }
+
+  static int _indexForPage(String? page) {
+    switch (page) {
+      case 'Appointments':
+      case 'Encounters':
+        return 1;
+      case 'PeriodTracker':
+      case 'Period Tracker':
+        return 2;
+      case 'Profile':
+      case 'Settings':
+        return 3;
+      default:
+        return 0;
     }
+  }
 
-    final currentIndex = tabs.keys.toList().indexOf(pageKey);
-
-    return Scaffold(
-      resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
-      body: _currentPage ?? tabs[pageKey],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (i) => safeSetState(() {
-          _currentPage = null;
-          final pageName = tabs.keys.toList()[i];
-          _currentPageName = pageName == 'PeriodTracker'
-              ? 'Period Tracker'
-              : pageName; // Store the label
-        }),
-        backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-        selectedItemColor: FlutterFlowTheme.of(context).primary,
-        unselectedItemColor: FlutterFlowTheme.of(context).secondaryText,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        items: <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.home_outlined,
-              size: 24.0,
-            ),
-            activeIcon: Icon(
-              Icons.home_rounded,
-              size: 24.0,
-            ),
-            label: 'Home',
-            tooltip: '',
+  Future<void> _confirmAndLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.calendar_today,
-              size: 24.0,
-            ),
-            activeIcon: Icon(
-              Icons.calendar_month,
-              size: 24.0,
-            ),
-            label: 'Appointments',
-            tooltip: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.water_drop_outlined,
-              size: 24.0,
-            ),
-            activeIcon: Icon(
-              Icons.water_drop,
-              size: 24.0,
-            ),
-            label: 'Period Tracker',
-            tooltip: '',
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Logout'),
           ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+    GoRouter.of(context).prepareAuthEvent();
+    await authManager.signOut();
+    if (!mounted) return;
+    GoRouter.of(context).clearRedirectLocation();
+    context.goNamedAuth(LoginWidget.routeName, context.mounted);
   }
 }

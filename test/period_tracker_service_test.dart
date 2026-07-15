@@ -31,5 +31,32 @@ void main() {
       expect(activity.single['protected'], isTrue);
       expect(activity.single['time'], DateTime(2026, 5, 4, 10, 30));
     });
+
+    test('validateSettings accepts supported cycle values', () {
+      expect(
+        () => PeriodTrackerService.validateSettings(
+          averageCycleLength: 28,
+          periodLength: 5,
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('validateSettings rejects database-invalid values before saving', () {
+      expect(
+        () => PeriodTrackerService.validateSettings(
+          averageCycleLength: 14,
+          periodLength: 5,
+        ),
+        throwsA(isA<PeriodTrackerException>()),
+      );
+      expect(
+        () => PeriodTrackerService.validateSettings(
+          averageCycleLength: 20,
+          periodLength: 20,
+        ),
+        throwsA(isA<PeriodTrackerException>()),
+      );
+    });
   });
 }

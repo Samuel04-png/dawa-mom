@@ -1,5 +1,6 @@
 import '/auth/supabase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/components/branding/dawa_mom_logo.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -94,32 +95,15 @@ class _RegisterWidgetState extends State<RegisterWidget> {
                           child: Padding(
                             padding: EdgeInsetsDirectional.fromSTEB(
                                 20.0, 0.0, 0.0, 0.0),
-                            child: Stack(
-                              children: [
-                                if (Theme.of(context).brightness ==
-                                    Brightness.light)
-                                  Align(
-                                    alignment: AlignmentDirectional(0.0, -1.0),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      child: Image.asset(
-                                        'assets/images/Logos-06.png',
-                                        width: 150.0,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  ),
-                                if (Theme.of(context).brightness ==
-                                    Brightness.dark)
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8.0),
-                                    child: Image.asset(
-                                      'assets/images/Group_1_dark.png',
-                                      width: 150.0,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                              ],
+                            child: const Align(
+                              alignment: AlignmentDirectional(0.0, -1.0),
+                              child: SizedBox(
+                                width: 180.0,
+                                child: DawaMomLogo(
+                                  variant: DawaMomLogoVariant.authentication,
+                                  size: 92.0,
+                                ),
+                              ),
                             ),
                           ),
                         ),

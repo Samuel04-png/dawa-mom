@@ -16,6 +16,7 @@ where n.nspname = 'public'
     'first_encounters',
     'parities',
     'encounters',
+    'appointments',
     'pregnancy_weeks',
     'period_tracker_settings',
     'period_tracker_entries',
@@ -31,9 +32,12 @@ select
   event_object_table
 from information_schema.triggers
 where trigger_name in (
-  'on_auth_user_created',
-  'prevent_profile_role_self_change',
-  'prevent_patient_clinical_encounter_write'
+    'on_auth_user_created',
+    'prevent_profile_role_self_change',
+    'prevent_patient_clinical_encounter_write',
+    'validate_appointment_relationships',
+    'guard_patient_appointment_update',
+    'set_appointments_updated_at'
 )
 order by trigger_name;
 
@@ -58,6 +62,16 @@ where schemaname = 'public'
   and policyname = 'encounters_insert_patient_appointment';
 
 select
+  policyname,
+  cmd,
+  qual,
+  with_check
+from pg_policies
+where schemaname = 'public'
+  and tablename = 'appointments'
+order by policyname;
+
+select
   proname as function_name
 from pg_proc
 join pg_namespace on pg_namespace.oid = pg_proc.pronamespace
@@ -68,6 +82,10 @@ where nspname = 'public'
     'is_admin',
     'doctor_assigned_to_mother',
     'owns_chat_session',
-    'prevent_patient_clinical_encounter_write'
+    'prevent_patient_clinical_encounter_write',
+    'validate_appointment_relationships',
+    'guard_patient_appointment_update',
+    'get_bookable_clinicians',
+    'get_clinician_booked_slots'
   )
 order by proname;

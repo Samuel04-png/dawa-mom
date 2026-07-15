@@ -1,22 +1,14 @@
-import '/auth/supabase_auth/auth_util.dart';
-import '/backend/backend.dart';
-import '/components/shimmer/shimmer_widget.dart';
-import '/flutter_flow/flutter_flow_calendar.dart';
-import '/flutter_flow/flutter_flow_choice_chips.dart';
-import '/flutter_flow/flutter_flow_drop_down.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/form_field_controller.dart';
-import '/flutter_flow/custom_functions.dart' as functions;
-import '/index.dart';
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
-import 'booking_bottom_sheet_model.dart';
+import 'package:intl/intl.dart';
+
+import '/features/appointments/data/appointment_repository.dart';
+import '/features/appointments/data/clinician_directory_repository.dart';
+import '/features/appointments/domain/appointment.dart';
+import '/flutter_flow/flutter_flow_theme.dart';
+
 export 'booking_bottom_sheet_model.dart';
+
+enum _BookingState { ready, loading, success, error }
 
 class BookingBottomSheetWidget extends StatefulWidget {
   const BookingBottomSheetWidget({super.key});
@@ -27,1205 +19,720 @@ class BookingBottomSheetWidget extends StatefulWidget {
 }
 
 class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
-  late BookingBottomSheetModel _model;
+  late final SupabaseClinicianDirectoryRepository _clinicianDirectory;
+  late final AppointmentRepository _appointments;
+  final _reasonController = TextEditingController();
 
-  @override
-  void setState(VoidCallback callback) {
-    super.setState(callback);
-    _model.onUpdate();
-  }
+  List<ClinicOption> _clinics = const [];
+  List<ClinicianProfile> _clinicians = const [];
+  List<AppointmentSlot> _slots = const [];
+  ClinicOption? _selectedClinic;
+  ClinicianProfile? _selectedClinician;
+  AppointmentSlot? _selectedSlot;
+  DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
+
+  bool _loadingDirectory = true;
+  bool _loadingClinicians = false;
+  bool _loadingSlots = false;
+  _BookingState _bookingState = _BookingState.ready;
+  String? _formError;
+  String? _clinicError;
+  String? _clinicianError;
+  String? _dateError;
+  String? _timeError;
 
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => BookingBottomSheetModel());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    _clinicianDirectory = SupabaseClinicianDirectoryRepository();
+    _appointments = AppointmentRepository(
+      clinicianDirectory: _clinicianDirectory,
+    );
+    _loadClinics();
   }
 
   @override
   void dispose() {
-    _model.maybeDispose();
-
+    _reasonController.dispose();
     super.dispose();
   }
 
-  bool _hasValue(String? value) => value != null && value.trim().isNotEmpty;
-
-  bool get _canBookAppointment =>
-      _model.calendarSelectedDay != null &&
-      _hasValue(_model.dropDownValue1) &&
-      _hasValue(_model.dropDownValue2) &&
-      _hasValue(_model.choiceChipsValue);
-
-  void _clearSelectedTime() {
-    _model.choiceChipsValue = null;
+  Future<void> _loadClinics() async {
+    try {
+      final clinics = await _appointments.getClinics();
+      if (!mounted) return;
+      setState(() {
+        _clinics = clinics;
+        _loadingDirectory = false;
+        if (clinics.isEmpty) {
+          _formError = 'No clinics are available for booking right now.';
+        }
+      });
+    } on AppointmentException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingDirectory = false;
+        _formError = error.message;
+        _bookingState = _BookingState.error;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingDirectory = false;
+        _formError = 'Clinics could not be loaded. Please try again.';
+        _bookingState = _BookingState.error;
+      });
+    }
   }
 
-  void _showSnackBar(String message) {
-    if (!mounted) {
-      return;
+  Future<void> _selectClinic(String? id) async {
+    final clinic = _clinics.where((item) => item.id == id).firstOrNull;
+    setState(() {
+      _selectedClinic = clinic;
+      _selectedClinician = null;
+      _selectedSlot = null;
+      _clinicians = const [];
+      _slots = const [];
+      _clinicError = null;
+      _clinicianError = null;
+      _timeError = null;
+      _formError = null;
+      _bookingState = _BookingState.ready;
+      _loadingClinicians = clinic != null;
+    });
+    if (clinic == null) return;
+
+    try {
+      final clinicians =
+          await _clinicianDirectory.getCliniciansByClinic(clinic.id);
+      if (!mounted || _selectedClinic?.id != clinic.id) return;
+      setState(() {
+        _clinicians = clinicians;
+        _loadingClinicians = false;
+        if (clinicians.isEmpty) {
+          _clinicianError =
+              'No bookable clinicians are available at this clinic.';
+        }
+      });
+    } catch (_) {
+      if (!mounted || _selectedClinic?.id != clinic.id) return;
+      setState(() {
+        _loadingClinicians = false;
+        _clinicianError =
+            'Clinicians could not be loaded. Choose the clinic again to retry.';
+      });
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(milliseconds: 3500),
-        ),
+  }
+
+  Future<void> _selectClinician(String? id) async {
+    final clinician = _clinicians.where((item) => item.id == id).firstOrNull;
+    setState(() {
+      _selectedClinician = clinician;
+      _selectedSlot = null;
+      _slots = const [];
+      _clinicianError = null;
+      _timeError = null;
+      _formError = null;
+      _bookingState = _BookingState.ready;
+    });
+    await _loadSlots();
+  }
+
+  Future<void> _selectDate(DateTime date) async {
+    setState(() {
+      _selectedDate = DateTime(date.year, date.month, date.day);
+      _selectedSlot = null;
+      _slots = const [];
+      _dateError = null;
+      _timeError = null;
+      _formError = null;
+      _bookingState = _BookingState.ready;
+    });
+    await _loadSlots();
+  }
+
+  Future<void> _loadSlots() async {
+    final clinician = _selectedClinician;
+    if (clinician == null) return;
+    setState(() => _loadingSlots = true);
+    try {
+      final slots = await _clinicianDirectory.getClinicianAvailability(
+        clinician.id,
+        _selectedDate,
       );
+      if (!mounted || _selectedClinician?.id != clinician.id) return;
+      setState(() {
+        _slots = slots;
+        _loadingSlots = false;
+        if (!slots.any((slot) => slot.isAvailable)) {
+          _timeError = 'No appointment times are available on this date.';
+        }
+      });
+    } on AppointmentException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingSlots = false;
+        _timeError = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingSlots = false;
+        _timeError = 'Appointment times could not be loaded. Please retry.';
+      });
+    }
   }
 
-  Future<DocumentReference?> _resolveCurrentMotherRef() async {
-    final userRef = currentUserReference;
-    if (userRef == null || currentUserUid.isEmpty) {
-      debugPrint('Appointment booking blocked: no authenticated user.');
-      FFAppState().motherRef = null;
-      return null;
-    }
+  bool _validate() {
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    setState(() {
+      _clinicError = _selectedClinic == null ? 'Please select a clinic.' : null;
+      _clinicianError =
+          _selectedClinician == null ? 'Please select a clinician.' : null;
+      _dateError = _selectedDate.isBefore(normalizedToday)
+          ? 'Please choose a date in the future.'
+          : null;
+      _timeError =
+          _selectedSlot == null ? 'Please choose an appointment time.' : null;
+      _formError = null;
+    });
+    return _clinicError == null &&
+        _clinicianError == null &&
+        _dateError == null &&
+        _timeError == null;
+  }
 
-    final motherRecords = await queryMotherRecordOnce(
-      queryBuilder: (motherRecord) => motherRecord.where(
-        'user_Id',
-        isEqualTo: userRef,
-      ),
-      singleRecord: true,
-    );
-    final motherRef =
-        motherRecords.isNotEmpty ? motherRecords.first.reference : null;
-    FFAppState().motherRef = motherRef;
+  Future<void> _book() async {
+    if (_bookingState == _BookingState.loading || !_validate()) return;
+    final clinic = _selectedClinic!;
+    final clinician = _selectedClinician!;
+    final slot = _selectedSlot!;
+    setState(() {
+      _bookingState = _BookingState.loading;
+      _formError = null;
+    });
 
-    if (motherRef == null) {
-      debugPrint(
-        'Appointment booking blocked: no mother row found for user ${userRef.id}.',
+    try {
+      final appointment = await _appointments.bookAppointment(
+        clinicId: clinic.id,
+        clinicianId: clinician.id,
+        date: _selectedDate,
+        slot: slot,
+        reason: _reasonController.text,
       );
+      if (!mounted) return;
+      setState(() => _bookingState = _BookingState.success);
+      await Future<void>.delayed(const Duration(milliseconds: 1300));
+      if (mounted) Navigator.of(context).pop(appointment);
+    } on AppointmentException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _bookingState = _BookingState.error;
+        _formError = error.message;
+      });
+      if (error.retryable) {
+        await _loadSlots();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _bookingState = _BookingState.error;
+        _formError = 'We could not book your appointment. Please try again.';
+      });
     }
-    return motherRef;
-  }
-
-  void _logBookingError(Object error, StackTrace stackTrace) {
-    if (error is PostgrestException) {
-      debugPrint(
-        'Supabase appointment booking failed: '
-        'message=${error.message}, code=${error.code}, '
-        'details=${error.details}, hint=${error.hint}',
-      );
-    } else {
-      debugPrint('Appointment booking failed: $error');
-    }
-    debugPrintStack(stackTrace: stackTrace);
-  }
-
-  Widget _timeSlotMessage(String message) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(16.0, 8.0, 16.0, 0.0),
-      child: Text(
-        message,
-        style: FlutterFlowTheme.of(context).bodyMedium.override(
-              font: GoogleFonts.poppins(),
-              color: FlutterFlowTheme.of(context).secondaryText,
-              letterSpacing: 0.0,
-            ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    context.watch<FFAppState>();
-    final canBookAppointment = _canBookAppointment;
-    final mediaQuery = MediaQuery.of(context);
-    final screenSize = mediaQuery.size;
-    final isCompactSheet = screenSize.width < 600;
-    final sheetMaxWidth = isCompactSheet ? screenSize.width : 780.0;
-    final sheetMaxHeight = screenSize.height * (isCompactSheet ? 0.94 : 0.88);
-    final topRadius = isCompactSheet ? 20.0 : 24.0;
-    final headerHeight = isCompactSheet ? 60.0 : 68.0;
-    final horizontalGutter = isCompactSheet ? 16.0 : 24.0;
+    final theme = FlutterFlowTheme.of(context);
+    final media = MediaQuery.of(context);
+    final compact = media.size.width < 700;
+    final bottomPadding = media.viewInsets.bottom;
 
     return Align(
-      alignment: AlignmentDirectional.bottomCenter,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: sheetMaxWidth),
+      alignment: compact ? Alignment.bottomCenter : Alignment.center,
+      child: Material(
+        color: Colors.transparent,
         child: Container(
+          width: compact ? double.infinity : 720,
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.92),
+          margin: compact ? EdgeInsets.zero : const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: FlutterFlowTheme.of(context).secondaryBackground,
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(0.0),
-              bottomRight: Radius.circular(0.0),
-              topLeft: Radius.circular(topRadius),
-              topRight: Radius.circular(topRadius),
+            color: theme.secondaryBackground,
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(22),
+              bottom: compact ? Radius.zero : const Radius.circular(22),
             ),
-          ),
-          child: SafeArea(
-            top: false,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: sheetMaxHeight,
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 30,
+                offset: Offset(0, 12),
+                color: Color(0x33000000),
               ),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      height: headerHeight,
-                      decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).primary,
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(0.0),
-                          bottomRight: Radius.circular(0.0),
-                          topLeft: Radius.circular(topRadius),
-                          topRight: Radius.circular(topRadius),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _Header(
+                isSubmitting: _bookingState == _BookingState.loading,
+                onClose: () => Navigator.of(context).maybePop(),
+              ),
+              Flexible(
+                child: _loadingDirectory
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(48),
+                          child: CircularProgressIndicator(),
                         ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(
-                            horizontalGutter, 0.0, 8.0, 0.0),
-                        child: Row(
+                      )
+                    : SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          compact ? 16 : 28,
+                          22,
+                          compact ? 16 : 28,
+                          20 + bottomPadding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                'Book an appointment',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: FlutterFlowTheme.of(context)
-                                    .headlineMedium
-                                    .override(
-                                      font: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w600,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .headlineMedium
-                                            .fontStyle,
-                                      ),
-                                      color: FlutterFlowTheme.of(context)
-                                          .secondaryBackground,
-                                      fontSize: isCompactSheet ? 18.0 : 22.0,
-                                      letterSpacing: 0.0,
-                                      fontWeight: FontWeight.w600,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .headlineMedium
-                                          .fontStyle,
-                                    ),
+                            Text(
+                              'Choose a date, clinic, clinician and available time.',
+                              style: theme.bodyMedium.copyWith(
+                                color: theme.secondaryText,
                               ),
                             ),
-                            IconButton(
-                              tooltip: 'Close',
-                              onPressed: () => Navigator.pop(context),
-                              icon: Icon(
-                                Icons.close_rounded,
-                                color: FlutterFlowTheme.of(context)
-                                    .secondaryBackground,
-                                size: 22.0,
+                            const SizedBox(height: 20),
+                            _DateSection(
+                              selectedDate: _selectedDate,
+                              errorText: _dateError,
+                              onSelected: _selectDate,
+                            ),
+                            const SizedBox(height: 18),
+                            DropdownButtonFormField<String>(
+                              key: ValueKey('clinic-${_selectedClinic?.id}'),
+                              initialValue: _selectedClinic?.id,
+                              isExpanded: true,
+                              decoration: _inputDecoration(
+                                context,
+                                label: 'Clinic',
+                                errorText: _clinicError,
+                              ),
+                              hint: const Text('Select a clinic'),
+                              items: _clinics
+                                  .map(
+                                    (clinic) => DropdownMenuItem(
+                                      value: clinic.id,
+                                      child: Text(
+                                        clinic.name,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _bookingState == _BookingState.loading
+                                  ? null
+                                  : _selectClinic,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              key: ValueKey(
+                                'clinician-${_selectedClinic?.id}-${_selectedClinician?.id}',
+                              ),
+                              initialValue: _selectedClinician?.id,
+                              isExpanded: true,
+                              decoration: _inputDecoration(
+                                context,
+                                label: 'Clinician',
+                                errorText: _clinicianError,
+                                suffix: _loadingClinicians
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(13),
+                                        child: SizedBox.square(
+                                          dimension: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              hint: Text(
+                                _selectedClinic == null
+                                    ? 'Select a clinic first'
+                                    : 'Select a clinician',
+                              ),
+                              items: _clinicians
+                                  .map(
+                                    (clinician) => DropdownMenuItem(
+                                      value: clinician.id,
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            clinician.displayName,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (clinician.subtitle.isNotEmpty)
+                                            Text(
+                                              clinician.subtitle,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.bodySmall.copyWith(
+                                                color: theme.secondaryText,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _selectedClinic == null ||
+                                      _loadingClinicians ||
+                                      _bookingState == _BookingState.loading
+                                  ? null
+                                  : _selectClinician,
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Available times',
+                              style: theme.titleSmall.copyWith(
+                                color: theme.primaryText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            if (_loadingSlots)
+                              const LinearProgressIndicator(minHeight: 3)
+                            else if (_selectedClinician == null)
+                              Text(
+                                'Select a clinician to view appointment times.',
+                                style: theme.bodySmall.copyWith(
+                                  color: theme.secondaryText,
+                                ),
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _slots
+                                    .where((slot) => slot.isAvailable)
+                                    .map(
+                                      (slot) => ChoiceChip(
+                                        label:
+                                            Text(_displayTime(slot.startTime)),
+                                        selected: _selectedSlot?.startTime ==
+                                            slot.startTime,
+                                        onSelected: (selected) {
+                                          setState(() {
+                                            _selectedSlot =
+                                                selected ? slot : null;
+                                            _timeError = null;
+                                            _formError = null;
+                                            _bookingState = _BookingState.ready;
+                                          });
+                                        },
+                                        selectedColor: theme.primary
+                                            .withValues(alpha: 0.15),
+                                        checkmarkColor: theme.primary,
+                                        labelStyle: TextStyle(
+                                          color: _selectedSlot?.startTime ==
+                                                  slot.startTime
+                                              ? theme.primary
+                                              : theme.primaryText,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        side: BorderSide(
+                                          color: _selectedSlot?.startTime ==
+                                                  slot.startTime
+                                              ? theme.primary
+                                              : theme.alternate,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            if (_timeError != null) ...[
+                              const SizedBox(height: 8),
+                              _FieldError(_timeError!),
+                            ],
+                            const SizedBox(height: 18),
+                            TextField(
+                              controller: _reasonController,
+                              enabled: _bookingState != _BookingState.loading,
+                              maxLength: 500,
+                              maxLines: 3,
+                              decoration: _inputDecoration(
+                                context,
+                                label: 'Reason for appointment (optional)',
+                              ).copyWith(
+                                hintText:
+                                    'Share a short reason to help the care team prepare.',
+                              ),
+                            ),
+                            if (_formError != null) ...[
+                              const SizedBox(height: 8),
+                              _StatusBanner(
+                                message: _formError!,
+                                isSuccess: false,
+                              ),
+                            ],
+                            if (_bookingState == _BookingState.success) ...[
+                              const SizedBox(height: 8),
+                              const _StatusBanner(
+                                message: 'Appointment booked successfully',
+                                isSuccess: true,
+                              ),
+                            ],
+                            const SizedBox(height: 18),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: _canSubmit ? _book : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: theme.primary,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: theme.alternate,
+                                  disabledForegroundColor: theme.secondaryText,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: _buildButtonContent(),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, isCompactSheet ? 14.0 : 20.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          0.0, 0.0, 0.0, 5.0),
-                                      child: Text(
-                                        'Select Date: ${valueOrDefault<String>(
-                                          dateTimeFormat(
-                                              "EEEE",
-                                              _model
-                                                  .calendarSelectedDay?.start),
-                                          'date',
-                                        )}',
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.w500,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontStyle,
-                                              ),
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                      ),
-                                    ),
-                                    FlutterFlowCalendar(
-                                      color:
-                                          FlutterFlowTheme.of(context).primary,
-                                      iconColor: FlutterFlowTheme.of(context)
-                                          .secondaryText,
-                                      weekFormat: true,
-                                      weekStartsMonday: true,
-                                      rowHeight: isCompactSheet ? 54.0 : 64.0,
-                                      onChange:
-                                          (DateTimeRange? newSelectedDate) {
-                                        safeSetState(() {
-                                          _model.calendarSelectedDay =
-                                              newSelectedDate;
-                                          _clearSelectedTime();
-                                        });
-                                      },
-                                      titleStyle: FlutterFlowTheme.of(context)
-                                          .headlineSmall
-                                          .override(
-                                            font: GoogleFonts.poppins(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .headlineSmall
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .headlineSmall
-                                                      .fontStyle,
-                                            ),
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .headlineSmall
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .headlineSmall
-                                                    .fontStyle,
-                                          ),
-                                      dayOfWeekStyle: FlutterFlowTheme.of(
-                                              context)
-                                          .labelLarge
-                                          .override(
-                                            font: GoogleFonts.poppins(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelLarge
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelLarge
-                                                      .fontStyle,
-                                            ),
-                                            fontSize: 14.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelLarge
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelLarge
-                                                    .fontStyle,
-                                          ),
-                                      dateStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.poppins(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
-                                          ),
-                                      selectedDateStyle: FlutterFlowTheme.of(
-                                              context)
-                                          .titleSmall
-                                          .override(
-                                            font: GoogleFonts.poppins(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .fontStyle,
-                                            ),
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .titleSmall
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .titleSmall
-                                                    .fontStyle,
-                                          ),
-                                      inactiveDateStyle: FlutterFlowTheme.of(
-                                              context)
-                                          .labelMedium
-                                          .override(
-                                            font: GoogleFonts.poppins(
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .labelMedium
-                                                      .fontStyle,
-                                            ),
-                                            letterSpacing: 0.0,
-                                            fontWeight:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontWeight,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .labelMedium
-                                                    .fontStyle,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ]
-                                .addToStart(SizedBox(width: horizontalGutter))
-                                .addToEnd(SizedBox(width: horizontalGutter)),
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 16.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          16.0, 0.0, 16.0, 5.0),
-                                      child: Text(
-                                        'Select Clinic',
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.w500,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontStyle,
-                                              ),
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                      ),
-                                    ),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.max,
-                                      children: [
-                                        Expanded(
-                                          child:
-                                              StreamBuilder<List<ClinicRecord>>(
-                                            stream: queryClinicRecord(),
-                                            builder: (context, snapshot) {
-                                              // Customize what your widget looks like when it's loading.
-                                              if (!snapshot.hasData) {
-                                                return Container(
-                                                  height: 30.0,
-                                                  child: ShimmerWidget(),
-                                                );
-                                              }
-                                              List<ClinicRecord>
-                                                  dropDownClinicRecordList =
-                                                  snapshot.data!;
-
-                                              return FlutterFlowDropDown<
-                                                  String>(
-                                                controller: _model
-                                                        .dropDownValueController1 ??=
-                                                    FormFieldController<String>(
-                                                        null),
-                                                options:
-                                                    dropDownClinicRecordList
-                                                        .map((e) => e.name)
-                                                        .toList(),
-                                                onChanged: (val) =>
-                                                    safeSetState(() {
-                                                  _model.dropDownValue1 = val;
-                                                  _model.dropDownValue2 = null;
-                                                  _model
-                                                      .dropDownValueController2
-                                                      ?.value = null;
-                                                  _clearSelectedTime();
-                                                }),
-                                                width: 300.0,
-                                                height: 50.0,
-                                                textStyle: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.poppins(
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                hintText: 'Please select...',
-                                                icon: Icon(
-                                                  Icons
-                                                      .keyboard_arrow_down_rounded,
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .secondaryText,
-                                                  size: 24.0,
-                                                ),
-                                                fillColor:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondaryBackground,
-                                                elevation: 2.0,
-                                                borderColor:
-                                                    FlutterFlowTheme.of(context)
-                                                        .alternate,
-                                                borderWidth: 1.0,
-                                                borderRadius: 8.0,
-                                                margin: EdgeInsetsDirectional
-                                                    .fromSTEB(
-                                                        16.0, 4.0, 16.0, 4.0),
-                                                hidesUnderline: true,
-                                                isSearchable: false,
-                                                isMultiSelect: false,
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ]
-                                          .addToStart(
-                                              SizedBox(width: horizontalGutter))
-                                          .addToEnd(SizedBox(
-                                              width: horizontalGutter)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 16.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          16.0, 0.0, 16.0, 5.0),
-                                      child: Text(
-                                        'Select Clinician',
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.w500,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontStyle,
-                                              ),
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                      ),
-                                    ),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.max,
-                                      children: [
-                                        Expanded(
-                                          child:
-                                              StreamBuilder<List<DoctorRecord>>(
-                                            stream: queryDoctorRecord(
-                                              queryBuilder: (doctorRecord) =>
-                                                  doctorRecord.where(
-                                                'clinic_name',
-                                                isEqualTo:
-                                                    _model.dropDownValue1,
-                                              ),
-                                            ),
-                                            builder: (context, snapshot) {
-                                              // Customize what your widget looks like when it's loading.
-                                              if (!snapshot.hasData) {
-                                                return Container(
-                                                  height: 20.0,
-                                                  child: ShimmerWidget(),
-                                                );
-                                              }
-                                              List<DoctorRecord>
-                                                  dropDownDoctorRecordList =
-                                                  snapshot.data!;
-
-                                              return FlutterFlowDropDown<
-                                                  String>(
-                                                controller: _model
-                                                        .dropDownValueController2 ??=
-                                                    FormFieldController<String>(
-                                                        null),
-                                                options: List<String>.from(
-                                                    dropDownDoctorRecordList
-                                                        .map((e) =>
-                                                            e.reference.id)
-                                                        .toList()),
-                                                optionLabels:
-                                                    dropDownDoctorRecordList
-                                                        .map((e) => e.name)
-                                                        .toList(),
-                                                onChanged: (val) =>
-                                                    safeSetState(() {
-                                                  _model.dropDownValue2 = val;
-                                                  _clearSelectedTime();
-                                                }),
-                                                width: 300.0,
-                                                height: 50.0,
-                                                textStyle: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.poppins(
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                hintText: 'Please select...',
-                                                icon: Icon(
-                                                  Icons
-                                                      .keyboard_arrow_down_rounded,
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .secondaryText,
-                                                  size: 24.0,
-                                                ),
-                                                fillColor:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondaryBackground,
-                                                elevation: 2.0,
-                                                borderColor:
-                                                    FlutterFlowTheme.of(context)
-                                                        .alternate,
-                                                borderWidth: 1.0,
-                                                borderRadius: 8.0,
-                                                margin: EdgeInsetsDirectional
-                                                    .fromSTEB(
-                                                        16.0, 4.0, 16.0, 4.0),
-                                                hidesUnderline: true,
-                                                isSearchable: false,
-                                                isMultiSelect: false,
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ]
-                                          .addToStart(
-                                              SizedBox(width: horizontalGutter))
-                                          .addToEnd(SizedBox(
-                                              width: horizontalGutter)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                              0.0, 16.0, 0.0, 0.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          16.0, 0.0, 16.0, 5.0),
-                                      child: Text(
-                                        'Select Time',
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .override(
-                                              font: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.w500,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodyMedium
-                                                        .fontStyle,
-                                              ),
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                      ),
-                                    ),
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        children: [
-                                          if (!_hasValue(
-                                                  _model.dropDownValue1) ||
-                                              !_hasValue(_model.dropDownValue2))
-                                            _timeSlotMessage(
-                                                'Select a clinic and clinician to see available times.')
-                                          else
-                                            StreamBuilder<List<DoctorRecord>>(
-                                              stream: queryDoctorRecord(
-                                                queryBuilder: (doctorRecord) =>
-                                                    doctorRecord.where(
-                                                  'id',
-                                                  isEqualTo:
-                                                      _model.dropDownValue2,
-                                                ),
-                                                singleRecord: true,
-                                              ),
-                                              builder: (context, snapshot) {
-                                                // Customize what your widget looks like when it's loading.
-                                                if (!snapshot.hasData) {
-                                                  return Container(
-                                                    height: 20.0,
-                                                    child: ShimmerWidget(),
-                                                  );
-                                                }
-                                                List<DoctorRecord>
-                                                    containerDoctorRecordList =
-                                                    snapshot.data!;
-                                                if (containerDoctorRecordList
-                                                    .isEmpty) {
-                                                  return _timeSlotMessage(
-                                                      'No available times for this clinic/clinician/date');
-                                                }
-                                                final containerDoctorRecord =
-                                                    containerDoctorRecordList
-                                                        .first;
-                                                final timeSlots = functions
-                                                    .thirtyMinuteIntervals(
-                                                  containerDoctorRecord
-                                                      .startTime,
-                                                  containerDoctorRecord.endTime,
-                                                );
-
-                                                if (timeSlots.isEmpty) {
-                                                  return _timeSlotMessage(
-                                                      'No available times for this clinic/clinician/date');
-                                                }
-
-                                                return Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    FlutterFlowChoiceChips(
-                                                      options: timeSlots
-                                                          .map((label) =>
-                                                              ChipData(label))
-                                                          .toList(),
-                                                      onChanged: (val) =>
-                                                          safeSetState(() => _model
-                                                                  .choiceChipsValue =
-                                                              val?.firstOrNull),
-                                                      selectedChipStyle:
-                                                          ChipStyle(
-                                                        backgroundColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        textStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .poppins(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryBackground,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontStyle,
-                                                                ),
-                                                        iconColor: FlutterFlowTheme
-                                                                .of(context)
-                                                            .secondaryBackground,
-                                                        iconSize: 18.0,
-                                                        elevation: 0.0,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(16.0),
-                                                      ),
-                                                      unselectedChipStyle:
-                                                          ChipStyle(
-                                                        backgroundColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .alternate,
-                                                        textStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .poppins(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyMedium
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryText,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium
-                                                                      .fontStyle,
-                                                                ),
-                                                        iconColor:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .secondaryText,
-                                                        iconSize: 18.0,
-                                                        elevation: 0.0,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(16.0),
-                                                      ),
-                                                      chipSpacing: 12.0,
-                                                      rowSpacing: 12.0,
-                                                      multiselect: false,
-                                                      alignment:
-                                                          WrapAlignment.start,
-                                                      controller: _model
-                                                              .choiceChipsValueController ??=
-                                                          FormFieldController<
-                                                              List<String>>(
-                                                        [],
-                                                      ),
-                                                      wrapped: false,
-                                                    ),
-                                                    if (_hasValue(_model
-                                                        .choiceChipsValue))
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsetsDirectional
-                                                                .fromSTEB(0.0,
-                                                                8.0, 0.0, 0.0),
-                                                        child: Text(
-                                                          'Selected time: ${_model.choiceChipsValue}',
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .bodySmall
-                                                              .override(
-                                                                font: GoogleFonts
-                                                                    .poppins(),
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .primary,
-                                                                letterSpacing:
-                                                                    0.0,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                  ],
-                                                );
-                                              },
-                                            ),
-                                        ]
-                                            .addToStart(SizedBox(
-                                                width: horizontalGutter))
-                                            .addToEnd(SizedBox(
-                                                width: horizontalGutter)),
-                                      ),
-                                    ),
-                                    Container(
-                                      decoration: BoxDecoration(),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Padding(
-                      padding:
-                          EdgeInsetsDirectional.fromSTEB(0.0, 16.0, 0.0, 16.0),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Expanded(
-                            child: FFButtonWidget(
-                              onPressed: canBookAppointment
-                                  ? () async {
-                                      // checks to make sure all fields have been set or have a value
-                                      if ((_model.calendarSelectedDay !=
-                                              null) &&
-                                          (_model.dropDownValue1 != null &&
-                                              _model.dropDownValue1 != '') &&
-                                          (_model.dropDownValue2 != null &&
-                                              _model.dropDownValue2 != '') &&
-                                          (_model.choiceChipsValue != null &&
-                                              _model.choiceChipsValue != '')) {
-                                        try {
-                                          final motherRef =
-                                              await _resolveCurrentMotherRef();
-                                          if (motherRef == null) {
-                                            _showSnackBar(
-                                                'We could not book your appointment. Please try again.');
-                                            return;
-                                          }
-
-                                          // gets reference of doctor choosen by mother
-                                          _model.doctorRefFound =
-                                              await queryDoctorRecordOnce(
-                                            queryBuilder: (doctorRecord) =>
-                                                doctorRecord.where(
-                                              'id',
-                                              isEqualTo: _model.dropDownValue2,
-                                            ),
-                                            singleRecord: true,
-                                          ).then((s) => s.firstOrNull);
-                                          if (_model.doctorRefFound == null) {
-                                            _showSnackBar(
-                                                'Selected clinician could not be found. Please choose a clinician again.');
-                                            return;
-                                          }
-                                          _model.doctorBooked =
-                                              await queryEncounterRecordOnce(
-                                            queryBuilder: (encounterRecord) =>
-                                                encounterRecord
-                                                    .where(
-                                                      'doctor_id',
-                                                      isEqualTo: _model
-                                                          .doctorRefFound
-                                                          ?.reference,
-                                                    )
-                                                    .where(
-                                                      'date',
-                                                      isEqualTo: _model
-                                                          .calendarSelectedDay
-                                                          ?.start,
-                                                    )
-                                                    .where(
-                                                      'time',
-                                                      isEqualTo: _model
-                                                          .choiceChipsValue,
-                                                    )
-                                                    .where(
-                                                      'status',
-                                                      isNotEqualTo: 'completed',
-                                                    ),
-                                            singleRecord: true,
-                                          ).then((s) => s.firstOrNull);
-                                          _model.motherBooked =
-                                              await queryEncounterRecordOnce(
-                                            queryBuilder: (encounterRecord) =>
-                                                encounterRecord
-                                                    .where(
-                                                      'mother_id',
-                                                      isEqualTo: motherRef,
-                                                    )
-                                                    .where(
-                                                      'date',
-                                                      isEqualTo: _model
-                                                          .calendarSelectedDay
-                                                          ?.start,
-                                                    )
-                                                    .where(
-                                                      'time',
-                                                      isEqualTo: _model
-                                                          .choiceChipsValue,
-                                                    )
-                                                    .where(
-                                                      'status',
-                                                      isNotEqualTo: 'completed',
-                                                    ),
-                                            singleRecord: true,
-                                          ).then((s) => s.firstOrNull);
-                                          // checks to see if either mother or doctor already has an appointment at the time and date selected
-                                          if ((_model.doctorBooked != null) ||
-                                              (_model.motherBooked != null)) {
-                                            await showDialog(
-                                              context: context,
-                                              builder: (alertDialogContext) {
-                                                return AlertDialog(
-                                                  title:
-                                                      Text('Unavailable slot'),
-                                                  content: Text(
-                                                      'Either the clinician or you are booked at the time entered. Please select another time'),
-                                                  actions: [
-                                                    TextButton(
-                                                      onPressed: () =>
-                                                          Navigator.pop(
-                                                              alertDialogContext),
-                                                      child: Text('Ok'),
-                                                    ),
-                                                  ],
-                                                );
-                                              },
-                                            );
-                                          } else {
-                                            await EncounterRecord.collection
-                                                .doc()
-                                                .set(createEncounterRecordData(
-                                                  doctorId: _model
-                                                      .doctorRefFound
-                                                      ?.reference,
-                                                  status: 'scheduled',
-                                                  motherId: motherRef,
-                                                  date: _model
-                                                      .calendarSelectedDay
-                                                      ?.start,
-                                                  time: _model.choiceChipsValue,
-                                                ));
-                                            if (!mounted) {
-                                              return;
-                                            }
-                                            Navigator.pop(context);
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Appointment successfully scheduled',
-                                                  style: TextStyle(
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .secondaryBackground,
-                                                  ),
-                                                ),
-                                                duration: Duration(
-                                                    milliseconds: 4000),
-                                                backgroundColor:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondary,
-                                              ),
-                                            );
-
-                                            context.goNamed(
-                                              EncountersWidget.routeName,
-                                              extra: <String, dynamic>{
-                                                kTransitionInfoKey:
-                                                    TransitionInfo(
-                                                  hasTransition: true,
-                                                  transitionType:
-                                                      PageTransitionType.fade,
-                                                ),
-                                              },
-                                            );
-                                          }
-                                        } on PostgrestException catch (error, stackTrace) {
-                                          _logBookingError(error, stackTrace);
-                                          _showSnackBar(
-                                              'We could not book your appointment. Please try again.');
-                                        } catch (error, stackTrace) {
-                                          _logBookingError(error, stackTrace);
-                                          _showSnackBar(
-                                              'We could not book your appointment. Please try again.');
-                                        }
-                                      } else {
-                                        await showDialog(
-                                          context: context,
-                                          builder: (alertDialogContext) {
-                                            return AlertDialog(
-                                              title: Text('Incomplete fields'),
-                                              content: Text(
-                                                  'Kindly ensure that you have selected a date, clinic, clinician and time before booking an appointment'),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(
-                                                          alertDialogContext),
-                                                  child: Text('Ok'),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        );
-                                      }
-
-                                      safeSetState(() {});
-                                    }
-                                  : null,
-                              text: 'Book Appointment',
-                              options: FFButtonOptions(
-                                height: isCompactSheet ? 44.0 : 48.0,
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    24.0, 0.0, 24.0, 0.0),
-                                iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 0.0, 0.0, 0.0),
-                                color: FlutterFlowTheme.of(context).primary,
-                                disabledColor:
-                                    FlutterFlowTheme.of(context).alternate,
-                                disabledTextColor:
-                                    FlutterFlowTheme.of(context).secondaryText,
-                                textStyle: FlutterFlowTheme.of(context)
-                                    .titleSmall
-                                    .override(
-                                      font: GoogleFonts.poppins(
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .titleSmall
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .titleSmall
-                                            .fontStyle,
-                                      ),
-                                      color: FlutterFlowTheme.of(context)
-                                          .secondaryBackground,
-                                      letterSpacing: 0.0,
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontStyle,
-                                    ),
-                                elevation: 0.0,
-                                borderSide: BorderSide(
-                                  color: Colors.transparent,
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                            ),
-                          ),
-                        ]
-                            .divide(SizedBox(width: horizontalGutter))
-                            .around(SizedBox(width: horizontalGutter)),
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  bool get _canSubmit =>
+      _bookingState != _BookingState.loading &&
+      _bookingState != _BookingState.success &&
+      !_loadingDirectory &&
+      _clinics.isNotEmpty;
+
+  Widget _buildButtonContent() {
+    switch (_bookingState) {
+      case _BookingState.loading:
+        return const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 10),
+            Text('Booking appointment…'),
+          ],
+        );
+      case _BookingState.success:
+        return const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_outline),
+            SizedBox(width: 8),
+            Text('Appointment booked'),
+          ],
+        );
+      case _BookingState.error:
+        return const Text('Retry booking');
+      case _BookingState.ready:
+        return const Text('Book Appointment');
+    }
+  }
+
+  static InputDecoration _inputDecoration(
+    BuildContext context, {
+    required String label,
+    String? errorText,
+    Widget? suffix,
+  }) {
+    final theme = FlutterFlowTheme.of(context);
+    return InputDecoration(
+      labelText: label,
+      errorText: errorText,
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: theme.secondaryBackground,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: theme.alternate),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: theme.primary, width: 1.5),
+      ),
+    );
+  }
+
+  static String _displayTime(String value) {
+    final date = Appointment.dateAtTime(DateTime(2000), value);
+    return DateFormat.jm().format(date);
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.isSubmitting, required this.onClose});
+
+  final bool isSubmitting;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = FlutterFlowTheme.of(context).primary;
+    return Container(
+      color: primary,
+      padding: const EdgeInsets.fromLTRB(20, 15, 10, 15),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_month_rounded, color: Colors.white),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Book an appointment',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'Poppins',
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Close booking form',
+            onPressed: isSubmitting ? null : onClose,
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateSection extends StatelessWidget {
+  const _DateSection({
+    required this.selectedDate,
+    required this.onSelected,
+    this.errorText,
+  });
+
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onSelected;
+  final String? errorText;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    final today = DateTime.now();
+    final firstDate = DateTime(today.year, today.month, today.day);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Select date',
+          style: theme.titleSmall.copyWith(
+            color: theme.primaryText,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: errorText == null ? theme.alternate : theme.error,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: CalendarDatePicker(
+            initialDate: selectedDate,
+            firstDate: firstDate,
+            lastDate: firstDate.add(const Duration(days: 180)),
+            onDateChanged: onSelected,
+          ),
+        ),
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          _FieldError(errorText!),
+        ],
+      ],
+    );
+  }
+}
+
+class _FieldError extends StatelessWidget {
+  const _FieldError(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        message,
+        style: TextStyle(
+          color: FlutterFlowTheme.of(context).error,
+          fontSize: 12,
+          fontFamily: 'Poppins',
+        ),
+      );
+}
+
+class _StatusBanner extends StatelessWidget {
+  const _StatusBanner({required this.message, required this.isSuccess});
+
+  final String message;
+  final bool isSuccess;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    final color = isSuccess ? theme.success : theme.error;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle_outline : Icons.error_outline,
+              color: color,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: color, fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

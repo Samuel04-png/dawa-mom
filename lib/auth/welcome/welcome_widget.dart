@@ -1,3 +1,4 @@
+import '/components/branding/dawa_mom_logo.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -148,13 +149,13 @@ class _WelcomeWidgetState extends State<WelcomeWidget>
                           borderRadius: BorderRadius.circular(16.0),
                           shape: BoxShape.rectangle,
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8.0),
-                          child: Image.asset(
-                            'assets/images/Logos-06.png',
-                            width: double.infinity,
-                            height: double.infinity,
-                            fit: BoxFit.contain,
+                        child: const Center(
+                          child: SizedBox(
+                            width: 220.0,
+                            child: DawaMomLogo(
+                              variant: DawaMomLogoVariant.authentication,
+                              size: 90.0,
+                            ),
                           ),
                         ),
                       ).animateOnPageLoad(

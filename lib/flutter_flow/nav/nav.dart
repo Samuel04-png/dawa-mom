@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '/components/branding/dawa_mom_logo.dart';
 import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
 
 import '/auth/base_auth_user_provider.dart';
 
 import '/main.dart';
+import '/features/profile/profile_completion_page.dart';
+import '/features/settings/dawa_mom_settings_page.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
 import '/index.dart';
@@ -110,7 +114,23 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: ProfileWidget.routeName,
           path: ProfileWidget.routePath,
-          builder: (context, params) => ProfileWidget(),
+          builder: (context, params) => NavBarPage(initialPage: 'Settings'),
+        ),
+        FFRoute(
+          name: DawaMomSettingsPage.routeName,
+          path: DawaMomSettingsPage.routePath,
+          builder: (context, params) => NavBarPage(initialPage: 'Settings'),
+        ),
+        FFRoute(
+          name: PeriodTrackerWidget.routeName,
+          path: PeriodTrackerWidget.routePath,
+          builder: (context, params) =>
+              NavBarPage(initialPage: 'PeriodTracker'),
+        ),
+        FFRoute(
+          name: ProfileCompletionPage.routeName,
+          path: ProfileCompletionPage.routePath,
+          builder: (context, params) => const ProfileCompletionPage(),
         ),
         FFRoute(
           name: EncountersWidget.routeName,
@@ -157,6 +177,10 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           name: AppointmentDetailsWidget.routeName,
           path: AppointmentDetailsWidget.routePath,
           builder: (context, params) => AppointmentDetailsWidget(
+            appointmentId: params.getParam(
+              'appointmentId',
+              ParamType.String,
+            ),
             encounterDets: params.getParam(
               'encounterDets',
               ParamType.DocumentReference,
@@ -365,11 +389,27 @@ class FFRoute {
                 )
               : builder(context, ffParams);
           final child = appStateNotifier.loading
-              ? Container(
-                  color: Colors.transparent,
-                  child: Image.asset(
-                    'assets/images/Frame_7.png',
-                    fit: BoxFit.cover,
+              ? ColoredBox(
+                  color: const Color(0xFFF1F4F8),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const DawaMomLogo(
+                          variant: DawaMomLogoVariant.authentication,
+                          size: 180,
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: const Color(0xFF1945CD),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : page;

@@ -1,14 +1,18 @@
 import 'dart:async';
 
 import 'package:dawa_mom/navbar/appointments/appointment_details/appointment_details_widget.dart';
-import 'package:dawa_mom/navbar/profile/profile_widget.dart';
-import 'package:dawa_mom/navbar/week/week_widget.dart';
 
 import '/auth/supabase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/booking_bottom_sheet/booking_bottom_sheet_widget.dart';
-import '/components/no_pregnancy_data_comp/no_pregnancy_data_comp_widget.dart';
+import '/components/branding/dawa_mom_logo.dart';
+import '/components/responsive/responsive_home_dashboard.dart';
+import '/components/responsive/dawa_mom_responsive_shell.dart';
+import '/components/responsive/upcoming_appointment_section.dart';
 import '/components/shimmer/shimmer_widget.dart';
+import '/features/settings/dawa_mom_settings_page.dart';
+import '/features/pregnancy/presentation/pregnancy_what_to_expect.dart';
+import '/features/period_tracker/presentation/period_cycle_status_card.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -40,6 +44,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   final animationsMap = <String, AnimationInfo>{};
+
+  bool get _usesDedicatedAppointments => true;
 
   @override
   void initState() {
@@ -258,6 +264,12 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           FFAppState().motherRef = currentMotherRef;
         }
 
+        if (MediaQuery.sizeOf(context).width >= 700) {
+          return DawaMomResponsiveDashboard(
+            onOpenRudo: () => DawaMomResponsiveShell.openRudo(context),
+          );
+        }
+
         return GestureDetector(
           onTap: () {
             FocusScope.of(context).unfocus();
@@ -285,7 +297,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                           hoverColor: Colors.transparent,
                           highlightColor: Colors.transparent,
                           onTap: () async {
-                            context.pushNamed(ProfileWidget.routeName);
+                            context.pushNamed(DawaMomSettingsPage.routeName);
                           },
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(100.0),
@@ -315,7 +327,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                               TextSpan(
                                 text: valueOrDefault<String>(
                                   homeMotherRecord?.name,
-                                  'Joshua',
+                                  'there',
                                 ),
                                 style: TextStyle(
                                   color:
@@ -420,221 +432,339 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                     Padding(
                       padding:
                           EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.max,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Next Appointment',
-                            style: TextStyle(
-                              color: FlutterFlowTheme.of(context).primaryText,
-                              letterSpacing: 0.0,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14.0,
-                              fontFamily: 'Poppins',
-                            ),
-                          ).animateOnPageLoad(
-                              animationsMap['textOnPageLoadAnimation2']!),
-                          Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Expanded(
-                                child: StreamBuilder<List<EncounterRecord>>(
-                                  stream: queryEncounterRecord(
-                                    queryBuilder: (encounterRecord) =>
-                                        encounterRecord
-                                            .where(
-                                              'mother_id',
-                                              isEqualTo: FFAppState().motherRef,
-                                            )
-                                            .where(
-                                              'status',
-                                              isEqualTo: 'scheduled',
-                                            ),
-                                    singleRecord: true,
+                      child: _usesDedicatedAppointments
+                          ? UpcomingAppointmentSection(compact: true)
+                          : Column(
+                              mainAxisSize: MainAxisSize.max,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Next Appointment',
+                                  style: TextStyle(
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                    letterSpacing: 0.0,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14.0,
+                                    fontFamily: 'Poppins',
                                   ),
-                                  builder: (context, snapshot) {
-                                    // Customize what your widget looks like when it's loading.
-                                    if (!snapshot.hasData) {
-                                      return ShimmerWidget();
-                                    }
+                                ).animateOnPageLoad(
+                                    animationsMap['textOnPageLoadAnimation2']!),
+                                Row(
+                                  mainAxisSize: MainAxisSize.max,
+                                  children: [
+                                    Expanded(
+                                      child:
+                                          StreamBuilder<List<EncounterRecord>>(
+                                        stream: queryEncounterRecord(
+                                          queryBuilder: (encounterRecord) =>
+                                              encounterRecord
+                                                  .where(
+                                                    'mother_id',
+                                                    isEqualTo:
+                                                        FFAppState().motherRef,
+                                                  )
+                                                  .where(
+                                                    'status',
+                                                    isEqualTo: 'scheduled',
+                                                  ),
+                                          singleRecord: true,
+                                        ),
+                                        builder: (context, snapshot) {
+                                          // Customize what your widget looks like when it's loading.
+                                          if (!snapshot.hasData) {
+                                            return ShimmerWidget();
+                                          }
 
-                                    List<EncounterRecord>
-                                        containerEncounterRecordList =
-                                        snapshot.data!;
-                                    final containerEncounterRecord =
-                                        containerEncounterRecordList.isNotEmpty
-                                            ? containerEncounterRecordList.first
-                                            : null;
+                                          List<EncounterRecord>
+                                              containerEncounterRecordList =
+                                              snapshot.data!;
+                                          final containerEncounterRecord =
+                                              containerEncounterRecordList
+                                                      .isNotEmpty
+                                                  ? containerEncounterRecordList
+                                                      .first
+                                                  : null;
 
-                                    // Show no data image when there's no appointment
-                                    if (containerEncounterRecord == null) {
-                                      return Column(
-                                        mainAxisSize: MainAxisSize.max,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            height:
-                                                200.0, // Adjust height as needed
-                                            width: double.infinity,
-                                            child: ClipRect(
-                                              child: Image.asset(
-                                                'assets/images/No_data-pana.png',
-                                                fit: BoxFit.contain,
-                                                errorBuilder: (context, error,
-                                                    stackTrace) {
-                                                  return Center(
-                                                    child: Text(
-                                                      'No upcoming appointments',
-                                                      style: TextStyle(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .secondaryText,
-                                                        fontSize: 14.0,
-                                                      ),
+                                          // Show no data image when there's no appointment
+                                          if (containerEncounterRecord ==
+                                              null) {
+                                            return Column(
+                                              mainAxisSize: MainAxisSize.max,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Container(
+                                                  height:
+                                                      200.0, // Adjust height as needed
+                                                  width: double.infinity,
+                                                  child: ClipRect(
+                                                    child: Image.asset(
+                                                      'assets/images/No_data-pana.png',
+                                                      fit: BoxFit.contain,
+                                                      errorBuilder: (context,
+                                                          error, stackTrace) {
+                                                        return Center(
+                                                          child: Text(
+                                                            'No upcoming appointments',
+                                                            style: TextStyle(
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .secondaryText,
+                                                              fontSize: 14.0,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
                                                     ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(height: 8.0),
-                                          Text(
-                                            'No upcoming appointments',
-                                            style: TextStyle(
+                                                  ),
+                                                ),
+                                                SizedBox(height: 8.0),
+                                                Text(
+                                                  'No upcoming appointments',
+                                                  style: TextStyle(
+                                                    color: FlutterFlowTheme.of(
+                                                            context)
+                                                        .secondaryText,
+                                                    fontSize: 14.0,
+                                                    fontFamily: 'Poppins',
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          }
+
+                                          // Show appointment details when there is data
+                                          return Container(
+                                            decoration: BoxDecoration(
                                               color:
                                                   FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 14.0,
-                                              fontFamily: 'Poppins',
+                                                      .secondaryBackground,
                                             ),
-                                          ),
-                                        ],
-                                      );
-                                    }
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.max,
+                                              children: [
+                                                Expanded(
+                                                  child: StreamBuilder<
+                                                      DoctorRecord>(
+                                                    stream: DoctorRecord
+                                                        .getDocument(
+                                                            containerEncounterRecord
+                                                                .doctorId!),
+                                                    builder:
+                                                        (context, snapshot) {
+                                                      // Customize what your widget looks like when it's loading.
+                                                      if (!snapshot.hasData) {
+                                                        return ShimmerWidget();
+                                                      }
 
-                                    // Show appointment details when there is data
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryBackground,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        children: [
-                                          Expanded(
-                                            child: StreamBuilder<DoctorRecord>(
-                                              stream: DoctorRecord.getDocument(
-                                                  containerEncounterRecord
-                                                      .doctorId!),
-                                              builder: (context, snapshot) {
-                                                // Customize what your widget looks like when it's loading.
-                                                if (!snapshot.hasData) {
-                                                  return ShimmerWidget();
-                                                }
+                                                      final containerDoctorRecord =
+                                                          snapshot.data!;
 
-                                                final containerDoctorRecord =
-                                                    snapshot.data!;
-
-                                                return InkWell(
-                                                  splashColor:
-                                                      Colors.transparent,
-                                                  focusColor:
-                                                      Colors.transparent,
-                                                  hoverColor:
-                                                      Colors.transparent,
-                                                  highlightColor:
-                                                      Colors.transparent,
-                                                  onTap: () async {
-                                                    context.pushNamed(
-                                                      AppointmentDetailsWidget
-                                                          .routeName,
-                                                      queryParameters: {
-                                                        'encounterDets':
-                                                            serializeParam(
-                                                          containerEncounterRecord
-                                                              .reference,
-                                                          ParamType
-                                                              .DocumentReference,
-                                                        ),
-                                                      }.withoutNulls,
-                                                    );
-                                                  },
-                                                  child: Container(
-                                                    constraints: BoxConstraints(
-                                                      maxWidth: 400.0,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: FlutterFlowTheme
-                                                              .of(context)
-                                                          .secondaryBackground,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8.0),
-                                                      border: Border.all(
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .alternate,
-                                                      ),
-                                                    ),
-                                                    child: Padding(
-                                                      padding:
-                                                          EdgeInsets.all(16.0),
-                                                      child: Column(
-                                                        mainAxisSize:
-                                                            MainAxisSize.max,
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          Row(
-                                                            children: [
-                                                              // LEFT SIDE (Avatar + Name)
-                                                              Expanded(
-                                                                child: Row(
+                                                      return InkWell(
+                                                        splashColor:
+                                                            Colors.transparent,
+                                                        focusColor:
+                                                            Colors.transparent,
+                                                        hoverColor:
+                                                            Colors.transparent,
+                                                        highlightColor:
+                                                            Colors.transparent,
+                                                        onTap: () async {
+                                                          context.pushNamed(
+                                                            AppointmentDetailsWidget
+                                                                .routeName,
+                                                            queryParameters: {
+                                                              'encounterDets':
+                                                                  serializeParam(
+                                                                containerEncounterRecord
+                                                                    .reference,
+                                                                ParamType
+                                                                    .DocumentReference,
+                                                              ),
+                                                            }.withoutNulls,
+                                                          );
+                                                        },
+                                                        child: Container(
+                                                          constraints:
+                                                              BoxConstraints(
+                                                            maxWidth: 400.0,
+                                                          ),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: FlutterFlowTheme
+                                                                    .of(context)
+                                                                .secondaryBackground,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8.0),
+                                                            border: Border.all(
+                                                              color: FlutterFlowTheme
+                                                                      .of(context)
+                                                                  .alternate,
+                                                            ),
+                                                          ),
+                                                          child: Padding(
+                                                            padding:
+                                                                EdgeInsets.all(
+                                                                    16.0),
+                                                            child: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .max,
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .spaceBetween,
+                                                              children: [
+                                                                Row(
                                                                   children: [
-                                                                    Container(
-                                                                      width:
-                                                                          30.0,
-                                                                      height:
-                                                                          30.0,
-                                                                      clipBehavior:
-                                                                          Clip.antiAlias,
-                                                                      decoration:
-                                                                          const BoxDecoration(
-                                                                        shape: BoxShape
-                                                                            .circle,
-                                                                      ),
-                                                                      child: Image
-                                                                          .asset(
-                                                                        'assets/images/app_logo_2.png',
-                                                                        fit: BoxFit
-                                                                            .cover,
-                                                                      ),
-                                                                    ),
-                                                                    const SizedBox(
-                                                                        width:
-                                                                            8),
-
-                                                                    // 🔑 THIS IS THE IMPORTANT PART
+                                                                    // LEFT SIDE (Avatar + Name)
                                                                     Expanded(
                                                                       child:
-                                                                          Text(
-                                                                        containerDoctorRecord
-                                                                            .name,
-                                                                        maxLines:
-                                                                            1,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
+                                                                          Row(
+                                                                        children: [
+                                                                          const DawaMomLogo(
+                                                                            variant:
+                                                                                DawaMomLogoVariant.compact,
+                                                                            size:
+                                                                                30,
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              width: 8),
+
+                                                                          // 🔑 THIS IS THE IMPORTANT PART
+                                                                          Expanded(
+                                                                            child:
+                                                                                Text(
+                                                                              containerDoctorRecord.name,
+                                                                              maxLines: 1,
+                                                                              overflow: TextOverflow.ellipsis,
+                                                                              style: const TextStyle(
+                                                                                letterSpacing: 0.0,
+                                                                                fontWeight: FontWeight.w600,
+                                                                                fontFamily: 'Poppins',
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+
+                                                                    const SizedBox(
+                                                                        width:
+                                                                            10),
+
+                                                                    // RIGHT SIDE (Status badge)
+                                                                    Container(
+                                                                      decoration:
+                                                                          BoxDecoration(
+                                                                        color: valueOrDefault<
+                                                                            Color>(
+                                                                          () {
+                                                                            if (containerEncounterRecord.status ==
+                                                                                'completed') {
+                                                                              return const Color(0xFF2DAC5C);
+                                                                            } else if (containerEncounterRecord.status ==
+                                                                                'canceled') {
+                                                                              return FlutterFlowTheme.of(context).error;
+                                                                            } else {
+                                                                              return FlutterFlowTheme.of(context).warning;
+                                                                            }
+                                                                          }(),
+                                                                          FlutterFlowTheme.of(context)
+                                                                              .accent2,
+                                                                        ),
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(8.0),
+                                                                      ),
+                                                                      child:
+                                                                          Padding(
+                                                                        padding: const EdgeInsets
+                                                                            .all(
+                                                                            8.0),
+                                                                        child:
+                                                                            Text(
+                                                                          valueOrDefault<
+                                                                              String>(
+                                                                            containerEncounterRecord.status,
+                                                                            'Pending',
+                                                                          ),
+                                                                          style:
+                                                                              TextStyle(
+                                                                            color:
+                                                                                FlutterFlowTheme.of(context).secondaryBackground,
+                                                                            letterSpacing:
+                                                                                0.0,
+                                                                            fontWeight:
+                                                                                FontWeight.w500,
+                                                                            fontFamily:
+                                                                                'Poppins',
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                                Divider(
+                                                                  thickness:
+                                                                      1.0,
+                                                                  color: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .alternate,
+                                                                ),
+                                                                Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .max,
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons
+                                                                          .calendar_month_rounded,
+                                                                      color: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .secondaryText,
+                                                                      size:
+                                                                          24.0,
+                                                                    ),
+                                                                    RichText(
+                                                                      textScaler:
+                                                                          MediaQuery.of(context)
+                                                                              .textScaler,
+                                                                      text:
+                                                                          TextSpan(
+                                                                        children: [
+                                                                          TextSpan(
+                                                                            text:
+                                                                                dateTimeFormat(
+                                                                              "MMMMEEEEd",
+                                                                              containerEncounterRecord.date!,
+                                                                            ),
+                                                                            style:
+                                                                                TextStyle(
+                                                                              color: FlutterFlowTheme.of(context).primaryText,
+                                                                              letterSpacing: 0.0,
+                                                                              fontWeight: FontWeight.w600,
+                                                                              fontFamily: 'Poppins',
+                                                                            ),
+                                                                          ),
+                                                                          TextSpan(
+                                                                            text:
+                                                                                ' - ',
+                                                                            style:
+                                                                                TextStyle(),
+                                                                          ),
+                                                                          TextSpan(
+                                                                            text:
+                                                                                containerEncounterRecord.time,
+                                                                            style:
+                                                                                TextStyle(),
+                                                                          )
+                                                                        ],
                                                                         style:
-                                                                            const TextStyle(
+                                                                            TextStyle(
                                                                           letterSpacing:
                                                                               0.0,
-                                                                          fontWeight:
-                                                                              FontWeight.w600,
                                                                           fontFamily:
                                                                               'Poppins',
                                                                         ),
@@ -642,160 +772,26 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                                                     ),
                                                                   ],
                                                                 ),
-                                                              ),
-
-                                                              const SizedBox(
-                                                                  width: 10),
-
-                                                              // RIGHT SIDE (Status badge)
-                                                              Container(
-                                                                decoration:
-                                                                    BoxDecoration(
-                                                                  color:
-                                                                      valueOrDefault<
-                                                                          Color>(
-                                                                    () {
-                                                                      if (containerEncounterRecord
-                                                                              .status ==
-                                                                          'completed') {
-                                                                        return const Color(
-                                                                            0xFF2DAC5C);
-                                                                      } else if (containerEncounterRecord
-                                                                              .status ==
-                                                                          'canceled') {
-                                                                        return FlutterFlowTheme.of(context)
-                                                                            .error;
-                                                                      } else {
-                                                                        return FlutterFlowTheme.of(context)
-                                                                            .warning;
-                                                                      }
-                                                                    }(),
-                                                                    FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .accent2,
-                                                                  ),
-                                                                  borderRadius:
-                                                                      BorderRadius
-                                                                          .circular(
-                                                                              8.0),
-                                                                ),
-                                                                child: Padding(
-                                                                  padding:
-                                                                      const EdgeInsets
-                                                                          .all(
-                                                                          8.0),
-                                                                  child: Text(
-                                                                    valueOrDefault<
-                                                                        String>(
-                                                                      containerEncounterRecord
-                                                                          .status,
-                                                                      'Pending',
-                                                                    ),
-                                                                    style:
-                                                                        TextStyle(
-                                                                      color: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .secondaryBackground,
-                                                                      letterSpacing:
-                                                                          0.0,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w500,
-                                                                      fontFamily:
-                                                                          'Poppins',
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ],
+                                                              ],
+                                                            ),
                                                           ),
-                                                          Divider(
-                                                            thickness: 1.0,
-                                                            color: FlutterFlowTheme
-                                                                    .of(context)
-                                                                .alternate,
-                                                          ),
-                                                          Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            children: [
-                                                              Icon(
-                                                                Icons
-                                                                    .calendar_month_rounded,
-                                                                color: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .secondaryText,
-                                                                size: 24.0,
-                                                              ),
-                                                              RichText(
-                                                                textScaler: MediaQuery.of(
-                                                                        context)
-                                                                    .textScaler,
-                                                                text: TextSpan(
-                                                                  children: [
-                                                                    TextSpan(
-                                                                      text:
-                                                                          dateTimeFormat(
-                                                                        "MMMMEEEEd",
-                                                                        containerEncounterRecord
-                                                                            .date!,
-                                                                      ),
-                                                                      style:
-                                                                          TextStyle(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        letterSpacing:
-                                                                            0.0,
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                        fontFamily:
-                                                                            'Poppins',
-                                                                      ),
-                                                                    ),
-                                                                    TextSpan(
-                                                                      text:
-                                                                          ' - ',
-                                                                      style:
-                                                                          TextStyle(),
-                                                                    ),
-                                                                    TextSpan(
-                                                                      text: containerEncounterRecord
-                                                                          .time,
-                                                                      style:
-                                                                          TextStyle(),
-                                                                    )
-                                                                  ],
-                                                                  style:
-                                                                      TextStyle(
-                                                                    letterSpacing:
-                                                                        0.0,
-                                                                    fontFamily:
-                                                                        'Poppins',
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
+                                                        ),
+                                                      ).animateOnPageLoad(
+                                                          animationsMap[
+                                                              'containerOnPageLoadAnimation1']!);
+                                                    },
                                                   ),
-                                                ).animateOnPageLoad(animationsMap[
-                                                    'containerOnPageLoadAnimation1']!);
-                                              },
+                                                ),
+                                              ],
                                             ),
-                                          ),
-                                        ],
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                              ],
+                            ),
                     ),
                     Align(
                       alignment: AlignmentDirectional(-1.0, 0.0),
@@ -815,541 +811,14 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                             animationsMap['textOnPageLoadAnimation3']!),
                       ),
                     ),
-                    StreamBuilder<List<FirstEncounterRecord>>(
-                      stream: queryFirstEncounterRecord(
-                        queryBuilder: (firstEncounterRecord) =>
-                            firstEncounterRecord.where(
-                          'mother_Id',
-                          isEqualTo: FFAppState().motherRef,
-                        ),
-                        singleRecord: true,
-                      ),
-                      builder: (context, snapshot) {
-                        // Customize what your widget looks like when it's loading.
-                        if (!snapshot.hasData) {
-                          return Container(
-                            width: double.infinity,
-                            child: ShimmerWidget(),
-                          );
-                        }
-                        List<FirstEncounterRecord>
-                            containerFirstEncounterRecordList = snapshot.data!;
-                        final containerFirstEncounterRecord =
-                            containerFirstEncounterRecordList.isNotEmpty
-                                ? containerFirstEncounterRecordList.first
-                                : null;
-
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                          ),
-                          child: Stack(
-                            children: [
-                              if (containerFirstEncounterRecord != null)
-                                Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          16.0, 10.0, 16.0, 0.0),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            functions.nextWeek(
-                                                        -3,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!)) <=
-                                                    0
-                                                ? '.'
-                                                : functions
-                                                    .nextWeek(
-                                                        -3,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!))
-                                                    .toString(),
-                                            style: TextStyle(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w600,
-                                              fontFamily: 'Poppins',
-                                            ),
-                                          ),
-                                          Text(
-                                            functions.nextWeek(
-                                                        -2,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!)) <=
-                                                    0
-                                                ? '.'
-                                                : functions
-                                                    .nextWeek(
-                                                        -2,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!))
-                                                    .toString(),
-                                            style: TextStyle(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w600,
-                                              fontFamily: 'Poppins',
-                                            ),
-                                          ),
-                                          Text(
-                                            functions.nextWeek(
-                                                        -1,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!)) <=
-                                                    0
-                                                ? '.'
-                                                : functions
-                                                    .nextWeek(
-                                                        -1,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!))
-                                                    .toString(),
-                                            style: TextStyle(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w600,
-                                              fontFamily: 'Poppins',
-                                            ),
-                                          ),
-                                          Container(
-                                            width: 50.0,
-                                            height: 50.0,
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primary,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Align(
-                                              alignment: AlignmentDirectional(
-                                                  0.0, 0.0),
-                                              child: Text(
-                                                functions
-                                                    .calculateGestationalAgeInWeeks(
-                                                        containerFirstEncounterRecord
-                                                            .lnmp!)
-                                                    .toString(),
-                                                style: TextStyle(
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .secondaryBackground,
-                                                  fontSize: 16.0,
-                                                  letterSpacing: 0.0,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontFamily: 'Poppins',
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Text(
-                                            functions.nextWeek(
-                                                        1,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!)) >
-                                                    40
-                                                ? '.'
-                                                : functions
-                                                    .nextWeek(
-                                                        1,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!))
-                                                    .toString(),
-                                            style: TextStyle(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w600,
-                                              fontFamily: 'Poppins',
-                                            ),
-                                          ),
-                                          Text(
-                                            functions.nextWeek(
-                                                        2,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!)) >
-                                                    40
-                                                ? '.'
-                                                : functions
-                                                    .nextWeek(
-                                                        2,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!))
-                                                    .toString(),
-                                            style: TextStyle(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w600,
-                                              fontFamily: 'Poppins',
-                                            ),
-                                          ),
-                                          Text(
-                                            functions.nextWeek(
-                                                        3,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!)) >
-                                                    40
-                                                ? '.'
-                                                : functions
-                                                    .nextWeek(
-                                                        3,
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!))
-                                                    .toString(),
-                                            style: TextStyle(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 16.0,
-                                              letterSpacing: 0.0,
-                                              fontWeight: FontWeight.w600,
-                                              fontFamily: 'Poppins',
-                                            ),
-                                          ),
-                                        ],
-                                      ).animateOnPageLoad(animationsMap[
-                                          'rowOnPageLoadAnimation1']!),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsetsDirectional.fromSTEB(
-                                          0.0, 16.0, 0.0, 0.0),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.max,
-                                        children: [
-                                          Expanded(
-                                            child: InkWell(
-                                              splashColor: Colors.transparent,
-                                              focusColor: Colors.transparent,
-                                              hoverColor: Colors.transparent,
-                                              highlightColor:
-                                                  Colors.transparent,
-                                              onTap: () async {
-                                                if (functions
-                                                        .calculateGestationalAgeInWeeks(
-                                                            containerFirstEncounterRecord
-                                                                .lnmp!) ==
-                                                    0) {
-                                                  context.pushNamed(
-                                                    WeekWidget.routeName,
-                                                    queryParameters: {
-                                                      'week': serializeParam(
-                                                        1,
-                                                        ParamType.int,
-                                                      ),
-                                                    }.withoutNulls,
-                                                  );
-                                                } else {
-                                                  context.pushNamed(
-                                                    WeekWidget.routeName,
-                                                    queryParameters: {
-                                                      'week': serializeParam(
-                                                        functions
-                                                            .calculateGestationalAgeInWeeks(
-                                                                containerFirstEncounterRecord
-                                                                    .lnmp!),
-                                                        ParamType.int,
-                                                      ),
-                                                    }.withoutNulls,
-                                                  );
-                                                }
-                                              },
-                                              child: Container(
-                                                width: 350.0,
-                                                decoration: BoxDecoration(
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .primary,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          16.0),
-                                                ),
-                                                child: Padding(
-                                                  padding: EdgeInsets.all(16.0),
-                                                  child: Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.max,
-                                                    children: [
-                                                      Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.max,
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              Text(
-                                                                'Week',
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .primaryBackground,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontFamily:
-                                                                      'Poppins',
-                                                                ),
-                                                              ),
-                                                              Text(
-                                                                functions
-                                                                    .calculateGestationalAgeInWeeks(
-                                                                        containerFirstEncounterRecord
-                                                                            .lnmp!)
-                                                                    .toString(),
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryBackground,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  fontSize:
-                                                                      24.0,
-                                                                  fontFamily:
-                                                                      'Poppins',
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              Text(
-                                                                'Trimester',
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .primaryBackground,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontFamily:
-                                                                      'Poppins',
-                                                                ),
-                                                              ),
-                                                              Text(
-                                                                functions
-                                                                    .calculateTrimester(
-                                                                        functions
-                                                                            .calculateGestationalAgeInWeeks(containerFirstEncounterRecord.lnmp!))
-                                                                    .toString(),
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryBackground,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  fontSize:
-                                                                      24.0,
-                                                                  fontFamily:
-                                                                      'Poppins',
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ]
-                                            .divide(SizedBox(width: 12.0))
-                                            .addToStart(SizedBox(width: 16.0))
-                                            .addToEnd(SizedBox(width: 16.0)),
-                                      ).animateOnPageLoad(animationsMap[
-                                          'rowOnPageLoadAnimation2']!),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.all(16.0),
-                                      child: InkWell(
-                                        splashColor: Colors.transparent,
-                                        focusColor: Colors.transparent,
-                                        hoverColor: Colors.transparent,
-                                        highlightColor: Colors.transparent,
-                                        onTap: () async {
-                                          if (animationsMap[
-                                                  'containerOnActionTriggerAnimation'] !=
-                                              null) {
-                                            await animationsMap[
-                                                    'containerOnActionTriggerAnimation']!
-                                                .controller
-                                                .forward(from: 0.0);
-                                          }
-                                        },
-                                        child: Container(
-                                          width:
-                                              MediaQuery.sizeOf(context).width *
-                                                  1.0,
-                                          height: 60.0,
-                                          decoration: BoxDecoration(
-                                            color: FlutterFlowTheme.of(context)
-                                                .secondaryBackground,
-                                            borderRadius:
-                                                BorderRadius.circular(8.0),
-                                            border: Border.all(
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .alternate,
-                                            ),
-                                          ),
-                                          child: Padding(
-                                            padding: EdgeInsets.all(10.0),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.max,
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.spaceEvenly,
-                                              children: [
-                                                Icon(
-                                                  Icons.stroller,
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .primary,
-                                                  size: 30.0,
-                                                ),
-                                                RichText(
-                                                  textScaler:
-                                                      MediaQuery.of(context)
-                                                          .textScaler,
-                                                  text: TextSpan(
-                                                    children: [
-                                                      TextSpan(
-                                                        text: 'Due date:',
-                                                        style: TextStyle(
-                                                          color: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .secondaryText,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          fontFamily: 'Poppins',
-                                                        ),
-                                                      ),
-                                                      TextSpan(
-                                                        text: dateTimeFormat(
-                                                            "yMMMd",
-                                                            containerFirstEncounterRecord
-                                                                .estimatedDueDate!),
-                                                        style: TextStyle(
-                                                          fontSize: 16.0,
-                                                          letterSpacing: 0.0,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontFamily: 'Poppins',
-                                                        ),
-                                                      )
-                                                    ],
-                                                    style: TextStyle(
-                                                      fontSize: 16.0,
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontFamily: 'Poppins',
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                          .animateOnPageLoad(animationsMap[
-                                              'containerOnPageLoadAnimation2']!)
-                                          .animateOnActionTrigger(
-                                            animationsMap[
-                                                'containerOnActionTriggerAnimation']!,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              Container(
-                                decoration: BoxDecoration(),
-                                child: Visibility(
-                                  visible:
-                                      !(containerFirstEncounterRecord != null),
-                                  child: Align(
-                                    alignment: AlignmentDirectional(0.0, 0.0),
-                                    child: wrapWithModel(
-                                      model: _model.noPregnancyDataCompModel,
-                                      updateCallback: () => safeSetState(() {}),
-                                      child: NoPregnancyDataCompWidget(
-                                        parameter1:
-                                            !(containerFirstEncounterRecord !=
-                                                null),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0),
+                      child: PregnancyWhatToExpectLoader(compact: true),
+                    ),
+                    const SizedBox(height: 14.0),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0),
+                      child: PeriodCycleStatusLoader(),
                     ),
                     Padding(
                       padding:
@@ -1452,188 +921,6 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                 ),
               ),
             ),
-            floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-            floatingActionButton: Padding(
-              padding: const EdgeInsets.only(bottom: 78.0, right: 4.0),
-              child: _AnimatedDoctorIcon(
-                onTap: () {
-                  _showAIChatModal(context, homeMotherRecord);
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // Function to show AI Chat Modal
-  void _showAIChatModal(BuildContext context, MotherRecord? motherRecord) {
-    showModalBottomSheet(
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      useSafeArea: true,
-      context: context,
-      builder: (context) {
-        return Padding(
-          padding: MediaQuery.viewInsetsOf(context),
-          child: DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.66,
-            minChildSize: 0.42,
-            maxChildSize: 0.75,
-            snap: true,
-            snapSizes: const [0.42, 0.66, 0.75],
-            builder: (context, _) {
-              return GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: AIChatModal(
-                  userPhoneNumber: motherRecord?.phoneNumber ?? '+1234567890',
-                  userName: motherRecord?.name ?? 'User',
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-}
-
-// Animated AI Doctor Icon Widget with onTap callback
-class _AnimatedDoctorIcon extends StatefulWidget {
-  final VoidCallback onTap;
-
-  const _AnimatedDoctorIcon({required this.onTap});
-
-  @override
-  State<_AnimatedDoctorIcon> createState() => _AnimatedDoctorIconState();
-}
-
-class _AnimatedDoctorIconState extends State<_AnimatedDoctorIcon>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: SizedBox(
-        width: 58.0,
-        height: 58.0,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Outer glow rings
-            _buildGlowRing(delay: 0.0),
-            _buildGlowRing(delay: 0.3),
-            _buildGlowRing(delay: 0.6),
-
-            // Bouncing doctor icon
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                final bounceValue =
-                    math.sin(_controller.value * 2 * 3.14159) * 3;
-                return Transform.translate(
-                  offset: Offset(0, bounceValue),
-                  child: Transform.scale(
-                    scale: 0.95 + (_controller.value * 0.05),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: FlutterFlowTheme.of(context)
-                                .primary
-                                .withValues(alpha: 0.4),
-                            blurRadius: 8,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/female-doctor.png',
-                          width: 50.0,
-                          height: 50.0,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            // Fallback to a placeholder if image fails to load
-                            return Container(
-                              width: 40.0,
-                              height: 40.0,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: FlutterFlowTheme.of(context).primary,
-                              ),
-                              child: Icon(
-                                Icons.person,
-                                color: FlutterFlowTheme.of(context)
-                                    .secondaryBackground,
-                                size: 24.0,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlowRing({required double delay}) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final animatedValue = (_controller.value + delay) % 1.0;
-        return Transform.scale(
-          scale: 1.0 + (animatedValue * 0.5),
-          child: Opacity(
-            opacity: 0.4 * (1 - animatedValue),
-            child: Container(
-              width: 54.0 + (animatedValue * 24),
-              height: 54.0 + (animatedValue * 24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: FlutterFlowTheme.of(context)
-                      .primary
-                      .withValues(alpha: 0.5 - (animatedValue * 0.3)),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: FlutterFlowTheme.of(context)
-                        .primary
-                        .withValues(alpha: 0.2 * (1 - animatedValue)),
-                    blurRadius: 8 + (animatedValue * 5),
-                    spreadRadius: 1 + (animatedValue * 2),
-                  ),
-                ],
-              ),
-            ),
           ),
         );
       },
@@ -1650,7 +937,12 @@ class AIChatModal extends StatefulWidget {
     super.key,
     required this.userPhoneNumber,
     required this.userName,
+    this.onClose,
+    this.onMinimize,
   });
+
+  final VoidCallback? onClose;
+  final VoidCallback? onMinimize;
 
   @override
   State<AIChatModal> createState() => _SupabaseAIChatModalState();
@@ -1684,6 +976,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     'What symptoms are normal this week?',
     'How can I prepare for my next appointment?',
     'What foods should I focus on today?',
+    'Help me understand my period tracker.',
   ];
 
   @override
@@ -2096,11 +1389,43 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     }
 
     if (_messages.isEmpty) {
-      return Center(
-        child: Icon(
-          Icons.chat_bubble_outline,
-          size: 46,
-          color: FlutterFlowTheme.of(context).alternate,
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(28, 24, 28, 12),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const _RudoAvatar(size: 74),
+                const SizedBox(height: 18),
+                Text(
+                  "Hi, I'm Rudo",
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).titleLarge.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'I can help you understand maternal health, prepare for appointments, and find information about your cycle.',
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).bodyMedium.copyWith(
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                        height: 1.45,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Choose a suggestion below or type your question.',
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).bodySmall.copyWith(
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                      ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -2336,13 +1661,23 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
                     ],
                   ),
                 ),
+                if (widget.onMinimize != null)
+                  IconButton(
+                    tooltip: 'Minimize',
+                    icon: Icon(
+                      Icons.remove_rounded,
+                      color: FlutterFlowTheme.of(context).primaryText,
+                    ),
+                    onPressed: widget.onMinimize,
+                  ),
                 IconButton(
                   tooltip: 'Close',
                   icon: Icon(
                     Icons.close,
                     color: FlutterFlowTheme.of(context).primaryText,
                   ),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed:
+                      widget.onClose ?? () => Navigator.maybePop(context),
                 ),
               ],
             ),
@@ -2452,7 +1787,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
           const SizedBox(width: 4),
           Flexible(
             child: Text(
-              'Responses are stored in Supabase and are not a substitute for medical advice',
+              'Rudo provides general health information and is not a substitute for professional medical advice.',
               style: TextStyle(
                 fontSize: 10,
                 color: FlutterFlowTheme.of(context).secondaryText,

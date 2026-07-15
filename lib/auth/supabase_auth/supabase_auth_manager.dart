@@ -53,11 +53,10 @@ class SupabaseAuthManager extends AuthManager
       debugPrint('Error: delete user attempted with no logged in user');
       return;
     }
-    final uid = currentUser?.uid;
-    if (uid != null && uid.isNotEmpty) {
-      await UserRecord.collection.doc(uid).delete();
-    }
-    await _client.auth.signOut();
+    await SupabaseDatabase.instance.runWithFreshSession(
+      () => _client.rpc('delete_current_user'),
+    );
+    await _client.auth.signOut(scope: supabase.SignOutScope.local);
   }
 
   @override

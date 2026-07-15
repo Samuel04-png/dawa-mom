@@ -1,5 +1,6 @@
 import '/auth/supabase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/components/period_setup/period_setup_flow.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -1043,6 +1044,26 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
                                             );
 
                                             FFAppState().motherRef = motherRef;
+
+                                            if (!context.mounted) return;
+                                            final periodOutcome =
+                                                await showPeriodSetupFlow(
+                                              context,
+                                              registration: true,
+                                              allowSkip: true,
+                                            );
+                                            if (!context.mounted) return;
+                                            if (periodOutcome == null ||
+                                                periodOutcome ==
+                                                    PeriodSetupOutcome.back) {
+                                              _showSnackBar(
+                                                'Your personal details are saved. Continue when you are ready.',
+                                                backgroundColor:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondary,
+                                              );
+                                              return;
+                                            }
 
                                             _showSnackBar(
                                               'Account created! Welcome to Dawa Mom $name',

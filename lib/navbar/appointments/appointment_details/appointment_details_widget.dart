@@ -1,26 +1,23 @@
-import '/backend/backend.dart';
-import '/components/no_data_generic/no_data_generic_widget.dart';
-import '/components/shimmer/shimmer_widget.dart';
-import '/flutter_flow/flutter_flow_icon_button.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'appointment_details_model.dart';
-export 'appointment_details_model.dart';
+import 'package:intl/intl.dart';
+
+import '/backend/backend.dart';
+import '/features/appointments/data/appointment_repository.dart';
+import '/features/appointments/domain/appointment.dart';
+import '/flutter_flow/flutter_flow_theme.dart';
 
 class AppointmentDetailsWidget extends StatefulWidget {
   const AppointmentDetailsWidget({
     super.key,
-    required this.encounterDets,
+    this.encounterDets,
+    this.appointmentId,
   });
 
   final DocumentReference? encounterDets;
+  final String? appointmentId;
 
-  static String routeName = 'AppointmentDetails';
-  static String routePath = '/appointmentDetails';
+  static const String routeName = 'AppointmentDetails';
+  static const String routePath = '/appointmentDetails';
 
   @override
   State<AppointmentDetailsWidget> createState() =>
@@ -28,527 +25,453 @@ class AppointmentDetailsWidget extends StatefulWidget {
 }
 
 class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
-  late AppointmentDetailsModel _model;
-
-  final scaffoldKey = GlobalKey<ScaffoldState>();
+  final _repository = AppointmentRepository();
+  late Future<Appointment?> _appointment;
+  bool _cancelling = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => AppointmentDetailsModel());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    _appointment = _load();
   }
 
-  @override
-  void dispose() {
-    _model.dispose();
+  Future<Appointment?> _load() {
+    final id = widget.appointmentId ?? widget.encounterDets?.id;
+    return id == null ? Future.value() : _repository.getAppointment(id);
+  }
 
-    super.dispose();
+  Future<void> _refresh() async {
+    final future = _load();
+    setState(() {
+      _appointment = future;
+      _error = null;
+    });
+    await future;
+  }
+
+  Future<void> _cancel(Appointment appointment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel appointment?'),
+        content: const Text(
+          'This will release the selected time. You can book a new appointment afterwards.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep appointment'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Cancel appointment'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _cancelling = true;
+      _error = null;
+    });
+    try {
+      final updated = await _repository.cancelAppointment(appointment.id);
+      if (!mounted) return;
+      setState(() {
+        _appointment = Future.value(updated);
+        _cancelling = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Appointment cancelled')),
+      );
+    } on AppointmentException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _cancelling = false;
+        _error = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _cancelling = false;
+        _error = 'The appointment could not be cancelled. Please try again.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<EncounterRecord>(
-      stream: EncounterRecord.getDocument(widget.encounterDets!),
-      builder: (context, snapshot) {
-        // Customize what your widget looks like when it's loading.
-        if (!snapshot.hasData) {
-          return Scaffold(
-            backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-            body: Center(
-              child: SizedBox(
-                width: 50.0,
-                height: 50.0,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    FlutterFlowTheme.of(context).primary,
-                  ),
-                ),
-              ),
-            ),
+    final theme = FlutterFlowTheme.of(context);
+    return Scaffold(
+      backgroundColor: theme.primaryBackground,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: theme.primaryBackground,
+        foregroundColor: theme.primaryText,
+        title: const Text('Appointment details'),
+      ),
+      body: FutureBuilder<Appointment?>(
+        future: _appointment,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _DetailsError(onRetry: _refresh);
+          }
+          final appointment = snapshot.data;
+          if (appointment == null) {
+            return const _MissingAppointment();
+          }
+          return _DetailsBody(
+            appointment: appointment,
+            error: _error,
+            cancelling: _cancelling,
+            onCancel: () => _cancel(appointment),
           );
-        }
+        },
+      ),
+    );
+  }
+}
 
-        final appointmentDetailsEncounterRecord = snapshot.data!;
+class _DetailsBody extends StatelessWidget {
+  const _DetailsBody({
+    required this.appointment,
+    required this.cancelling,
+    required this.onCancel,
+    this.error,
+  });
 
-        return GestureDetector(
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            FocusManager.instance.primaryFocus?.unfocus();
-          },
-          child: Scaffold(
-            key: scaffoldKey,
-            backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-            appBar: AppBar(
-              backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-              automaticallyImplyLeading: false,
-              leading: FlutterFlowIconButton(
-                borderColor: Colors.transparent,
-                borderRadius: 30.0,
-                borderWidth: 1.0,
-                buttonSize: 60.0,
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  color: FlutterFlowTheme.of(context).primaryText,
-                  size: 30.0,
+  final Appointment appointment;
+  final bool cancelling;
+  final VoidCallback onCancel;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    final start = Appointment.dateAtTime(
+      appointment.date,
+      appointment.startTime,
+    );
+    final end = Appointment.dateAtTime(
+      appointment.date,
+      appointment.endTime,
+    );
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: theme.primary,
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                onPressed: () async {
-                  context.pop();
-                },
-              ),
-              title: Text(
-                'Apppointment Details',
-                style: FlutterFlowTheme.of(context).headlineMedium.override(
-                      font: GoogleFonts.poppins(
-                        fontWeight: FlutterFlowTheme.of(context)
-                            .headlineMedium
-                            .fontWeight,
-                        fontStyle: FlutterFlowTheme.of(context)
-                            .headlineMedium
-                            .fontStyle,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      color: FlutterFlowTheme.of(context).primaryText,
-                      fontSize: 22.0,
-                      letterSpacing: 0.0,
-                      fontWeight: FlutterFlowTheme.of(context)
-                          .headlineMedium
-                          .fontWeight,
-                      fontStyle:
-                          FlutterFlowTheme.of(context).headlineMedium.fontStyle,
+                      child: const Icon(
+                        Icons.calendar_month_rounded,
+                        color: Colors.white,
+                        size: 30,
+                      ),
                     ),
-              ),
-              actions: [],
-              centerTitle: true,
-              elevation: 0.0,
-            ),
-            body: SafeArea(
-              top: true,
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
+                    const SizedBox(width: 16),
+                    Expanded(
                       child: Column(
-                        mainAxisSize: MainAxisSize.max,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                16.0, 0.0, 0.0, 0.0),
-                            child: StreamBuilder<DoctorRecord>(
-                              stream: DoctorRecord.getDocument(
-                                  appointmentDetailsEncounterRecord.doctorId!),
-                              builder: (context, snapshot) {
-                                // Customize what your widget looks like when it's loading.
-                                if (!snapshot.hasData) {
-                                  return Container(
-                                    height: 30.0,
-                                    child: ShimmerWidget(),
-                                  );
-                                }
-
-                                final textDoctorRecord = snapshot.data!;
-
-                                return Text(
-                                  'Appointment with ${textDoctorRecord.name}',
-                                  style: FlutterFlowTheme.of(context)
-                                      .headlineSmall
-                                      .override(
-                                        font: GoogleFonts.poppins(
-                                          fontWeight:
-                                              FlutterFlowTheme.of(context)
-                                                  .headlineSmall
-                                                  .fontWeight,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .headlineSmall
-                                                  .fontStyle,
-                                        ),
-                                        letterSpacing: 0.0,
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .headlineSmall
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .headlineSmall
-                                            .fontStyle,
-                                      ),
-                                );
-                              },
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 4,
                             ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                16.0, 4.0, 0.0, 0.0),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
                             child: Text(
-                              '${dateTimeFormat("MMMMEEEEd", appointmentDetailsEncounterRecord.date)} at ${appointmentDetailsEncounterRecord.time}',
-                              textAlign: TextAlign.start,
-                              style: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .override(
-                                    font: GoogleFonts.poppins(
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .labelMedium
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .labelMedium
-                                          .fontStyle,
-                                    ),
-                                    letterSpacing: 0.0,
-                                    fontWeight: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .fontWeight,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .labelMedium
-                                        .fontStyle,
-                                  ),
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                16.0, 4.0, 0.0, 0.0),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: valueOrDefault<Color>(
-                                  () {
-                                    if (appointmentDetailsEncounterRecord
-                                            .status ==
-                                        'completed') {
-                                      return Color(0xFF2DAC5C);
-                                    } else if (appointmentDetailsEncounterRecord
-                                            .status ==
-                                        'canceled') {
-                                      return FlutterFlowTheme.of(context).error;
-                                    } else {
-                                      return FlutterFlowTheme.of(context)
-                                          .warning;
-                                    }
-                                  }(),
-                                  FlutterFlowTheme.of(context).accent2,
-                                ),
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                              child: Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Text(
-                                  appointmentDetailsEncounterRecord.status,
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        font: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w500,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryBackground,
-                                        letterSpacing: 0.0,
-                                        fontWeight: FontWeight.w500,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .bodyMedium
-                                            .fontStyle,
-                                      ),
-                                ),
+                              _statusLabel(appointment.status),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                          Divider(
-                            height: 32.0,
-                            thickness: 1.0,
-                            color: FlutterFlowTheme.of(context).alternate,
-                          ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                                16.0, 4.0, 0.0, 12.0),
-                            child: Text(
-                              'Appointment Result Details',
-                              textAlign: TextAlign.start,
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    font: GoogleFonts.poppins(
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .fontStyle,
-                                    ),
-                                    letterSpacing: 0.0,
-                                    fontWeight: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .fontWeight,
-                                    fontStyle: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .fontStyle,
-                                  ),
+                          const SizedBox(height: 3),
+                          Text(
+                            DateFormat('EEEE, d MMMM y').format(start),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          Align(
-                            alignment: AlignmentDirectional(0.0, 0.0),
-                            child: Stack(
-                              alignment: AlignmentDirectional(0.0, 0.0),
-                              children: [
-                                if (appointmentDetailsEncounterRecord.status ==
-                                    'completed')
-                                  Padding(
-                                    padding: EdgeInsetsDirectional.fromSTEB(
-                                        16.0, 0.0, 16.0, 0.0),
-                                    child: InkWell(
-                                      splashColor: Colors.transparent,
-                                      focusColor: Colors.transparent,
-                                      hoverColor: Colors.transparent,
-                                      highlightColor: Colors.transparent,
-                                      onTap: () async {
-                                        if (Navigator.of(context).canPop()) {
-                                          context.pop();
-                                        }
-                                        context.pushNamed(
-                                          EncounterDetailsWidget.routeName,
-                                          queryParameters: {
-                                            'encounterDets': serializeParam(
-                                              widget.encounterDets,
-                                              ParamType.DocumentReference,
-                                            ),
-                                          }.withoutNulls,
-                                        );
-                                      },
-                                      child: Container(
-                                        width: double.infinity,
-                                        constraints: BoxConstraints(
-                                          maxWidth: 570.0,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: FlutterFlowTheme.of(context)
-                                              .secondaryBackground,
-                                          borderRadius:
-                                              BorderRadius.circular(8.0),
-                                          border: Border.all(
-                                            color: FlutterFlowTheme.of(context)
-                                                .alternate,
-                                            width: 1.0,
-                                          ),
-                                        ),
-                                        child: Padding(
-                                          padding:
-                                              EdgeInsetsDirectional.fromSTEB(
-                                                  16.0, 12.0, 16.0, 12.0),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.max,
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Expanded(
-                                                child: Padding(
-                                                  padding: EdgeInsetsDirectional
-                                                      .fromSTEB(
-                                                          0.0, 0.0, 12.0, 0.0),
-                                                  child: Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.max,
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        'Next Visit: ${dateTimeFormat("MMMMEEEEd", appointmentDetailsEncounterRecord.nextVisit)}',
-                                                        style:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyLarge
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .poppins(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyLarge
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .bodyLarge
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyLarge
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyLarge
-                                                                      .fontStyle,
-                                                                ),
-                                                      ),
-                                                      Padding(
-                                                        padding:
-                                                            EdgeInsetsDirectional
-                                                                .fromSTEB(
-                                                                    0.0,
-                                                                    4.0,
-                                                                    0.0,
-                                                                    0.0),
-                                                        child: Text(
-                                                          appointmentDetailsEncounterRecord
-                                                              .comment,
-                                                          style: FlutterFlowTheme
-                                                                  .of(context)
-                                                              .labelMedium
-                                                              .override(
-                                                                font: GoogleFonts
-                                                                    .poppins(
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .labelMedium
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .labelMedium
-                                                                      .fontStyle,
-                                                                ),
-                                                                letterSpacing:
-                                                                    0.0,
-                                                                fontWeight: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontWeight,
-                                                                fontStyle: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .labelMedium
-                                                                    .fontStyle,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                if (appointmentDetailsEncounterRecord.status !=
-                                    'completed')
-                                  Container(
-                                    height: 200.0,
-                                    decoration: BoxDecoration(),
-                                    child: wrapWithModel(
-                                      model: _model.noDataGenericModel,
-                                      updateCallback: () => safeSetState(() {}),
-                                      child: NoDataGenericWidget(
-                                        message:
-                                            'No encounter result available yet',
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                          Text(
+                            '${DateFormat.jm().format(start)} – ${DateFormat.jm().format(end)}',
+                            style: const TextStyle(color: Colors.white),
                           ),
                         ],
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _DetailCard(
+                children: [
+                  _DetailRow(
+                    icon: Icons.medical_services_outlined,
+                    label: 'Clinician',
+                    value: appointment.clinicianName ?? 'Clinician',
                   ),
-                  Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        if (appointmentDetailsEncounterRecord.status ==
-                            'scheduled')
-                          Expanded(
-                            child: FFButtonWidget(
-                              onPressed: () async {
-                                var confirmDialogResponse =
-                                    await showDialog<bool>(
-                                          context: context,
-                                          builder: (alertDialogContext) {
-                                            return AlertDialog(
-                                              title: Text('Cancel Appointment'),
-                                              content: Text(
-                                                  'Are you sure you want to cancel this appointment? This action cannot be undone'),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(
-                                                          alertDialogContext,
-                                                          false),
-                                                  child: Text('No. Leave it'),
-                                                ),
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(
-                                                          alertDialogContext,
-                                                          true),
-                                                  child: Text('Yes. Cancel it'),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ) ??
-                                        false;
-                                if (confirmDialogResponse) {
-                                  await widget.encounterDets!
-                                      .update(createEncounterRecordData(
-                                    status: 'canceled',
-                                  ));
-
-                                  context.pushNamed(EncountersWidget.routeName);
-                                }
-                              },
-                              text: 'Cancel Appointment',
-                              options: FFButtonOptions(
-                                height: 40.0,
-                                padding: EdgeInsetsDirectional.fromSTEB(
-                                    24.0, 0.0, 24.0, 0.0),
-                                iconPadding: EdgeInsetsDirectional.fromSTEB(
-                                    0.0, 0.0, 0.0, 0.0),
-                                color: FlutterFlowTheme.of(context).accent3,
-                                textStyle: FlutterFlowTheme.of(context)
-                                    .titleSmall
-                                    .override(
-                                      font: GoogleFonts.poppins(
-                                        fontWeight: FlutterFlowTheme.of(context)
-                                            .titleSmall
-                                            .fontWeight,
-                                        fontStyle: FlutterFlowTheme.of(context)
-                                            .titleSmall
-                                            .fontStyle,
-                                      ),
-                                      color: FlutterFlowTheme.of(context).error,
-                                      letterSpacing: 0.0,
-                                      fontWeight: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontWeight,
-                                      fontStyle: FlutterFlowTheme.of(context)
-                                          .titleSmall
-                                          .fontStyle,
-                                    ),
-                                elevation: 0.0,
-                                borderSide: BorderSide(
-                                  color: FlutterFlowTheme.of(context).error,
-                                  width: 1.0,
-                                ),
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                            ),
-                          ),
-                      ],
+                  if (appointment.clinicianTitle?.isNotEmpty == true ||
+                      appointment.clinicianSpeciality?.isNotEmpty == true)
+                    _DetailRow(
+                      icon: Icons.badge_outlined,
+                      label: 'Title or speciality',
+                      value: [
+                        appointment.clinicianTitle,
+                        appointment.clinicianSpeciality,
+                      ]
+                          .whereType<String>()
+                          .where((value) => value.trim().isNotEmpty)
+                          .join(' - '),
                     ),
+                  _DetailRow(
+                    icon: Icons.local_hospital_outlined,
+                    label: 'Clinic',
+                    value: appointment.clinicName ?? 'Clinic',
+                  ),
+                  if (appointment.clinicAddress?.isNotEmpty == true)
+                    _DetailRow(
+                      icon: Icons.location_on_outlined,
+                      label: 'Clinic location',
+                      value: appointment.clinicAddress!,
+                    ),
+                  _DetailRow(
+                    icon: Icons.health_and_safety_outlined,
+                    label: 'Appointment type',
+                    value: _typeLabel(appointment.appointmentType),
+                  ),
+                  if (appointment.reason?.isNotEmpty == true)
+                    _DetailRow(
+                      icon: Icons.notes_rounded,
+                      label: 'Reason',
+                      value: appointment.reason!,
+                    ),
+                  if (appointment.notes?.isNotEmpty == true)
+                    _DetailRow(
+                      icon: Icons.description_outlined,
+                      label: 'Booking notes',
+                      value: appointment.notes!,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _DetailCard(
+                children: [
+                  _DetailRow(
+                    icon: Icons.source_outlined,
+                    label: 'Booking source',
+                    value: _typeLabel(appointment.source),
+                  ),
+                  _DetailRow(
+                    icon: Icons.schedule_outlined,
+                    label: 'Booked on',
+                    value: DateFormat('d MMM y, h:mm a')
+                        .format(appointment.createdAt.toLocal()),
+                  ),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: EdgeInsets.zero,
+                    title: const Text('Technical information'),
+                    subtitle: const Text('Reference for support requests'),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: SelectableText(
+                          'Appointment ID: ${appointment.id}',
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: theme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: theme.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        appointment.status == 'pending'
+                            ? 'Your request is pending confirmation. Dawa Mom will show status updates here when the clinic responds.'
+                            : 'Appointment status: ${_statusLabel(appointment.status)}.',
+                        style: theme.bodyMedium.copyWith(
+                          color: theme.primaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  error!,
+                  style: TextStyle(color: theme.error),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              if (appointment.canPatientCancel) ...[
+                const SizedBox(height: 22),
+                OutlinedButton.icon(
+                  onPressed: cancelling ? null : onCancel,
+                  icon: cancelling
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.event_busy_outlined),
+                  label: Text(
+                    cancelling ? 'Cancelling…' : 'Cancel appointment',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.error,
+                    side: BorderSide(color: theme.error),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                ),
+              ],
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
+
+  static String _statusLabel(String status) => status.isEmpty
+      ? 'Pending'
+      : '${status[0].toUpperCase()}${status.substring(1)}';
+
+  static String _typeLabel(String value) => value
+      .split('_')
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+}
+
+class _DetailCard extends StatelessWidget {
+  const _DetailCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.secondaryBackground,
+        border: Border.all(color: theme.alternate),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: theme.primary, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.bodySmall.copyWith(color: theme.secondaryText),
+                ),
+                const SizedBox(height: 2),
+                Text(value, style: theme.bodyMedium),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MissingAppointment extends StatelessWidget {
+  const _MissingAppointment();
+
+  @override
+  Widget build(BuildContext context) => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('This appointment is no longer available.'),
+        ),
+      );
+}
+
+class _DetailsError extends StatelessWidget {
+  const _DetailsError({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Appointment details could not be loaded.'),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
 }
