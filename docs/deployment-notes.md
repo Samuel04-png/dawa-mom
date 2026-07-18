@@ -1,6 +1,12 @@
 # Deployment Notes
 
-## Current Status
+## Current Dawa platform status
+
+The cross-project Supabase backend rollout was completed and reconciled on 18 July 2026. It does not by itself publish Flutter web/mobile clients. Follow the verified order in [Dawa Platform Integration](dawa-platform-integration.md) for another environment; never link this repository to the Clinician project.
+
+The Dawa Mom integration assets are migrations `202607170001` and `202607180001`, functions `clinician-directory`, `process-dawa-platform-outbox` and `receive-dawa-clinician-appointment-status`, plus the Vault-backed one-minute worker schedule.
+
+## General application deployment status
 
 Deployment is partially documented in the repo. Flutter build commands, web preview, Supabase function deploy commands, and Python/Vercel backend config are present. A complete production release runbook is not confirmed.
 

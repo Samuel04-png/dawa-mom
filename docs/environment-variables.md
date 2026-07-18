@@ -33,6 +33,20 @@ OMNIVOICE_API_KEY=your_omnivoice_api_key
 
 These belong in Supabase secrets, not Flutter.
 
+### Dawa platform integration
+
+| Secret or variable | Purpose |
+| --- | --- |
+| `DAWA_CLINICIAN_PATIENT_SYNC_URL` | Clinician patient receiver URL. |
+| `DAWA_CLINICIAN_APPOINTMENT_URL` | Clinician appointment receiver URL. |
+| `DAWA_CLINICIAN_DIRECTORY_URL` | Authoritative Clinician directory URL. |
+| `DAWA_CLINICIAN_DIRECTORY_TOKEN` | Authenticates directory requests. |
+| `DAWA_CLINICIAN_SYNC_SECRET` | Authenticates patient and appointment delivery. |
+| `DAWA_MOM_SYNC_SECRET` | Validates appointment-status callbacks. |
+| `DAWA_MOM_WORKER_SECRET` | Optional direct worker invocation credential; the schedule reads its value from Vault. |
+
+Use environment-variable names in documentation and CI configuration. Store values in Supabase secrets/Vault only.
+
 | Secret | Used By | Purpose |
 |---|---|---|
 | `SUPABASE_URL` | Edge Functions | Automatically provided by Supabase runtime in deployed functions. |

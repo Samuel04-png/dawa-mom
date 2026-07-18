@@ -2,6 +2,8 @@
 
 Dawa Mom is a Flutter application with Supabase as the active app backend. The code still contains FlutterFlow/Firestore-style generated names, but the active runtime paths use Supabase Auth, Supabase Postgres, and Supabase Edge Functions.
 
+The current cross-project boundary, identifier mapping, outbox workers and rollout state are documented in [Dawa Platform Integration](dawa-platform-integration.md).
+
 ## High-Level Architecture
 
 ```mermaid
@@ -88,10 +90,7 @@ Needs confirmation: I did not find a standalone mother-facing blood pressure mon
 
 ## Local And Offline Layer
 
-The app uses `SharedPreferences` for:
-
-- Theme mode.
-- Persisted `motherRef` in `FFAppState`.
+The app is light-mode only. `SharedPreferences` remains available for local app state such as onboarding completion; runtime theme selection is not persisted. Supabase session persistence is handled by `supabase_flutter`.
 
 Supabase session persistence is handled by `supabase_flutter`. There is no confirmed offline queue, conflict resolution layer, or local database sync implementation. `sqflite` is listed in `pubspec.yaml`, but I did not find a confirmed active offline sync feature using it.
 
@@ -103,7 +102,7 @@ The UI uses:
 - Poppins fonts from `assets/fonts/`.
 - Material icons and FlutterFlow widgets.
 - App images and illustrations under `assets/images/`.
-- Bottom navigation for Home, Appointments, and Period Tracker.
+- Responsive phone navigation and bounded tablet/desktop navigation for Home, Appointments, Period Tracker and Settings.
 - A floating Rudo assistant action on the Home screen.
 
 ## External Services

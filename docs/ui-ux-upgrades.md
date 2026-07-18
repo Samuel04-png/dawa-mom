@@ -11,8 +11,8 @@ Confirmed:
 - Centralized FlutterFlow theme in `lib/flutter_flow/flutter_flow_theme.dart`.
 - Poppins font family loaded from `assets/fonts/`.
 - Primary color family defined in the theme.
-- Light/dark theme mode support through `ThemeMode` and `SharedPreferences`.
-- Splash/video startup flow through `DawaSplashScreen`.
+- Light mode is the only runtime theme; dark/system controls and persistence were removed.
+- Transparent `assets/dawa_intro.gif` startup flow through `DawaSplashScreen` on brand blue.
 
 ## Authentication UI
 
@@ -78,12 +78,7 @@ Confirmed:
 - The login/register/profile flows include responsive sizing and scroll behavior.
 - `MyAppScrollBehavior` enables touch and mouse dragging.
 
-Needs confirmation:
-
-- Tablet-specific QA.
-- Landscape QA.
-- Web viewport QA.
-- Accessibility testing.
+Automated widget coverage now exercises key phone, tablet and desktop widths. Landscape, accessibility and real-device screenshot QA remain manual release checks.
 
 ## Rudo-Style UI
 

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Appointments and records are confirmed features. The app uses `encounters` as both appointment rows and completed clinical encounter result rows.
+Patient appointment requests use the dedicated Supabase `appointments` table and synchronise to Dawa Clinician. Completed clinical visit results remain separate records in `encounters`. See [Dawa Platform Integration](dawa-platform-integration.md) for the authoritative cross-project flow.
 
 ## Appointment Features
 
@@ -12,7 +12,7 @@ Confirmed:
 - Appointment detail screen: `AppointmentDetailsWidget`.
 - Booking bottom sheet: `BookingBottomSheetWidget`.
 - Completed encounter result page: `EncounterDetailsWidget`.
-- Appointment statuses include `scheduled`, `completed`, and `canceled`.
+- Appointment statuses include pending/confirmed/rescheduled/completed/cancelled transition states returned through the guarded integration.
 - Cancelled appointments are filtered out of the appointment list.
 - Scheduled appointments can be cancelled.
 - Completed appointments can open encounter result details.
@@ -88,6 +88,4 @@ Local:
 
 - The app relies heavily on `FFAppState().motherRef`; this should be resolved from the logged-in profile after auth/session changes.
 - No reminder/notification workflow was found.
-- No test coverage exists for appointment booking/cancellation.
-- No separate audit log was found for appointment changes.
-- No explicit appointment reschedule flow was found.
+- A real authenticated UI acceptance flow is still required before a client release, even though model, architecture and backend transaction paths are automated or live-verified.

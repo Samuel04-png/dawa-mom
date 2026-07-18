@@ -1,5 +1,11 @@
 # Testing And Verification
 
+## Current verified gate
+
+On 18 July 2026, `flutter analyze` passed, all 52 Flutter tests passed and the release web build completed. The Settings regression test renders every section at 390, 900 and 1200 logical pixels and catches framework/layout exceptions. Deno type checks passed for all changed integration functions and the backfill tool.
+
+Android resource XML is valid, but a complete APK compile remains pending because Gradle could not reach required Google/Maven artifacts. Full Xcode is not installed, so iOS compilation/signing remains pending.
+
 ## Automated Tests
 
 Current tests found:

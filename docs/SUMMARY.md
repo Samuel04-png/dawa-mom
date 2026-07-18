@@ -19,6 +19,7 @@
 
 ## Backend and Data
 
+- [Dawa Platform Integration](dawa-platform-integration.md)
 - [Database and Backend](database-and-backend.md)
 - [Firebase to Supabase](firebase-to-supabase.md)
 - [Supabase Migration](supabase-migration.md)
@@ -27,6 +28,7 @@
 
 ## App Features
 
+- [Current UI and Workflows](current-ui-and-workflows.md)
 - [Mother Health Workflows](mother-health-workflows.md)
 - [Blood Pressure Monitor](blood-pressure-monitor.md)
 - [Health Interpretation](health-interpretation.md)
