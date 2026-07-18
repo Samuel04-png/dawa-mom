@@ -919,7 +919,7 @@ class _LoginWidgetState extends State<LoginWidget> {
                     image: DecorationImage(
                       fit: BoxFit.contain,
                       image: Image.asset(
-                        'assets/images/login-page-img.png',
+                        'assets/images/transparent assets/login-page-img.png',
                       ).image,
                     ),
                     borderRadius: BorderRadius.circular(16.0),

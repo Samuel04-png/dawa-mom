@@ -1,28 +1,43 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
 
-import '/components/branding/dawa_mom_logo.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '/flutter_flow/flutter_flow_theme.dart';
 
 class DawaSplashScreen extends StatefulWidget {
   final VoidCallback onAnimationComplete;
 
-  const DawaSplashScreen({Key? key, required this.onAnimationComplete})
-      : super(key: key);
+  const DawaSplashScreen({super.key, required this.onAnimationComplete});
+
+  static const assetPath = 'assets/dawa_intro.gif';
+  static const splashDuration = Duration(seconds: 2);
 
   @override
   State<DawaSplashScreen> createState() => _DawaSplashScreenState();
 }
 
 class _DawaSplashScreenState extends State<DawaSplashScreen> {
-  static const _splashDuration = Duration(seconds: 2);
   bool _hasCompleted = false;
+  bool _didPrecache = false;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
 
-    _timer = Timer(_splashDuration, _completeAnimation);
+    _timer = Timer(DawaSplashScreen.splashDuration, _completeAnimation);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didPrecache) return;
+    _didPrecache = true;
+    precacheImage(
+      const AssetImage(DawaSplashScreen.assetPath),
+      context,
+    );
   }
 
   void _completeAnimation() {
@@ -41,23 +56,43 @@ class _DawaSplashScreenState extends State<DawaSplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF1F4F8),
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const DawaMomLogo(
-                variant: DawaMomLogoVariant.authentication,
-                size: 240,
-              ),
-              const SizedBox(height: 28),
-              const CircularProgressIndicator(
-                color: Color(0xFF1945CD),
-                strokeWidth: 3,
-              ),
-            ],
+    final splashBlue = FlutterFlowTheme.of(context).primary;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: splashBlue,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: splashBlue,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final widthFactor = constraints.maxWidth < 600
+                  ? 0.68
+                  : constraints.maxWidth < 1024
+                      ? 0.50
+                      : 0.38;
+              final animationWidth = (constraints.maxWidth * widthFactor)
+                  .clamp(180.0, 560.0)
+                  .toDouble();
+
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: animationWidth,
+                    maxHeight: constraints.maxHeight * 0.60,
+                  ),
+                  child: Image.asset(
+                    DawaSplashScreen.assetPath,
+                    width: animationWidth,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

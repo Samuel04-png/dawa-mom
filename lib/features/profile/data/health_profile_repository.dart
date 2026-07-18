@@ -31,7 +31,7 @@ class HealthProfileRepository {
         () => _client
             .from('mothers')
             .select(
-              'id,name,phone_number,date_of_birth,occupation,address,pregnancy_status,first_encounter_id',
+              'id,name,phone_number,date_of_birth,occupation,address,pregnancy_status,first_encounter_id,dawa_clinician_patient_id,dawa_clinician_synced_at,dawa_clinician_sync_error_code',
             )
             .eq('profile_id', userId)
             .maybeSingle(),
@@ -93,6 +93,14 @@ class HealthProfileRepository {
     }
   }
 
+  Future<void> retryPatientSync() async {
+    _requireUserId();
+    await SupabaseDatabase.instance.runWithFreshSession(
+      () => _client.rpc('retry_own_dawa_clinician_patient_sync'),
+    );
+    notifyChanged();
+  }
+
   String _requireUserId() {
     final value = _client.auth.currentUser?.id;
     if (value == null || value.isEmpty) {
@@ -145,6 +153,10 @@ class HealthProfileSnapshot {
   DateTime? get lastPeriodStart =>
       periodSettings?['lastPeriodStart'] as DateTime?;
   bool get periodWasSkipped => profile['period_setup_skipped_at'] != null;
+  bool get isMappedToDawaClinician =>
+      _text(mother['dawa_clinician_patient_id']).isNotEmpty;
+  bool get patientSyncNeedsAttention =>
+      _text(mother['dawa_clinician_sync_error_code']).isNotEmpty;
 
   PregnancyProfileStatus get pregnancyProfileStatus {
     switch (pregnancyStatus) {

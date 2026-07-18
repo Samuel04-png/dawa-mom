@@ -18,7 +18,6 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/services/voice_service.dart';
-import '/flutter_flow/custom_functions.dart' as functions;
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -302,7 +301,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(100.0),
                             child: Image.asset(
-                              'assets/images/Frame_41.png',
+                              'assets/images/transparent assets/Frame_41.png',
                               width: 50.0,
                               height: 50.0,
                               fit: BoxFit.cover,
@@ -500,7 +499,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                                   width: double.infinity,
                                                   child: ClipRect(
                                                     child: Image.asset(
-                                                      'assets/images/No_data-pana.png',
+                                                      'assets/images/transparent assets/No_data-pana.png',
                                                       fit: BoxFit.contain,
                                                       errorBuilder: (context,
                                                           error, stackTrace) {

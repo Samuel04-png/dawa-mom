@@ -33,7 +33,18 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
   @override
   void initState() {
     super.initState();
+    AppointmentRepository.changes.addListener(_onAppointmentChanged);
     _appointment = _load();
+  }
+
+  @override
+  void dispose() {
+    AppointmentRepository.changes.removeListener(_onAppointmentChanged);
+    super.dispose();
+  }
+
+  void _onAppointmentChanged() {
+    if (mounted) _refresh();
   }
 
   Future<Appointment?> _load() {
@@ -161,6 +172,14 @@ class _DetailsBody extends StatelessWidget {
       appointment.date,
       appointment.endTime,
     );
+    final statusMessage = appointment.patientSafeStatusMessage?.trim().isNotEmpty ==
+            true
+        ? appointment.patientSafeStatusMessage!.trim()
+        : appointment.integrationStatus == 'failed'
+            ? 'Your appointment is saved, but the clinic connection needs attention. It will be retried safely.'
+            : appointment.status == 'pending'
+                ? 'Your request is pending confirmation. Dawa Mom will show status updates here when the clinic responds.'
+                : 'Appointment status: ${_statusLabel(appointment.status)}.';
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Center(
@@ -326,9 +345,7 @@ class _DetailsBody extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        appointment.status == 'pending'
-                            ? 'Your request is pending confirmation. Dawa Mom will show status updates here when the clinic responds.'
-                            : 'Appointment status: ${_statusLabel(appointment.status)}.',
+                        statusMessage,
                         style: theme.bodyMedium.copyWith(
                           color: theme.primaryText,
                         ),

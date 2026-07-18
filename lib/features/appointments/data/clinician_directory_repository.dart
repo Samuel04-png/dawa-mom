@@ -20,6 +20,9 @@ class SupabaseClinicianDirectoryRepository
 
   final SupabaseClient _client;
   List<ClinicianProfile>? _cachedClinicians;
+  bool _usingCachedDirectory = false;
+
+  bool get isUsingCachedDirectory => _usingCachedDirectory;
 
   @override
   Future<List<ClinicianProfile>> getClinicians() async {
@@ -35,6 +38,7 @@ class SupabaseClinicianDirectoryRepository
   Future<List<ClinicianProfile>> getCliniciansByClinic(String clinicId) async {
     final remote = await _tryRemoteDirectory(clinicId);
     if (remote != null) {
+      _usingCachedDirectory = false;
       return remote;
     }
 
@@ -44,6 +48,7 @@ class SupabaseClinicianDirectoryRepository
         params: {'target_clinic_id': clinicId},
       ),
     );
+    _usingCachedDirectory = true;
     return _parseClinicians(rows);
   }
 
@@ -56,47 +61,29 @@ class SupabaseClinicianDirectoryRepository
     if (remote != null) {
       return remote;
     }
-
-    final clinicians = await getClinicians();
-    final clinician =
-        clinicians.where((item) => item.id == clinicianId).firstOrNull;
-    if (clinician == null) {
-      throw const AppointmentException(
-        'This clinician is no longer available for booking.',
-      );
-    }
-
-    final rows = await SupabaseDatabase.instance.runWithFreshSession(
-      () => _client.rpc(
-        'get_clinician_booked_slots',
-        params: {
-          'target_clinician_id': clinicianId,
-          'target_date': _dateId(date),
-        },
-      ),
+    throw const AppointmentException(
+      'Live appointment times are temporarily unavailable. Please retry.',
+      retryable: true,
     );
-    final bookedStarts = (rows as List)
-        .map((row) => Appointment.normalizeDatabaseTime(
-              (row as Map)['start_time'],
-            ))
-        .toSet();
-    return _buildSlots(clinician, date, bookedStarts);
   }
 
   @override
   Future<void> refreshClinicianDirectory() async {
     _cachedClinicians = null;
+    _usingCachedDirectory = false;
     await getClinicians();
   }
 
   Future<List<ClinicianProfile>> _loadClinicians() async {
     final remote = await _tryRemoteDirectory(null);
     if (remote != null) {
+      _usingCachedDirectory = false;
       return remote;
     }
     final rows = await SupabaseDatabase.instance.runWithFreshSession(
       () => _client.rpc('get_bookable_clinicians'),
     );
+    _usingCachedDirectory = true;
     return _parseClinicians(rows);
   }
 
@@ -161,41 +148,8 @@ class SupabaseClinicianDirectoryRepository
         .toList();
   }
 
-  static List<AppointmentSlot> _buildSlots(
-    ClinicianProfile clinician,
-    DateTime date,
-    Set<String> bookedStarts,
-  ) {
-    final start = Appointment.dateAtTime(date, clinician.scheduleStart);
-    final end = Appointment.dateAtTime(date, clinician.scheduleEnd);
-    final now = DateTime.now();
-    final slots = <AppointmentSlot>[];
-    var cursor = start;
-    while (
-        cursor.add(Duration(minutes: clinician.slotMinutes)).compareTo(end) <=
-            0) {
-      final slotEnd = cursor.add(Duration(minutes: clinician.slotMinutes));
-      final startLabel = _timeId(cursor);
-      slots.add(AppointmentSlot(
-        startTime: startLabel,
-        endTime: _timeId(slotEnd),
-        isAvailable: !bookedStarts.contains(startLabel) && cursor.isAfter(now),
-      ));
-      cursor = slotEnd;
-    }
-    return slots;
-  }
-
   static String _dateId(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-'
       '${value.month.toString().padLeft(2, '0')}-'
       '${value.day.toString().padLeft(2, '0')}';
-
-  static String _timeId(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:'
-      '${value.minute.toString().padLeft(2, '0')}';
-}
-
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

@@ -63,13 +63,13 @@ class _DawaMomWalkthroughState extends State<DawaMomWalkthrough> {
       title: 'Track your cycle',
       description:
           'Record periods and view estimated cycle information when it is useful to you.',
-      image: 'assets/images/Menstrual_calendar-pana.png',
+      image: 'assets/images/transparent assets/Menstrual_calendar-pana.png',
     ),
     _WalkthroughStep(
       title: 'Complete your health profile',
       description:
           'Add relevant health information for more personalised guidance.',
-      image: 'assets/images/Status_update-pana.png',
+      image: 'assets/images/transparent assets/Status_update-pana.png',
     ),
     _WalkthroughStep(
       title: 'Ask Rudo',

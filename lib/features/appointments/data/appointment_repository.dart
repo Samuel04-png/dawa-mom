@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,17 +13,49 @@ class AppointmentRepository {
     ClinicianDirectoryRepository? clinicianDirectory,
   })  : _client = client ?? Supabase.instance.client,
         _clinicianDirectory = clinicianDirectory ??
-            SupabaseClinicianDirectoryRepository(client: client);
+            SupabaseClinicianDirectoryRepository(client: client) {
+    _ensureRealtime(_client);
+  }
 
   final SupabaseClient _client;
   final ClinicianDirectoryRepository _clinicianDirectory;
 
   static final ValueNotifier<int> changes = ValueNotifier<int>(0);
+  static RealtimeChannel? _appointmentsChannel;
+  static String? _realtimeUserId;
+
+  static void _ensureRealtime(SupabaseClient client) {
+    final userId = client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty || userId == _realtimeUserId) return;
+    final previous = _appointmentsChannel;
+    if (previous != null) {
+      unawaited(client.removeChannel(previous).then<void>((_) {}));
+    }
+    _realtimeUserId = userId;
+    _appointmentsChannel = client
+        .channel('dawa-mom-appointments-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'appointments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'patient_id',
+            value: userId,
+          ),
+          callback: (_) => changes.value += 1,
+        )
+        .subscribe();
+  }
 
   Future<List<ClinicOption>> getClinics() async {
     _requireUserId();
     final rows = await SupabaseDatabase.instance.runWithFreshSession(
-      () => _client.from('clinics').select('id,name,address').order('name'),
+      () => _client
+          .from('clinics')
+          .select('id,name,address')
+          .not('dawa_clinician_clinic_id', 'is', null)
+          .order('name'),
     );
     return (rows as List)
         .map((row) => ClinicOption.fromJson(
@@ -267,6 +301,7 @@ class AppointmentRepository {
         'Please sign in before booking an appointment.',
       );
     }
+    _ensureRealtime(_client);
     return userId;
   }
 

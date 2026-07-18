@@ -59,13 +59,30 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
 
   Future<void> _loadClinics() async {
     try {
-      final clinics = await _appointments.getClinics();
+      try {
+        await _clinicianDirectory.refreshClinicianDirectory();
+      } catch (_) {
+        // Keep the previously imported booking-safe cache available as a
+        // degraded fallback; clinic selection shows a retry state if no
+        // mapped clinicians can be loaded.
+      }
+      final directoryClinicians = await _clinicianDirectory.getClinicians();
+      final activeClinicIds = directoryClinicians
+          .where((clinician) => clinician.isActive && clinician.isBookable)
+          .map((clinician) => clinician.clinicId)
+          .toSet();
+      final clinics = (await _appointments.getClinics())
+          .where((clinic) => activeClinicIds.contains(clinic.id))
+          .toList(growable: false);
       if (!mounted) return;
       setState(() {
         _clinics = clinics;
         _loadingDirectory = false;
         if (clinics.isEmpty) {
           _formError = 'No clinics are available for booking right now.';
+        } else if (_clinicianDirectory.isUsingCachedDirectory) {
+          _formError =
+              'Showing the latest safely cached clinician directory. Live appointment times require a connection.';
         }
       });
     } on AppointmentException catch (error) {
@@ -112,6 +129,9 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
         if (clinicians.isEmpty) {
           _clinicianError =
               'No bookable clinicians are available at this clinic.';
+        } else if (_clinicianDirectory.isUsingCachedDirectory) {
+          _formError =
+              'Showing the latest safely cached clinicians. Live appointment times require a connection.';
         }
       });
     } catch (_) {

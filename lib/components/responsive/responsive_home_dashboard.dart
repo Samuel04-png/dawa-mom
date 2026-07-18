@@ -41,6 +41,7 @@ class _DawaMomResponsiveDashboardState
     super.initState();
     HealthProfileRepository.changes.addListener(_onProfileChanged);
     PeriodTrackerService.changes.addListener(_onProfileChanged);
+    AppointmentRepository.changes.addListener(_onProfileChanged);
     _data = _load();
   }
 
@@ -48,6 +49,7 @@ class _DawaMomResponsiveDashboardState
   void dispose() {
     HealthProfileRepository.changes.removeListener(_onProfileChanged);
     PeriodTrackerService.changes.removeListener(_onProfileChanged);
+    AppointmentRepository.changes.removeListener(_onProfileChanged);
     super.dispose();
   }
 
@@ -163,7 +165,7 @@ class _DawaMomResponsiveDashboardState
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.asset(
-                'assets/images/Frame_41.png',
+                'assets/images/transparent assets/Frame_41.png',
                 fit: BoxFit.cover,
               ),
             ),

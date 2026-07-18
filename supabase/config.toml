@@ -1,0 +1,7 @@
+project_id = "himbfndvsuwiudtzjojh"
+
+[functions.process-dawa-platform-outbox]
+verify_jwt = false
+
+[functions.receive-dawa-clinician-appointment-status]
+verify_jwt = false

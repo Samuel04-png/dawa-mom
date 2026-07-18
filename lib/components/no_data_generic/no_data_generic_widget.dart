@@ -49,10 +49,10 @@ class _NoDataGenericWidgetState extends State<NoDataGenericWidget> {
         ClipRRect(
           borderRadius: BorderRadius.circular(8.0),
           child: Image.asset(
-            'assets/images/No_data-pana.png',
+            'assets/images/transparent assets/No_data-pana.png',
             width: double.infinity,
             height: 110.0,
-            fit: BoxFit.scaleDown,
+            fit: BoxFit.contain,
           ),
         ),
         Padding(

@@ -431,9 +431,6 @@ extension StringDocRef on String {
   DocumentReference get ref => SupabaseDatabase.instance.doc(this);
 }
 
-void setDarkModeSetting(BuildContext context, ThemeMode themeMode) =>
-    MyApp.of(context).setThemeMode(themeMode);
-
 void showSnackbar(
   BuildContext context,
   String message, {
@@ -538,21 +535,17 @@ extension StatefulWidgetExtensions on State<StatefulWidget> {
 
 // For iOS 16 and below, set the status bar color to match the app's theme.
 // https://github.com/flutter/flutter/issues/41067
-Brightness? _lastBrightness;
 void fixStatusBarOniOS16AndBelow(BuildContext context) {
   if (!isiOS) {
     return;
   }
-  final brightness = Theme.of(context).brightness;
-  if (_lastBrightness != brightness) {
-    _lastBrightness = brightness;
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarBrightness: brightness,
-        systemStatusBarContrastEnforced: true,
-      ),
-    );
-  }
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      systemStatusBarContrastEnforced: true,
+    ),
+  );
 }
 
 extension ColorOpacityExt on Color {

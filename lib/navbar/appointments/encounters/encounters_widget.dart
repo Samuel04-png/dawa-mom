@@ -24,7 +24,18 @@ class _EncountersWidgetState extends State<EncountersWidget> {
   @override
   void initState() {
     super.initState();
+    AppointmentRepository.changes.addListener(_onAppointmentsChanged);
     _appointments = _repository.getAppointments();
+  }
+
+  @override
+  void dispose() {
+    AppointmentRepository.changes.removeListener(_onAppointmentsChanged);
+    super.dispose();
+  }
+
+  void _onAppointmentsChanged() {
+    if (mounted) _refresh();
   }
 
   Future<void> _refresh() async {
@@ -313,7 +324,7 @@ class _AppointmentsEmptyState extends StatelessWidget {
           child: Column(
             children: [
               Image.asset(
-                'assets/images/No_data-pana.png',
+                'assets/images/transparent assets/No_data-pana.png',
                 height: 170,
                 fit: BoxFit.contain,
               ),

@@ -395,7 +395,7 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8.0),
                               child: Image.asset(
-                                'assets/images/Status_update-pana.png',
+                                'assets/images/transparent assets/Status_update-pana.png',
                                 width: isCompactLayout ? 240.0 : 360.0,
                                 height: heroImageHeight,
                                 fit: BoxFit.contain,

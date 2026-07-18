@@ -18,6 +18,9 @@ void main() {
         'source': 'dawa_mom',
         'created_at': '2026-07-15T06:00:00Z',
         'integration_status': 'pending',
+        'dawa_clinician_appointment_id': 'dawa_mom_appointment',
+        'integration_error_code': 'UPSTREAM_UNREACHABLE',
+        'patient_safe_status_message': 'Your appointment is being reviewed.',
       });
 
       expect(appointment.startTime, '09:00');
@@ -25,6 +28,12 @@ void main() {
       expect(appointment.status, 'pending');
       expect(appointment.canPatientCancel, isTrue);
       expect(appointment.isUpcoming, isTrue);
+      expect(appointment.externalAppointmentId, 'dawa_mom_appointment');
+      expect(appointment.integrationErrorCode, 'UPSTREAM_UNREACHABLE');
+      expect(
+        appointment.patientSafeStatusMessage,
+        'Your appointment is being reviewed.',
+      );
     });
 
     test('normalizes a date and time into a local DateTime', () {

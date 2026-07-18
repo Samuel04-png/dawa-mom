@@ -356,10 +356,10 @@ class _WeekWidgetState extends State<WeekWidget> with TickerProviderStateMixin {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8.0),
                             child: Image.asset(
-                              'assets/images/Pregnancy_stages-pana.png',
+                              'assets/images/transparent assets/Pregnancy_stages-pana.png',
                               width: double.infinity,
                               height: double.infinity,
-                              fit: BoxFit.scaleDown,
+                              fit: BoxFit.contain,
                             ),
                           ),
                         ),

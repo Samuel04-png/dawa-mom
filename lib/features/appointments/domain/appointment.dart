@@ -19,6 +19,8 @@ class Appointment {
     this.reason,
     this.notes,
     this.externalAppointmentId,
+    this.integrationErrorCode,
+    this.patientSafeStatusMessage,
     this.clinicianName,
     this.clinicName,
     this.clinicianTitle,
@@ -42,6 +44,8 @@ class Appointment {
   final DateTime createdAt;
   final String integrationStatus;
   final String? externalAppointmentId;
+  final String? integrationErrorCode;
+  final String? patientSafeStatusMessage;
   final String? clinicianName;
   final String? clinicName;
   final String? clinicianTitle;
@@ -82,6 +86,8 @@ class Appointment {
         createdAt: createdAt,
         integrationStatus: integrationStatus,
         externalAppointmentId: externalAppointmentId,
+        integrationErrorCode: integrationErrorCode,
+        patientSafeStatusMessage: patientSafeStatusMessage,
         clinicianName: clinicianName ?? this.clinicianName,
         clinicName: clinicName ?? this.clinicName,
         clinicianTitle: clinicianTitle ?? this.clinicianTitle,
@@ -107,7 +113,12 @@ class Appointment {
       source: json['source']?.toString() ?? 'dawa_mom',
       createdAt: DateTime.parse(json['created_at'].toString()),
       integrationStatus: json['integration_status']?.toString() ?? 'pending',
-      externalAppointmentId: json['external_appointment_id']?.toString(),
+      externalAppointmentId:
+          json['dawa_clinician_appointment_id']?.toString() ??
+              json['external_appointment_id']?.toString(),
+      integrationErrorCode: json['integration_error_code']?.toString(),
+      patientSafeStatusMessage:
+          json['patient_safe_status_message']?.toString(),
     );
   }
 

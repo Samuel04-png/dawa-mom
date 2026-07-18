@@ -9,26 +9,31 @@ import '/features/profile/data/health_profile_repository.dart';
 import '/features/profile/profile_completion_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/main.dart';
 import '/navbar/edit_profile/edit_profile_widget.dart';
 
 class DawaMomSettingsPage extends StatefulWidget {
-  const DawaMomSettingsPage({super.key});
+  const DawaMomSettingsPage({
+    super.key,
+    HealthProfileRepository? profileRepository,
+  }) : _profileRepository = profileRepository;
 
   static const routeName = 'Settings';
   static const routePath = '/settings';
+
+  final HealthProfileRepository? _profileRepository;
 
   @override
   State<DawaMomSettingsPage> createState() => _DawaMomSettingsPageState();
 }
 
 class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
-  final _profiles = HealthProfileRepository();
+  late final HealthProfileRepository _profiles;
   late Future<HealthProfileSnapshot> _profile;
 
   @override
   void initState() {
     super.initState();
+    _profiles = widget._profileRepository ?? HealthProfileRepository();
     _profile = _profiles.load();
   }
 
@@ -217,22 +222,21 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
                       profile: profile,
                       onEdit: _editProfile,
                     );
-                    final sections = [
-                      _HealthSettings(
-                        profile: profile,
-                        onOpenCompletion: _openCompletionHub,
-                        onSetupPeriod: () => _setupPeriod(profile),
-                      ),
-                      const _AppearanceSettings(),
-                      _PrivacySettings(onChangePassword: _changePassword),
-                      _SupportSettings(
-                        onReplayTour: () => showDawaMomWalkthrough(context),
-                      ),
-                      _AccountActions(
-                        onLogout: _logout,
-                        onDelete: _deleteAccount,
-                      ),
-                    ];
+                    final healthSettings = _HealthSettings(
+                      profile: profile,
+                      onOpenCompletion: _openCompletionHub,
+                      onSetupPeriod: () => _setupPeriod(profile),
+                    );
+                    final privacySettings = _PrivacySettings(
+                      onChangePassword: _changePassword,
+                    );
+                    final supportSettings = _SupportSettings(
+                      onReplayTour: () => showDawaMomWalkthrough(context),
+                    );
+                    final accountActions = _AccountActions(
+                      onLogout: _logout,
+                      onDelete: _deleteAccount,
+                    );
                     if (constraints.maxWidth >= 860) {
                       return Column(
                         children: [
@@ -244,9 +248,9 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
                               Expanded(
                                 child: Column(
                                   children: [
-                                    sections[0],
+                                    healthSettings,
                                     const SizedBox(height: 16),
-                                    sections[2],
+                                    supportSettings,
                                   ],
                                 ),
                               ),
@@ -254,11 +258,9 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
                               Expanded(
                                 child: Column(
                                   children: [
-                                    sections[1],
+                                    privacySettings,
                                     const SizedBox(height: 16),
-                                    sections[3],
-                                    const SizedBox(height: 16),
-                                    sections[4],
+                                    accountActions,
                                   ],
                                 ),
                               ),
@@ -271,7 +273,12 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
                     return Column(
                       children: [
                         account,
-                        ...sections.expand(
+                        ...[
+                          healthSettings,
+                          privacySettings,
+                          supportSettings,
+                          accountActions,
+                        ].expand(
                           (section) => [
                             const SizedBox(height: 14),
                             section,
@@ -300,24 +307,26 @@ class _SettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: theme.secondaryBackground,
-        border: Border.all(color: theme.alternate),
+    return Material(
+      color: theme.secondaryBackground,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: theme.alternate),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.titleSmall.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 10),
-          ...children,
-        ],
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.titleSmall.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -335,55 +344,87 @@ class _AccountCard extends StatelessWidget {
     return _SettingsCard(
       title: 'Account and profile',
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final avatar = CircleAvatar(
               radius: 34,
               backgroundColor: theme.primary.withValues(alpha: 0.1),
-              backgroundImage: const AssetImage('assets/images/Frame_41.png'),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    profile.name.isEmpty ? 'Dawa Mom member' : profile.name,
-                    style: theme.titleMedium.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    profile.email,
-                    style: theme.bodySmall.copyWith(color: theme.secondaryText),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 5,
-                    children: [
-                      _ProfileFact(
-                          icon: Icons.phone_outlined, text: profile.phone),
-                      _ProfileFact(
-                        icon: Icons.work_outline_rounded,
-                        text: profile.occupation,
-                      ),
-                      _ProfileFact(
-                        icon: Icons.location_on_outlined,
-                        text: profile.address,
-                      ),
-                    ],
-                  ),
-                ],
+              backgroundImage: const AssetImage(
+                'assets/images/transparent assets/Frame_41.png',
               ),
-            ),
-            FilledButton.tonalIcon(
+            );
+            final details = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.name.isEmpty ? 'Dawa Mom member' : profile.name,
+                  style: theme.titleMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  profile.email,
+                  style: theme.bodySmall.copyWith(color: theme.secondaryText),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 14,
+                  runSpacing: 5,
+                  children: [
+                    _ProfileFact(
+                      icon: Icons.phone_outlined,
+                      text: profile.phone,
+                    ),
+                    _ProfileFact(
+                      icon: Icons.work_outline_rounded,
+                      text: profile.occupation,
+                    ),
+                    _ProfileFact(
+                      icon: Icons.location_on_outlined,
+                      text: profile.address,
+                    ),
+                  ],
+                ),
+              ],
+            );
+            final editButton = FilledButton.tonalIcon(
               onPressed: onEdit,
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: const Text('Edit profile'),
-            ),
-          ],
+            );
+
+            if (constraints.maxWidth < 520) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      avatar,
+                      const SizedBox(width: 16),
+                      Expanded(child: details),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: editButton,
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                avatar,
+                const SizedBox(width: 16),
+                Expanded(child: details),
+                const SizedBox(width: 12),
+                editButton,
+              ],
+            );
+          },
         ),
       ],
     );
@@ -403,7 +444,7 @@ class _ProfileFact extends StatelessWidget {
       children: [
         Icon(icon, size: 16),
         const SizedBox(width: 5),
-        Text(text),
+        Flexible(child: Text(text)),
       ],
     );
   }
@@ -443,32 +484,6 @@ class _HealthSettings extends StatelessWidget {
           ),
         ],
       );
-}
-
-class _AppearanceSettings extends StatelessWidget {
-  const _AppearanceSettings();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return _SettingsCard(
-      title: 'Appearance',
-      children: [
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          secondary: Icon(
-            isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-          ),
-          title: const Text('Dark appearance'),
-          subtitle: const Text('Use a darker colour scheme'),
-          value: isDark,
-          onChanged: (value) => MyApp.of(context).setThemeMode(
-            value ? ThemeMode.dark : ThemeMode.light,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _PrivacySettings extends StatelessWidget {

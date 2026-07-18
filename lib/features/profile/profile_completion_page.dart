@@ -19,6 +19,7 @@ class ProfileCompletionPage extends StatefulWidget {
 class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
   final _repository = HealthProfileRepository();
   late Future<HealthProfileSnapshot> _profile;
+  bool _retryingPatientSync = false;
 
   @override
   void initState() {
@@ -78,6 +79,34 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
           ),
         ),
       );
+    }
+  }
+
+  Future<void> _retryPatientSync() async {
+    if (_retryingPatientSync) return;
+    setState(() => _retryingPatientSync = true);
+    try {
+      await _repository.retryPatientSync();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Your profile sync has been queued and will retry safely.',
+          ),
+        ),
+      );
+      await _refresh();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Complete your personal details, then try the clinic connection again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _retryingPatientSync = false);
     }
   }
 
@@ -161,6 +190,32 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                       ],
                     ),
                   ),
+                  if (data.patientSyncNeedsAttention) ...[
+                    const SizedBox(height: 14),
+                    DawaMomCard(
+                      child: Row(
+                        children: [
+                          Icon(Icons.sync_problem_rounded, color: theme.warning),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Your health profile is saved. The clinic connection needs another attempt.',
+                              style: theme.bodyMedium,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          TextButton(
+                            onPressed: _retryingPatientSync
+                                ? null
+                                : _retryPatientSync,
+                            child: Text(
+                              _retryingPatientSync ? 'Queuing...' : 'Retry',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   LayoutBuilder(
                     builder: (context, constraints) {

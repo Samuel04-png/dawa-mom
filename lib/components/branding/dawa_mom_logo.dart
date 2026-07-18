@@ -19,9 +19,10 @@ class DawaMomLogo extends StatelessWidget {
     this.semanticLabel = 'Dawa Mom',
   });
 
-  static const crossAsset = 'assets/images/dawa_mom_cross.png';
+  static const crossAsset =
+      'assets/images/transparent assets/dawa_mom_cross.png';
   static const wordmarkAsset = 'assets/images/dawa_mom_wordmark.png';
-  static const fullAsset = 'assets/images/dawa_mom_full.png';
+  static const fullAsset = 'assets/images/transparent assets/dawa_mom_full.png';
 
   final DawaMomLogoVariant variant;
   final double size;

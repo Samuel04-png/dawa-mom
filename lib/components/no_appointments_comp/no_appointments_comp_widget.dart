@@ -45,10 +45,10 @@ class _NoAppointmentsCompWidgetState extends State<NoAppointmentsCompWidget> {
         ClipRRect(
           borderRadius: BorderRadius.circular(8.0),
           child: Image.asset(
-            'assets/images/Menstrual_calendar-pana.png',
+            'assets/images/transparent assets/Menstrual_calendar-pana.png',
             width: double.infinity,
             height: 107.6,
-            fit: BoxFit.scaleDown,
+            fit: BoxFit.contain,
           ),
         ),
         Padding(

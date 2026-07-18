@@ -4,7 +4,7 @@
     "description": "Maternal health companion app with appointments, pregnancy guidance, period tracking, and Rudo chat.",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#F1F4F8",
+    "background_color": "#1945CD",
     "theme_color": "#1945CD",
     "orientation": "portrait-primary",
     "icons": [
