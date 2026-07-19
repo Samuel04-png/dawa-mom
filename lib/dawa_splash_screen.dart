@@ -3,29 +3,31 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '/flutter_flow/flutter_flow_theme.dart';
-
 class DawaSplashScreen extends StatefulWidget {
-  final VoidCallback onAnimationComplete;
-
-  const DawaSplashScreen({super.key, required this.onAnimationComplete});
+  const DawaSplashScreen({
+    super.key,
+    required this.onAnimationComplete,
+  });
 
   static const assetPath = 'assets/dawa_intro.gif';
+  static const splashBackgroundColor = Color(0xFF102490);
   static const splashDuration = Duration(seconds: 2);
+
+  final VoidCallback onAnimationComplete;
 
   @override
   State<DawaSplashScreen> createState() => _DawaSplashScreenState();
 }
 
 class _DawaSplashScreenState extends State<DawaSplashScreen> {
+  Timer? _timer;
   bool _hasCompleted = false;
   bool _didPrecache = false;
-  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-
+    debugPrint('[Splash] Showing ${DawaSplashScreen.assetPath}.');
     _timer = Timer(DawaSplashScreen.splashDuration, _completeAnimation);
   }
 
@@ -37,14 +39,16 @@ class _DawaSplashScreenState extends State<DawaSplashScreen> {
     precacheImage(
       const AssetImage(DawaSplashScreen.assetPath),
       context,
-    );
+    ).catchError((Object error) {
+      debugPrint('[Splash] Failed to precache the intro GIF: $error');
+    });
   }
 
   void _completeAnimation() {
     if (_hasCompleted) return;
     _hasCompleted = true;
-
     _timer?.cancel();
+    debugPrint('[Splash] Intro GIF display completed.');
     if (mounted) widget.onAnimationComplete();
   }
 
@@ -56,43 +60,25 @@ class _DawaSplashScreenState extends State<DawaSplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final splashBlue = FlutterFlowTheme.of(context).primary;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: splashBlue,
+        systemNavigationBarColor: DawaSplashScreen.splashBackgroundColor,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: splashBlue,
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final widthFactor = constraints.maxWidth < 600
-                  ? 0.68
-                  : constraints.maxWidth < 1024
-                      ? 0.50
-                      : 0.38;
-              final animationWidth = (constraints.maxWidth * widthFactor)
-                  .clamp(180.0, 560.0)
-                  .toDouble();
-
-              return Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: animationWidth,
-                    maxHeight: constraints.maxHeight * 0.60,
-                  ),
-                  child: Image.asset(
-                    DawaSplashScreen.assetPath,
-                    width: animationWidth,
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
-                    filterQuality: FilterQuality.high,
-                  ),
-                ),
-              );
-            },
+        backgroundColor: DawaSplashScreen.splashBackgroundColor,
+        body: Semantics(
+          label: 'Dawa introduction animation',
+          image: true,
+          child: SizedBox.expand(
+            child: Image.asset(
+              DawaSplashScreen.assetPath,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
+            ),
           ),
         ),
       ),

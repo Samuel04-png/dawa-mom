@@ -8,7 +8,8 @@
     <application
         android:label="Dawa Mom"
         tools:replace="android:label"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/app_launcher_icon"
+        android:roundIcon="@mipmap/app_launcher_icon"
         android:requestLegacyExternalStorage="true">
 
         <activity
