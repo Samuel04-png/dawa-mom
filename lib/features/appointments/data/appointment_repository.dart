@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '/backend/supabase/supabase_database.dart';
 import '../domain/appointment.dart';
+import '../domain/appointment_result_summary.dart';
 import 'clinician_directory_repository.dart';
 
 class AppointmentRepository {
@@ -101,6 +102,23 @@ class AppointmentRepository {
       Appointment.fromJson(Map<String, dynamic>.from(row)),
     ]);
     return decorated.first;
+  }
+
+  Future<AppointmentResultSummary?> getAppointmentResultSummary(
+    String appointmentId,
+  ) async {
+    _requireUserId();
+    final row = await SupabaseDatabase.instance.runWithFreshSession(
+      () => _client
+          .from('appointment_result_summaries')
+          .select()
+          .eq('appointment_id', appointmentId)
+          .maybeSingle(),
+    );
+    if (row == null) return null;
+    return AppointmentResultSummary.fromJson(
+      Map<String, dynamic>.from(row),
+    );
   }
 
   Future<Appointment> bookAppointment({

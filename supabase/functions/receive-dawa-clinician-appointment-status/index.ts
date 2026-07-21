@@ -43,20 +43,10 @@ Deno.serve(async (req) => {
   const eventId = uuid(payload.event_id);
   const appointmentId = uuid(payload.source_appointment_id);
   const externalAppointmentId = text(payload.external_appointment_id);
-  const status = text(payload.status)?.toLowerCase() ?? null;
-  if (!eventId || !appointmentId || !externalAppointmentId || !status ||
-    !allowedStatuses.has(status)) {
-    return response({ error: 'Invalid appointment status event.' }, 400);
-  }
-
-  const isRescheduled = status === 'rescheduled';
-  const appointmentDate = optionalDate(payload.appointment_date);
-  const startTime = optionalTime(payload.start_time);
-  const endTime = optionalTime(payload.end_time);
-  if (isRescheduled && (!appointmentDate || !startTime || !endTime)) {
-    return response({
-      error: 'Rescheduled appointments require a valid date and time range.',
-    }, 400);
+  const eventType = text(payload.event_type)?.toLowerCase() ??
+    'appointment.status.changed';
+  if (!eventId || !appointmentId || !externalAppointmentId) {
+    return response({ error: 'Invalid appointment integration event.' }, 400);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -68,20 +58,62 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data, error } = await supabase.rpc(
-    'apply_dawa_clinician_appointment_status',
-    {
-      p_event_id: eventId,
-      p_appointment_id: appointmentId,
-      p_external_appointment_id: externalAppointmentId,
-      p_status: status,
-      p_appointment_date: appointmentDate,
-      p_start_time: startTime,
-      p_end_time: endTime,
-      p_effective_at: optionalTimestamp(payload.effective_at),
-      p_patient_safe_message: boundedText(payload.patient_safe_message, 500),
-    },
-  );
+  let data: unknown;
+  let error: { code?: string } | null;
+
+  if (eventType === 'appointment.results_available') {
+    const summary = sanitizeResultSummary(payload.summary);
+    if (!summary) {
+      return response({ error: 'Invalid patient result summary.' }, 400);
+    }
+    const result = await supabase.rpc(
+      'apply_dawa_clinician_appointment_result',
+      {
+        p_event_id: eventId,
+        p_appointment_id: appointmentId,
+        p_external_appointment_id: externalAppointmentId,
+        p_effective_at: optionalTimestamp(payload.effective_at),
+        p_patient_safe_message: boundedText(payload.patient_safe_message, 500),
+        p_summary: summary,
+      },
+    );
+    data = result.data;
+    error = result.error;
+  } else if (eventType === 'appointment.status.changed') {
+    const status = text(payload.status)?.toLowerCase() ?? null;
+    if (!status || !allowedStatuses.has(status)) {
+      return response({ error: 'Invalid appointment status event.' }, 400);
+    }
+
+    const isRescheduled = status === 'rescheduled';
+    const appointmentDate = optionalDate(payload.appointment_date);
+    const startTime = optionalTime(payload.start_time);
+    const endTime = optionalTime(payload.end_time);
+    if (isRescheduled && (!appointmentDate || !startTime || !endTime)) {
+      return response({
+        error: 'Rescheduled appointments require a valid date and time range.',
+      }, 400);
+    }
+
+    const result = await supabase.rpc(
+      'apply_dawa_clinician_appointment_status',
+      {
+        p_event_id: eventId,
+        p_appointment_id: appointmentId,
+        p_external_appointment_id: externalAppointmentId,
+        p_status: status,
+        p_appointment_date: appointmentDate,
+        p_start_time: startTime,
+        p_end_time: endTime,
+        p_effective_at: optionalTimestamp(payload.effective_at),
+        p_patient_safe_message: boundedText(payload.patient_safe_message, 500),
+      },
+    );
+    data = result.data;
+    error = result.error;
+  } else {
+    return response({ error: 'Unsupported appointment integration event.' }, 400);
+  }
 
   if (!error && isRecord(data)) {
     return response(data);
@@ -103,15 +135,21 @@ Deno.serve(async (req) => {
   }
   if (error?.code === '23514' || error?.code === '22023') {
     return response({
-      code: 'INVALID_STATUS_TRANSITION',
-      error: 'The appointment status update is not allowed.',
+      code: eventType === 'appointment.results_available'
+        ? 'INVALID_RESULT_SUMMARY'
+        : 'INVALID_STATUS_TRANSITION',
+      error: eventType === 'appointment.results_available'
+        ? 'The patient result summary is not valid for this appointment.'
+        : 'The appointment status update is not allowed.',
       retryable: false,
     }, 409);
   }
 
-  console.error('[receive-dawa-clinician-appointment-status] Status callback failed.');
+  console.error('[receive-dawa-clinician-appointment-status] Appointment callback failed.');
   return response({
-    code: 'STATUS_SYNC_FAILED',
+    code: eventType === 'appointment.results_available'
+      ? 'RESULT_SYNC_FAILED'
+      : 'STATUS_SYNC_FAILED',
     error: 'The appointment update could not be applied right now.',
     retryable: true,
   }, 500);
@@ -158,6 +196,112 @@ function optionalTimestamp(value: unknown): string | null {
 
 function boundedText(value: unknown, maxLength: number): string | null {
   return text(value)?.slice(0, maxLength) ?? null;
+}
+
+function sanitizeResultSummary(value: unknown): JsonRecord | null {
+  if (!isRecord(value)) return null;
+
+  const id = uuid(value.id);
+  const encounterId = boundedText(value.encounter_id, 240);
+  const version = Number(value.version);
+  const appointmentDate = optionalDate(value.appointment_date);
+  const completedAt = optionalTimestamp(value.completed_at);
+  const generatedAt = optionalTimestamp(value.generated_at);
+  const overallStatus = text(value.overall_status)?.toLowerCase() ?? null;
+  if (!id || !encounterId || !Number.isSafeInteger(version) || version < 1 ||
+    !appointmentDate || !completedAt || !generatedAt ||
+    !overallStatus || ![
+      'routine',
+      'follow_up',
+      'needs_attention',
+      'urgent',
+    ].includes(overallStatus)) {
+    return null;
+  }
+
+  const maternal = isRecord(value.maternal_health) ? value.maternal_health : {};
+  const pregnancy = isRecord(value.pregnancy_health)
+    ? value.pregnancy_health
+    : {};
+
+  return {
+    id,
+    encounter_id: encounterId,
+    version,
+    clinician_display_name: boundedText(value.clinician_display_name, 240) ??
+      'Your clinician',
+    clinic_name: boundedText(value.clinic_name, 240) ?? 'Your clinic',
+    appointment_date: appointmentDate,
+    completed_at: completedAt,
+    overall_status: overallStatus,
+    maternal_health: {
+      heart_rate: sanitizeMeasurement(maternal.heart_rate),
+      blood_pressure: sanitizeMeasurement(maternal.blood_pressure),
+      hemoglobin: sanitizeMeasurement(maternal.hemoglobin),
+    },
+    pregnancy_health: {
+      pregnancy_status: sanitizePregnancyStatus(pregnancy.pregnancy_status),
+      fetal_heartbeat: sanitizeMeasurement(pregnancy.fetal_heartbeat),
+      heartbeat_quality: sanitizeMeasurement(pregnancy.heartbeat_quality),
+      fetal_position: sanitizeMeasurement(pregnancy.fetal_position),
+      estimated_baby_size: sanitizeMeasurement(pregnancy.estimated_baby_size),
+    },
+    key_findings: boundedText(value.key_findings, 4000),
+    recommendations: boundedText(value.recommendations, 8000),
+    follow_up_instructions: boundedText(value.follow_up_instructions, 8000),
+    referral_summary: boundedText(value.referral_summary, 8000),
+    next_appointment_at: optionalTimestamp(value.next_appointment_at),
+    urgent_care_instruction: boundedText(value.urgent_care_instruction, 4000),
+    generated_at: generatedAt,
+  };
+}
+
+function sanitizeMeasurement(value: unknown): JsonRecord {
+  if (!isRecord(value)) return {};
+  const state = text(value.state)?.toLowerCase() ?? null;
+  const interpretation = text(value.interpretation)?.toLowerCase() ?? null;
+  const unit = text(value.unit);
+  return {
+    state: state && [
+        'measured',
+        'recorded',
+        'not_measured',
+        'unable_to_obtain',
+        'not_applicable',
+      ].includes(state)
+      ? state
+      : null,
+    value: boundedText(value.value, 160),
+    unit: unit && ['bpm', 'mmHg', 'g/dL', 'cm'].includes(unit) ? unit : null,
+    interpretation: interpretation && [
+        'normal',
+        'low',
+        'high',
+        'needs_attention',
+        'critical',
+        'recorded',
+      ].includes(interpretation)
+      ? interpretation
+      : null,
+  };
+}
+
+function sanitizePregnancyStatus(value: unknown): JsonRecord {
+  if (!isRecord(value)) return {};
+  const status = text(value.value)?.toLowerCase() ?? null;
+  const source = text(value.source)?.toLowerCase() ?? null;
+  return {
+    state: value.state === 'recorded' ? 'recorded' : null,
+    value: status && [
+        'pregnant',
+        'not_pregnant',
+        'not_provided',
+        'prefer_not_to_say',
+      ].includes(status)
+      ? status
+      : null,
+    source: source && ['patient', 'clinician'].includes(source) ? source : null,
+  };
 }
 
 function timingSafeEqual(left: string, right: string): boolean {
