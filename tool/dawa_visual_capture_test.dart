@@ -1,12 +1,19 @@
+import 'package:dawa_mom/design_system/dawa_components.dart';
 import 'package:dawa_mom/design_system/dawa_design_tokens.dart';
 import 'package:dawa_mom/features/appointments/domain/appointment.dart';
 import 'package:dawa_mom/features/appointments/presentation/dawa_care_page.dart';
 import 'package:dawa_mom/features/auth/dawa_auth_pages.dart';
+import 'package:dawa_mom/features/games/domain/dawa_health_game.dart';
+import 'package:dawa_mom/features/games/presentation/dawa_games_pages.dart';
+import 'package:dawa_mom/features/games/services/dawa_game_feedback.dart';
 import 'package:dawa_mom/features/learning/data/dawa_learning_repository.dart';
 import 'package:dawa_mom/features/learning/presentation/dawa_learn_page.dart';
 import 'package:dawa_mom/features/learning/presentation/dawa_learning_detail_pages.dart';
+import 'package:dawa_mom/features/learning/presentation/dawa_quest_pages.dart';
+import 'package:dawa_mom/features/onboarding/dawa_onboarding_page.dart';
 import 'package:dawa_mom/features/preferences/dawa_language_sheet.dart';
 import 'package:dawa_mom/features/preferences/dawa_user_preferences_repository.dart';
+import 'package:dawa_mom/features/rewards/presentation/dawa_rewards_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,6 +111,115 @@ void main() {
     await tester.tap(find.text('Open language'));
     await tester.pumpAndSettle();
     await _capture(tester, 'language-sheet.png');
+  });
+
+  testWidgets('capture onboarding', (tester) async {
+    await _pump(tester, const DawaOnboardingPage());
+    await _capture(tester, 'onboarding-track.png');
+  });
+
+  testWidgets('capture games hub', (tester) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _pump(
+      tester,
+      DawaGamesHubPage(
+        repository: DawaLearningRepository(preferences: prefs),
+      ),
+    );
+    await _capture(tester, 'games-hub.png');
+  });
+
+  testWidgets('capture health game', (tester) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _pump(
+      tester,
+      DawaHealthGamePage(
+        game: DawaHealthGameCatalog.games.first,
+        repository: DawaLearningRepository(preferences: prefs),
+        feedback: const DawaSilentGameFeedback(),
+      ),
+    );
+    await _capture(tester, 'myth-match-game.png');
+  });
+
+  testWidgets('capture rewards center', (tester) async {
+    // ignore: invalid_use_of_visible_for_testing_member
+    SharedPreferences.setMockInitialValues({
+      'dawa_learning_coins': 215,
+      'dawa_learning_completed': ['game-myth-match', 'myth-vs-fact'],
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await _pump(
+      tester,
+      DawaRewardsPage(
+        repository: DawaLearningRepository(preferences: prefs),
+      ),
+    );
+    await _capture(tester, 'rewards-center.png');
+  });
+
+  testWidgets('capture game completion modal', (tester) async {
+    await _pump(
+      tester,
+      Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (context) => const DawaGameCompletionDialog(
+                  title: 'Game complete!',
+                  message:
+                      'You earned 10 Dawa points for completing Myth Match.',
+                  asset: DawaArtwork.banaCelebrate,
+                  primaryLabel: 'Play again',
+                  secondaryLabel: 'View rewards',
+                  passed: true,
+                  score: 5,
+                  total: 5,
+                  rewardCoins: 10,
+                ),
+              ),
+              child: const Text('Finish game'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Finish game'));
+    await tester.pumpAndSettle();
+    final dialogImage = tester.widget<Image>(find.byType(Image).last).image;
+    await tester.runAsync(() async {
+      final context = tester.element(find.byKey(_captureKey));
+      await precacheImage(dialogImage, context);
+    });
+    await tester.pumpAndSettle();
+    await _capture(tester, 'game-complete-modal.png');
+  });
+
+  testWidgets('capture reward redemption dialog', (tester) async {
+    final prefs = await SharedPreferences.getInstance();
+    final repository = DawaLearningRepository(preferences: prefs);
+    await _pump(
+      tester,
+      Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () => showDawaRewardDialog(
+                context,
+                repository: repository,
+                state: const DawaLearningState(coins: 1200),
+              ),
+              child: const Text('Open reward'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open reward'));
+    await tester.pumpAndSettle();
+    await _capture(tester, 'reward-redemption-modal.png');
   });
 }
 

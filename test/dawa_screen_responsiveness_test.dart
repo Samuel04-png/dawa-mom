@@ -1,7 +1,11 @@
 import 'package:dawa_mom/design_system/dawa_design_tokens.dart';
 import 'package:dawa_mom/features/auth/dawa_auth_pages.dart';
+import 'package:dawa_mom/features/games/domain/dawa_health_game.dart';
+import 'package:dawa_mom/features/games/presentation/dawa_games_pages.dart';
+import 'package:dawa_mom/features/games/services/dawa_game_feedback.dart';
 import 'package:dawa_mom/features/learning/data/dawa_learning_repository.dart';
 import 'package:dawa_mom/features/learning/presentation/dawa_learn_page.dart';
+import 'package:dawa_mom/features/rewards/presentation/dawa_rewards_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -63,6 +67,61 @@ void main() {
       expect(find.text('Learn'), findsOneWidget);
       expect(find.text('Cervical cancer awareness'), findsOneWidget);
       expect(find.text('Audio lessons in your language'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets(
+      'games, game play and rewards render at every required breakpoint',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    for (final size in sizes) {
+      SharedPreferences.setMockInitialValues({
+        'dawa_learning_coins': 205,
+        'dawa_learning_completed': ['game-myth-match'],
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final repository = DawaLearningRepository(preferences: preferences);
+      tester.view.physicalSize = size;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: DawaTheme.light(),
+          home: DawaGamesHubPage(repository: repository),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull,
+          reason: 'Games hub failed at $size');
+      expect(find.text('Myth Match'), findsOneWidget);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: DawaTheme.light(),
+          home: DawaHealthGamePage(
+            game: DawaHealthGameCatalog.games.first,
+            repository: repository,
+            feedback: const DawaSilentGameFeedback(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull,
+          reason: 'Game play failed at $size');
+      expect(find.text('Myth Match'), findsOneWidget);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: DawaTheme.light(),
+          home: DawaRewardsPage(repository: repository),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Rewards failed at $size');
+      expect(find.text('Dawa Rewards'), findsOneWidget);
+
       await tester.pumpWidget(const SizedBox());
     }
   });
