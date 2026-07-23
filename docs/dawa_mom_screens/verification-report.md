@@ -109,8 +109,16 @@ rather than reproducing non-functional screenshot content.
   award/redemption paths, and no Flutter service-role secret.
 - Repository tests verify local-first learning and reminder persistence,
   idempotent local completions, reward failure safety, and daily check-in data.
-- The Supabase CLI is installed (`2.109.1`) and Docker is healthy. Runtime
-  `supabase start` could not prepare this machine's previously absent Supabase
-  image set, so no remote migration was applied and no production data changed.
-  The migration remains additive and ready for the user's normal local/preview
-  database pipeline.
+- The migration was applied with `ON_ERROR_STOP` to a clean PostgreSQL 17
+  database using Supabase-compatible roles, `auth.uid()`, source tables, and
+  extension schema. All tables, constraints, RLS policies, grants, triggers,
+  comments, and functions were created successfully.
+- Runtime behavior checks confirmed that foreign preference and appointment
+  reminder writes are rejected, owner writes succeed, the learning award is
+  applied only once, and repeat reward redemption returns the same voucher
+  without a second debit.
+- The Supabase CLI is installed (`2.109.1`). Its full local stack could not
+  start because this machine had no cached Supabase image set and the Docker
+  credential helper stalled. The independent PostgreSQL validation therefore
+  exercised this migration without modifying the remote project or production
+  data.

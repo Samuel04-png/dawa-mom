@@ -90,11 +90,16 @@ supabase --version
 supabase status
 supabase start
 supabase db lint --local
+docker run --rm -d --name dawa-mom-sql-check postgres:17-alpine
+psql -v ON_ERROR_STOP=1 -f 202607230001_add_dawa_mom_learning_and_preferences.sql
 ```
 
-The last three Supabase runtime commands confirmed CLI/Docker availability but
-could not start a database because the local Supabase image set was absent.
-They did not connect to, migrate, or change the remote project.
+The Supabase full-stack commands confirmed CLI/Docker availability but could not
+prepare the absent Supabase image set through the machine's credential helper.
+A clean PostgreSQL 17 container then successfully parsed and applied the
+migration. Follow-up SQL verified owner and foreign-row RLS behavior plus
+idempotent learning awards and reward redemption. The temporary container was
+removed, and no command connected to, migrated, or changed the remote project.
 
 ## Final checklist
 
@@ -106,6 +111,7 @@ They did not connect to, migrate, or change the remote project.
 - [x] Learning/preferences/reminders wired local-first and owner-scoped remote
 - [x] Rewards controlled and confirmed server-side
 - [x] RLS remains enabled; no service role key in Flutter
+- [x] Migration applied and RLS/RPC behavior exercised in clean PostgreSQL 17
 - [x] 390/768/1024/1366/1440 rendering exercised
 - [x] Accessibility semantics and non-color status patterns included
 - [x] Analyzer, 72 tests, visual capture harness, web build, and APK build pass
