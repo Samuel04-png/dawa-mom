@@ -11,19 +11,24 @@ const _destinations = [
     selectedIcon: Icons.home,
   ),
   DawaMomShellDestination(
-    label: 'Appointments',
-    icon: Icons.calendar_today_outlined,
-    selectedIcon: Icons.calendar_month,
-  ),
-  DawaMomShellDestination(
-    label: 'Period Tracker',
+    label: 'Track',
     icon: Icons.water_drop_outlined,
     selectedIcon: Icons.water_drop,
   ),
   DawaMomShellDestination(
-    label: 'Settings',
-    icon: Icons.settings_outlined,
-    selectedIcon: Icons.settings,
+    label: 'Care',
+    icon: Icons.health_and_safety_outlined,
+    selectedIcon: Icons.health_and_safety,
+  ),
+  DawaMomShellDestination(
+    label: 'Learn',
+    icon: Icons.menu_book_outlined,
+    selectedIcon: Icons.menu_book,
+  ),
+  DawaMomShellDestination(
+    label: 'Profile',
+    icon: Icons.person_outline,
+    selectedIcon: Icons.person,
   ),
 ];
 
@@ -39,9 +44,17 @@ Widget _shellAt(double width) {
         onLogout: () async {},
         rudoChatBuilder: (_, controller) =>
             _StatefulRudoChat(controller: controller),
-        child: const ColoredBox(
-          color: Colors.white,
-          child: Center(child: Text('Content')),
+        child: Builder(
+          builder: (context) => ColoredBox(
+            color: Colors.white,
+            child: Center(
+              child: TextButton(
+                key: const ValueKey('rudo-mobile-entry'),
+                onPressed: () => DawaMomResponsiveShell.openRudo(context),
+                child: const Text('Content'),
+              ),
+            ),
+          ),
         ),
       ),
     ),
@@ -69,8 +82,8 @@ void main() {
     expect(find.byType(BottomNavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.byKey(const ValueKey('rudo-launcher')), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.byKey(const ValueKey('rudo-launcher')), findsNothing);
   });
 
   testWidgets('tablet uses a navigation rail', (tester) async {
@@ -78,7 +91,7 @@ void main() {
 
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(BottomNavigationBar), findsNothing);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
     expect(find.byKey(const ValueKey('rudo-launcher')), findsOneWidget);
   });
 
@@ -87,7 +100,7 @@ void main() {
 
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.byType(BottomNavigationBar), findsNothing);
-    expect(find.text('Appointments'), findsOneWidget);
+    expect(find.text('Care'), findsOneWidget);
     expect(find.text('Collapse sidebar'), findsOneWidget);
     expect(find.text('Logout'), findsOneWidget);
     expect(find.byKey(const ValueKey('dawa-mom-logo-full')), findsOneWidget);
@@ -125,7 +138,10 @@ void main() {
       (1400, 'rudo-desktop-panel'),
     ]) {
       await tester.pumpWidget(_shellAt(entry.$1));
-      await tester.tap(find.byKey(const ValueKey('rudo-launcher')));
+      final launcher = entry.$1 < 700
+          ? find.byKey(const ValueKey('rudo-mobile-entry'))
+          : find.byKey(const ValueKey('rudo-launcher'));
+      await tester.tap(launcher);
       await tester.pumpAndSettle();
 
       final panel = find.byKey(ValueKey(entry.$2));
@@ -145,16 +161,19 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('rudo-close-button')));
       await tester.pumpAndSettle();
       expect(panel, findsNothing);
-      expect(find.byKey(const ValueKey('rudo-launcher')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('rudo-launcher')),
+        entry.$1 < 700 ? findsNothing : findsOneWidget,
+      );
 
-      await tester.tap(find.byKey(const ValueKey('rudo-launcher')));
+      await tester.tap(launcher);
       await tester.pumpAndSettle();
       expect(find.text('Messages 1'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(panel, findsNothing);
 
-      await tester.tap(find.byKey(const ValueKey('rudo-launcher')));
+      await tester.tap(launcher);
       await tester.pumpAndSettle();
       expect(find.text('Messages 1'), findsOneWidget);
     }
