@@ -1,28 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '/backend/period_tracker_service.dart';
 import '/components/booking_bottom_sheet/booking_bottom_sheet_widget.dart';
 import '/components/period_setup/period_setup_flow.dart';
+import '/design_system/dawa_components.dart';
+import '/design_system/dawa_design_tokens.dart';
+import '/design_system/dawa_page_scaffold.dart';
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/domain/appointment.dart';
-import '/features/profile/data/health_profile_repository.dart';
-import '/features/profile/profile_completion_page.dart';
+import '/features/learning/data/dawa_learning_repository.dart';
 import '/features/period_tracker/domain/period_cycle_summary.dart';
-import '/features/period_tracker/presentation/period_cycle_status_card.dart';
-import '/features/pregnancy/presentation/pregnancy_what_to_expect.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/index.dart';
-import 'responsive_layout.dart';
-import 'upcoming_appointment_section.dart';
+import '/features/profile/data/health_profile_repository.dart';
+import '/navbar/appointments/appointment_details/appointment_details_widget.dart';
+import '/navbar/period_tracker/period_tracker_widget.dart';
 
 class DawaMomResponsiveDashboard extends StatefulWidget {
   const DawaMomResponsiveDashboard({
     super.key,
     required this.onOpenRudo,
+    this.appointmentRepository,
+    this.healthProfileRepository,
+    this.periodTrackerService,
+    this.learningRepository,
   });
 
   final VoidCallback onOpenRudo;
+  final AppointmentRepository? appointmentRepository;
+  final HealthProfileRepository? healthProfileRepository;
+  final PeriodTrackerService? periodTrackerService;
+  final DawaLearningRepository? learningRepository;
 
   @override
   State<DawaMomResponsiveDashboard> createState() =>
@@ -31,29 +39,37 @@ class DawaMomResponsiveDashboard extends StatefulWidget {
 
 class _DawaMomResponsiveDashboardState
     extends State<DawaMomResponsiveDashboard> {
-  final _appointments = AppointmentRepository();
-  final _healthProfiles = HealthProfileRepository();
-  final _periodTracker = PeriodTrackerService();
+  late final AppointmentRepository _appointments;
+  late final HealthProfileRepository _healthProfiles;
+  late final PeriodTrackerService _periodTracker;
+  late final DawaLearningRepository _learning;
   late Future<_DashboardData> _data;
 
   @override
   void initState() {
     super.initState();
-    HealthProfileRepository.changes.addListener(_onProfileChanged);
-    PeriodTrackerService.changes.addListener(_onProfileChanged);
-    AppointmentRepository.changes.addListener(_onProfileChanged);
+    _appointments = widget.appointmentRepository ?? AppointmentRepository();
+    _healthProfiles =
+        widget.healthProfileRepository ?? HealthProfileRepository();
+    _periodTracker = widget.periodTrackerService ?? PeriodTrackerService();
+    _learning = widget.learningRepository ?? DawaLearningRepository();
+    HealthProfileRepository.changes.addListener(_onDataChanged);
+    PeriodTrackerService.changes.addListener(_onDataChanged);
+    AppointmentRepository.changes.addListener(_onDataChanged);
+    DawaLearningRepository.changes.addListener(_onDataChanged);
     _data = _load();
   }
 
   @override
   void dispose() {
-    HealthProfileRepository.changes.removeListener(_onProfileChanged);
-    PeriodTrackerService.changes.removeListener(_onProfileChanged);
-    AppointmentRepository.changes.removeListener(_onProfileChanged);
+    HealthProfileRepository.changes.removeListener(_onDataChanged);
+    PeriodTrackerService.changes.removeListener(_onDataChanged);
+    AppointmentRepository.changes.removeListener(_onDataChanged);
+    DawaLearningRepository.changes.removeListener(_onDataChanged);
     super.dispose();
   }
 
-  void _onProfileChanged() {
+  void _onDataChanged() {
     if (mounted) _refresh();
   }
 
@@ -62,11 +78,13 @@ class _DawaMomResponsiveDashboardState
       _appointments.getAppointments(),
       _healthProfiles.load(),
       _periodTracker.loadPeriodHistory(),
+      _learning.load(),
     ]);
     return _DashboardData(
       appointments: results[0] as List<Appointment>,
       healthProfile: results[1] as HealthProfileSnapshot,
       periodHistory: results[2] as List<PeriodRecord>,
+      learningState: results[3] as DawaLearningState,
     );
   }
 
@@ -89,7 +107,7 @@ class _DawaMomResponsiveDashboardState
 
   Future<void> _openPeriodTracker(_DashboardData data) async {
     if (data.healthProfile.periodSettings?['lastPeriodStart'] != null) {
-      context.pushNamed(PeriodTrackerWidget.routeName);
+      context.go(PeriodTrackerWidget.routePath);
       return;
     }
     final result = await showPeriodSetupFlow(context, allowSkip: true);
@@ -106,289 +124,450 @@ class _DawaMomResponsiveDashboardState
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-    return Scaffold(
-      backgroundColor: theme.primaryBackground,
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: ResponsivePageContainer(
-              child: FutureBuilder<_DashboardData>(
-                future: _data,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      height: 520,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (snapshot.hasError) {
-                    return _DashboardError(onRetry: _refresh);
-                  }
-                  return _buildDashboard(context, snapshot.data!);
-                },
+  Widget build(BuildContext context) => FutureBuilder<_DashboardData>(
+        future: _data,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const DawaPageScaffold(
+              scrollable: false,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasError || snapshot.data == null) {
+            return DawaPageScaffold(
+              child: DawaCard(
+                child: Column(
+                  children: [
+                    const DawaIconBadge(
+                      icon: Icons.cloud_off_rounded,
+                      size: 58,
+                    ),
+                    const SizedBox(height: 10),
+                    Text('Dashboard could not be loaded',
+                        style: context.dawaSectionTitle),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Check your connection and try again.',
+                      style: context.dawaCaption,
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: _refresh,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: DawaPageScaffold(
+              child: _buildDashboard(context, snapshot.data!),
             ),
-          ),
-        ),
-      ),
-    );
-  }
+          );
+        },
+      );
 
   Widget _buildDashboard(BuildContext context, _DashboardData data) {
-    final theme = FlutterFlowTheme.of(context);
-    final nextAppointment = data.nextAppointment;
-    final profileComplete = data.healthProfile.isComplete;
-    final cycleSummary = PeriodCycleSummary.derive(
+    final profile = data.healthProfile;
+    final cycle = PeriodCycleSummary.derive(
       now: DateTime.now(),
-      settings: data.healthProfile.periodSettings,
+      settings: profile.periodSettings,
       history: data.periodHistory,
     );
-    final nextPeriod = cycleSummary.nextPeriodEstimate;
-    final cycleLength = cycleSummary.averageCycleLength ?? 28;
-    final pregnancyStatus = data.healthProfile.pregnancyProfileStatus;
+    final appointment = data.nextAppointment;
+    final firstName = profile.name.trim().isEmpty
+        ? 'Mama'
+        : profile.name.trim().split(RegExp(r'\s+')).first;
+    final week = profile.pregnancyWeek;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: theme.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Image.asset(
-                'assets/images/transparent assets/Frame_41.png',
-                fit: BoxFit.cover,
-              ),
+        DawaAppHeader(
+          eyebrow: 'Good ${_dayPeriod()},',
+          title: '$firstName ♥',
+          notificationUnread: true,
+          onNotifications: () => context.push('/notifications'),
+          onProfile: () => context.go('/settings'),
+        ),
+        const SizedBox(height: 8),
+        DawaCard(
+          padding: EdgeInsets.zero,
+          child: SizedBox(
+            height: DawaBreakpoints.isMobile(context) ? 205 : 245,
+            child: Stack(
+              children: [
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: DawaColors.softBlue,
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: DawaBreakpoints.isMobile(context) ? 8 : 48,
+                  bottom: 0,
+                  width: DawaBreakpoints.isMobile(context) ? 138 : 190,
+                  height: DawaBreakpoints.isMobile(context) ? 194 : 232,
+                  child: Image.asset(
+                    week == null
+                        ? DawaArtwork.motherGreeting
+                        : DawaArtwork.pregnancyPhone,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.bottomCenter,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(19),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 470),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          week == null
+                              ? 'Your health journey'
+                              : 'Your pregnancy',
+                          style: context.dawaCaption,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          week == null
+                              ? _profileHeadline(profile)
+                              : 'Week $week',
+                          style: context.dawaDisplay.copyWith(fontSize: 31),
+                        ),
+                        if (week != null)
+                          Text(
+                            profile.trimester == null
+                                ? 'Pregnancy guidance'
+                                : '${_ordinal(profile.trimester!)} Trimester',
+                            style: const TextStyle(
+                              color: DawaColors.green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          week == null
+                              ? profile.dashboardPrompt
+                              : 'You’re doing amazing, $firstName. Every little step matters.',
+                          style: context.dawaCaption,
+                        ),
+                        const SizedBox(height: 11),
+                        FilledButton(
+                          onPressed: week == null
+                              ? () => context.push('/profileCompletion')
+                              : () => context.push('/learn/pregnancy'),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(44, 42),
+                          ),
+                          child: Text(week == null
+                              ? 'Complete profile'
+                              : 'View journey'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 14),
+          ),
+        ),
+        const SizedBox(height: 11),
+        DawaResponsiveGrid(
+          mobileColumns: 2,
+          tabletColumns: 2,
+          desktopColumns: 4,
+          children: [
+            _HomeMetricCard(
+              icon: Icons.water_drop_rounded,
+              color: DawaColors.pink,
+              label: 'Next period',
+              value: cycle.daysUntilNextPeriod == null
+                  ? 'Not set up'
+                  : cycle.daysUntilNextPeriod == 0
+                      ? 'Today'
+                      : '${cycle.daysUntilNextPeriod} days',
+              helper: cycle.nextPeriodEstimate == null
+                  ? 'Add your last period'
+                  : DateFormat('d MMM').format(cycle.nextPeriodEstimate!),
+              onTap: () => _openPeriodTracker(data),
+            ),
+            _HomeMetricCard(
+              icon: Icons.sync_rounded,
+              color: DawaColors.purple,
+              label: 'Cycle day',
+              value: cycle.cycleDay == null
+                  ? 'Not available'
+                  : '${cycle.cycleDay} / ${cycle.averageCycleLength ?? 28}',
+              helper: cycle.statusLabel,
+              onTap: () => _openPeriodTracker(data),
+            ),
+            _HomeMetricCard(
+              icon: Icons.calendar_month_rounded,
+              color: DawaColors.green,
+              label: 'Next appointment',
+              value: appointment == null
+                  ? 'Nothing booked'
+                  : DateFormat('d MMM • h:mm a').format(
+                      Appointment.dateAtTime(
+                        appointment.date,
+                        appointment.startTime,
+                      ),
+                    ),
+              helper: appointment?.clinicName ?? 'Book when you are ready',
+              onTap: appointment == null
+                  ? _book
+                  : () => _openAppointment(appointment),
+            ),
+            _HomeMetricCard(
+              icon: Icons.workspace_premium_rounded,
+              color: DawaColors.primary,
+              label: 'Dawa rewards',
+              value: '${data.learningState.coins} points',
+              helper: 'Healthy actions',
+              onTap: () => context.push('/learn/quests'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (appointment != null)
+          DawaCard(
+            color: DawaColors.softGreen,
+            borderColor: DawaColors.green.withValues(alpha: 0.28),
+            onTap: () => _openAppointment(appointment),
+            semanticLabel:
+                'Next appointment at ${appointment.clinicName ?? 'your clinic'}',
+            child: Row(
+              children: [
+                const DawaIconBadge(
+                  icon: Icons.calendar_month_rounded,
+                  color: DawaColors.green,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Next appointment', style: context.dawaCaption),
+                      Text(
+                        DateFormat('EEE, d MMM • h:mm a').format(
+                          Appointment.dateAtTime(
+                            appointment.date,
+                            appointment.startTime,
+                          ),
+                        ),
+                        style: context.dawaSectionTitle,
+                      ),
+                      Text(
+                        appointment.clinicName ?? 'Dawa clinic',
+                        style: context.dawaCaption,
+                      ),
+                    ],
+                  ),
+                ),
+                const DawaStatusPill(
+                  label: 'View details',
+                  icon: Icons.chevron_right_rounded,
+                  color: DawaColors.green,
+                ),
+              ],
+            ),
+          ),
+        if (appointment != null) const SizedBox(height: 12),
+        DawaResponsiveGrid(
+          mobileColumns: 4,
+          tabletColumns: 4,
+          desktopColumns: 4,
+          spacing: 8,
+          children: [
+            _HomeQuickAction(
+              icon: Icons.sync_rounded,
+              label: 'Track\nCycle',
+              onTap: () => _openPeriodTracker(data),
+            ),
+            _HomeQuickAction(
+              icon: Icons.calendar_month_rounded,
+              label: 'Book\nVisit',
+              onTap: _book,
+            ),
+            _HomeQuickAction(
+              icon: Icons.favorite_border_rounded,
+              label: 'Ask\nRudo',
+              onTap: widget.onOpenRudo,
+            ),
+            _HomeQuickAction(
+              icon: Icons.menu_book_outlined,
+              label: 'Learn',
+              onTap: () => context.go('/learn'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        DawaCard(
+          onTap: () => context.push('/learn/quests'),
+          semanticLabel:
+              'Dawa Rewards, ${data.learningState.coins} points toward a free scan',
+          color: DawaColors.softBlue,
+          child: Row(
+            children: [
+              const DawaIconBadge(
+                icon: Icons.workspace_premium_rounded,
+                size: 50,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Dawa Rewards', style: context.dawaCaption),
+                    Text('${data.learningState.coins} points',
+                        style: context.dawaTitle),
+                    const SizedBox(height: 6),
+                    DawaProgressBar(
+                      value: data.learningState.coins / 1000,
+                      semanticLabel: 'Free scan reward progress',
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${(1000 - data.learningState.coins).clamp(0, 1000)} more points for a free scan',
+                      style: context.dawaCaption,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.redeem_rounded,
+                  color: DawaColors.primary, size: 38),
+              const Icon(Icons.chevron_right_rounded,
+                  color: DawaColors.primary),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        DawaCard(
+          child: Row(
+            children: [
+              const DawaIconBadge(
+                icon: Icons.lightbulb_outline_rounded,
+                color: DawaColors.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Today’s tip', style: context.dawaCaption),
+                    Text('Myth vs Fact', style: context.dawaSectionTitle),
+                    Text(
+                      'Pregnancy changes can be normal, but new or worrying symptoms deserve qualified care.',
+                      style: context.dawaCaption,
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => context.push('/learn/lesson/myth-vs-fact'),
+                child: const Text('Read more'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeMetricCard extends StatelessWidget {
+  const _HomeMetricCard({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.helper,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final String helper;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => DawaCard(
+        padding: const EdgeInsets.all(12),
+        onTap: onTap,
+        semanticLabel: '$label. $value. $helper.',
+        child: Row(
+          children: [
+            DawaIconBadge(icon: icon, color: color),
+            const SizedBox(width: 9),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(label, style: context.dawaCaption),
                   Text(
-                    'Hi, ${data.healthProfile.name.isEmpty ? 'there' : data.healthProfile.name}',
-                    style: theme.headlineSmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.dawaSectionTitle.copyWith(color: color),
                   ),
                   Text(
-                    DateFormat('EEEE, d MMMM y').format(DateTime.now()),
-                    style: theme.bodyMedium.copyWith(
-                      color: theme.secondaryText,
-                    ),
+                    helper,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.dawaCaption,
                   ),
                 ],
               ),
             ),
-            FilledButton.icon(
-              onPressed: _book,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Book appointment'),
-              style: FilledButton.styleFrom(
-                backgroundColor: theme.primary,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              ),
-            ),
           ],
         ),
-        const SizedBox(height: 28),
-        ResponsiveContentGrid(
-          minItemWidth: 245,
-          children: [
-            _SummaryCard(
-              icon: Icons.event_available_rounded,
-              iconColor: theme.primary,
-              label: 'Next appointment',
-              value: nextAppointment == null
-                  ? 'Nothing scheduled'
-                  : DateFormat('d MMM, h:mm a').format(
-                      Appointment.dateAtTime(
-                        nextAppointment.date,
-                        nextAppointment.startTime,
-                      ),
-                    ),
-              helper: nextAppointment == null
-                  ? 'Book when you are ready'
-                  : nextAppointment.clinicianName ?? 'Clinician',
-              onTap: nextAppointment == null
-                  ? _book
-                  : () => _openAppointment(nextAppointment),
-            ),
-            _SummaryCard(
-              icon: Icons.water_drop_outlined,
-              iconColor: const Color(0xFFE2557B),
-              label: 'Period tracker',
-              value: nextPeriod == null
-                  ? 'Period Tracker not set up'
-                  : 'Estimated around ${DateFormat('d MMM').format(nextPeriod)}',
-              helper: nextPeriod == null
-                  ? 'Add your last period to see estimates'
-                  : 'Estimate based on a $cycleLength-day cycle',
-              onTap: () => _openPeriodTracker(data),
-            ),
-            _SummaryCard(
-              icon: pregnancyStatus == PregnancyProfileStatus.pregnantWithData
-                  ? Icons.pregnant_woman_rounded
-                  : profileComplete
-                      ? Icons.verified_user_outlined
-                      : Icons.person_outline_rounded,
-              iconColor: profileComplete ? theme.success : theme.warning,
-              label: 'Pregnancy / health',
-              value: _pregnancyStatusValue(data.healthProfile),
-              helper: _pregnancyStatusHelper(data.healthProfile),
-              onTap: () => context.pushNamed(ProfileCompletionPage.routeName),
-            ),
-          ],
-        ),
-        const SizedBox(height: 30),
-        const DashboardSectionHeader(
-          title: 'Your care overview',
-          subtitle: 'Appointments and personalised maternal health information',
-        ),
-        const SizedBox(height: 14),
-        ResponsiveContentGrid(
-          minItemWidth: 420,
-          children: [
-            DawaMomCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Next appointment',
-                    style: theme.titleMedium.copyWith(
-                      color: theme.primaryText,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  UpcomingAppointmentSection(compact: true),
-                ],
-              ),
-            ),
-            DawaMomCard(
-              child: PeriodCycleStatusCard(
-                summary: cycleSummary,
-                onOpenTracker: () => _openPeriodTracker(data),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 30),
-        const DashboardSectionHeader(
-          title: 'What to expect',
-          subtitle: 'Pregnancy information based on your health profile',
-        ),
-        const SizedBox(height: 14),
-        DawaMomCard(
-          child: PregnancyWhatToExpectCard(
-            profile: data.healthProfile,
-            onOpenProfile: () =>
-                context.pushNamed(ProfileCompletionPage.routeName),
-          ),
-        ),
-        const SizedBox(height: 30),
-        const DashboardSectionHeader(
-          title: 'Quick actions',
-          subtitle: 'Common tasks and support',
-        ),
-        const SizedBox(height: 14),
-        ResponsiveContentGrid(
-          minItemWidth: 210,
-          children: [
-            _QuickAction(
-              icon: Icons.calendar_month_rounded,
-              title: 'Book appointment',
-              description: 'Choose a clinic, clinician and time',
-              onTap: _book,
-            ),
-            _QuickAction(
-              icon: Icons.chat_bubble_outline_rounded,
-              title: 'Ask Rudo',
-              description: 'Get maternal health guidance',
-              onTap: widget.onOpenRudo,
-            ),
-            _QuickAction(
-              icon: Icons.person_outline_rounded,
-              title: 'Review profile',
-              description: 'Keep your health details current',
-              onTap: () => context.pushNamed(ProfileCompletionPage.routeName),
-            ),
-          ],
-        ),
-        const SizedBox(height: 30),
-        const DashboardSectionHeader(
-          title: 'Recent activity',
-          subtitle: 'Your latest appointment requests and updates',
-        ),
-        const SizedBox(height: 14),
-        DawaMomCard(
-          child: data.appointments.isEmpty
-              ? const DawaMomEmptyState(
-                  icon: Icons.history_rounded,
-                  title: 'No recent health activity',
-                  description:
-                      'Your appointment requests and updates will appear here.',
-                  compact: true,
-                )
-              : Column(
-                  children: data.appointments
-                      .take(4)
-                      .map((appointment) => _ActivityRow(
-                            appointment: appointment,
-                            onTap: () => _openAppointment(appointment),
-                          ))
-                      .toList(),
-                ),
-        ),
-        const SizedBox(height: 22),
-      ],
-    );
-  }
+      );
+}
 
-  String _pregnancyStatusValue(HealthProfileSnapshot profile) {
-    switch (profile.pregnancyProfileStatus) {
-      case PregnancyProfileStatus.pregnantWithData:
-        final week = profile.pregnancyWeek;
-        return week == null
-            ? 'Pregnancy profile ready'
-            : 'Pregnancy week $week';
-      case PregnancyProfileStatus.pregnantMissingInformation:
-        return 'Pregnancy details incomplete';
-      case PregnancyProfileStatus.notCurrentlyPregnant:
-        return 'Not currently pregnant';
-      case PregnancyProfileStatus.notProvided:
-        return profile.pregnancyStatus == 'prefer_not_to_say'
-            ? 'Status kept private'
-            : 'Status not provided';
-    }
-  }
+class _HomeQuickAction extends StatelessWidget {
+  const _HomeQuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
-  String _pregnancyStatusHelper(HealthProfileSnapshot profile) {
-    switch (profile.pregnancyProfileStatus) {
-      case PregnancyProfileStatus.pregnantWithData:
-        final dueDate = profile.calculatedDueDate;
-        return dueDate == null
-            ? 'Pregnancy guidance is available'
-            : 'Estimated due ${DateFormat('d MMM y').format(dueDate)}';
-      case PregnancyProfileStatus.pregnantMissingInformation:
-        return 'Add dates for relevant guidance';
-      case PregnancyProfileStatus.notCurrentlyPregnant:
-        return 'Cycle and appointment support available';
-      case PregnancyProfileStatus.notProvided:
-        return 'Review your health profile at any time';
-    }
-  }
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => DawaCard(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 12),
+        onTap: onTap,
+        semanticLabel: label.replaceAll('\n', ' '),
+        child: Column(
+          children: [
+            Icon(icon, color: DawaColors.primary, size: 27),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: context.dawaCaption.copyWith(
+                color: DawaColors.ink,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _DashboardData {
@@ -396,230 +575,42 @@ class _DashboardData {
     required this.appointments,
     required this.healthProfile,
     required this.periodHistory,
+    required this.learningState,
   });
 
   final List<Appointment> appointments;
   final HealthProfileSnapshot healthProfile;
   final List<PeriodRecord> periodHistory;
+  final DawaLearningState learningState;
 
   Appointment? get nextAppointment {
     final upcoming = appointments.where((item) => item.isUpcoming).toList()
       ..sort((a, b) => Appointment.dateAtTime(a.date, a.startTime)
           .compareTo(Appointment.dateAtTime(b.date, b.startTime)));
-    return upcoming.firstOrNull;
+    return upcoming.isEmpty ? null : upcoming.first;
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.value,
-    required this.helper,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final String value;
-  final String helper;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-    final content = DawaMomCard(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: iconColor),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.bodySmall.copyWith(color: theme.secondaryText),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.titleSmall.copyWith(
-                    color: theme.primaryText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  helper,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.bodySmall.copyWith(color: theme.secondaryText),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-    if (onTap == null) return content;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        mouseCursor: SystemMouseCursors.click,
-        canRequestFocus: true,
-        borderRadius: BorderRadius.circular(14),
-        hoverColor: theme.primary.withValues(alpha: 0.04),
-        focusColor: theme.primary.withValues(alpha: 0.1),
-        child: content,
-      ),
-    );
-  }
+String _dayPeriod() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
 }
 
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.onTap,
-  });
+String _ordinal(int value) => switch (value) {
+      1 => '1st',
+      2 => '2nd',
+      3 => '3rd',
+      _ => '${value}th',
+    };
 
-  final IconData icon;
-  final String title;
-  final String description;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-    return Material(
-      color: theme.secondaryBackground,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        hoverColor: theme.primary.withValues(alpha: 0.04),
-        focusColor: theme.primary.withValues(alpha: 0.08),
-        child: Container(
-          padding: const EdgeInsets.all(17),
-          decoration: BoxDecoration(
-            border: Border.all(color: theme.alternate),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: theme.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style:
-                          theme.bodySmall.copyWith(color: theme.secondaryText),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_rounded,
-                  size: 18, color: theme.secondaryText),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActivityRow extends StatelessWidget {
-  const _ActivityRow({required this.appointment, required this.onTap});
-
-  final Appointment appointment;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-    final start = Appointment.dateAtTime(
-      appointment.date,
-      appointment.startTime,
-    );
-    return InkWell(
-      onTap: onTap,
-      mouseCursor: SystemMouseCursors.click,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Icon(Icons.event_note_outlined, color: theme.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${appointment.clinicianName ?? 'Clinician'} - ${appointment.status}',
-                    style:
-                        theme.bodyMedium.copyWith(fontWeight: FontWeight.w500),
-                  ),
-                  Text(
-                    DateFormat('d MMM y, h:mm a').format(start),
-                    style: theme.bodySmall.copyWith(color: theme.secondaryText),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DashboardError extends StatelessWidget {
-  const _DashboardError({required this.onRetry});
-
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 520,
-      child: DawaMomEmptyState(
-        icon: Icons.cloud_off_rounded,
-        title: 'Dashboard could not be loaded',
-        description: 'Check your connection and try again.',
-        actionLabel: 'Retry',
-        onAction: onRetry,
-      ),
-    );
-  }
-}
-
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
+String _profileHeadline(HealthProfileSnapshot profile) {
+  return switch (profile.pregnancyProfileStatus) {
+    PregnancyProfileStatus.pregnantMissingInformation =>
+      'Add pregnancy details',
+    PregnancyProfileStatus.notCurrentlyPregnant => 'Care made simple',
+    PregnancyProfileStatus.notProvided => 'Welcome to Dawa Mom',
+    PregnancyProfileStatus.pregnantWithData => 'Your pregnancy',
+  };
 }

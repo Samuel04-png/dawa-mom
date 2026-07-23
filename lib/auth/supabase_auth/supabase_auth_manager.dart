@@ -203,6 +203,38 @@ class SupabaseAuthManager extends AuthManager
         ),
       );
 
+  Future<BaseAuthUser?> createAccountWithPhone(
+    BuildContext context,
+    String phone,
+    String password, {
+    String? displayName,
+  }) =>
+      _signInOrCreateAccount(
+        context,
+        () => _client.auth.signUp(
+          phone: phone,
+          password: password,
+          data: {
+            'requested_role': 'patient',
+            if (displayName != null && displayName.trim().isNotEmpty)
+              'display_name': displayName.trim(),
+          },
+        ),
+      );
+
+  Future<BaseAuthUser?> signInWithPhonePassword(
+    BuildContext context,
+    String phone,
+    String password,
+  ) =>
+      _signInOrCreateAccount(
+        context,
+        () => _client.auth.signInWithPassword(
+          phone: phone,
+          password: password,
+        ),
+      );
+
   @override
   Future<BaseAuthUser?> signInAnonymously(BuildContext context) async {
     try {

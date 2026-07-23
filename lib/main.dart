@@ -13,8 +13,10 @@ import 'auth/supabase_auth/auth_util.dart';
 import 'backend/supabase/supabase_config.dart';
 import '/components/responsive/dawa_mom_responsive_shell.dart';
 import '/features/onboarding/app_walkthrough_service.dart';
-import '/features/onboarding/dawa_mom_walkthrough.dart';
 import '/features/settings/dawa_mom_settings_page.dart';
+import '/features/period_tracker/presentation/dawa_cycle_tracker_page.dart';
+import '/features/appointments/presentation/dawa_care_page.dart';
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/navbar/home/home_widget.dart' show AIChatModal;
 import 'flutter_flow/flutter_flow_util.dart';
@@ -147,9 +149,7 @@ class _MyAppState extends State<MyApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [Locale('en', '')],
-      theme: ThemeData(
-        brightness: Brightness.light,
-        useMaterial3: false,
+      theme: DawaTheme.light().copyWith(
         appBarTheme: const AppBarTheme(
           systemOverlayStyle: SystemUiOverlayStyle.dark,
         ),
@@ -200,19 +200,24 @@ class _NavBarPageState extends State<NavBarPage> {
       selectedIcon: Icons.home_rounded,
     ),
     DawaMomShellDestination(
-      label: 'Appointments',
-      icon: Icons.calendar_today_outlined,
-      selectedIcon: Icons.calendar_month_rounded,
+      label: 'Track',
+      icon: Icons.sync_rounded,
+      selectedIcon: Icons.sync_rounded,
     ),
     DawaMomShellDestination(
-      label: 'Period Tracker',
-      icon: Icons.water_drop_outlined,
-      selectedIcon: Icons.water_drop_rounded,
+      label: 'Care',
+      icon: Icons.health_and_safety_outlined,
+      selectedIcon: Icons.health_and_safety_rounded,
     ),
     DawaMomShellDestination(
-      label: 'Settings',
-      icon: Icons.settings_outlined,
-      selectedIcon: Icons.settings_rounded,
+      label: 'Learn',
+      icon: Icons.menu_book_outlined,
+      selectedIcon: Icons.menu_book_rounded,
+    ),
+    DawaMomShellDestination(
+      label: 'Profile',
+      icon: Icons.person_outline_rounded,
+      selectedIcon: Icons.person_rounded,
     ),
   ];
 
@@ -233,7 +238,7 @@ class _NavBarPageState extends State<NavBarPage> {
     if (_walkthroughChecked) return;
     _walkthroughChecked = true;
     final shouldShow = await AppWalkthroughService().shouldShow();
-    if (shouldShow && mounted) await showDawaMomWalkthrough(context);
+    if (shouldShow && mounted) await context.push('/onboarding');
   }
 
   @override
@@ -241,8 +246,9 @@ class _NavBarPageState extends State<NavBarPage> {
     context.watch<FFAppState>();
     final pages = <Widget>[
       HomeWidget(),
-      EncountersWidget(),
-      PeriodTrackerWidget(),
+      const DawaCycleTrackerPage(),
+      const DawaCarePage(),
+      const DawaLearnPage(),
       const DawaMomSettingsPage(),
     ];
     final child = _overridePage ?? pages[_currentIndex];
@@ -271,13 +277,17 @@ class _NavBarPageState extends State<NavBarPage> {
     switch (page) {
       case 'Appointments':
       case 'Encounters':
-        return 1;
+      case 'Care':
+        return 2;
       case 'PeriodTracker':
       case 'Period Tracker':
-        return 2;
+      case 'Track':
+        return 1;
+      case 'Learn':
+        return 3;
       case 'Profile':
       case 'Settings':
-        return 3;
+        return 4;
       default:
         return 0;
     }

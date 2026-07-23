@@ -5,7 +5,10 @@ import '/backend/backend.dart';
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/domain/appointment.dart';
 import '/features/appointments/domain/appointment_result_summary.dart';
+import '/features/appointments/presentation/dawa_appointment_reminder_sheet.dart';
 import '/features/appointments/presentation/appointment_result_summary_view.dart';
+import '/design_system/dawa_components.dart';
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 class AppointmentDetailsWidget extends StatefulWidget {
@@ -127,51 +130,61 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
     return Scaffold(
-      backgroundColor: theme.primaryBackground,
-      appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        surfaceTintColor: Colors.transparent,
-        backgroundColor: theme.secondaryBackground,
-        foregroundColor: theme.primaryText,
-        title: Text(
-          'Appointment details',
-          style: theme.titleMedium.copyWith(
-            color: theme.primaryText,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-      body: FutureBuilder<Appointment?>(
-        future: _appointment,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _DetailsError(onRetry: _refresh);
-          }
-          final appointment = snapshot.data;
-          if (appointment == null) {
-            return const _MissingAppointment();
-          }
-          return FutureBuilder<AppointmentResultSummary?>(
-            future: _resultSummary,
-            builder: (context, resultSnapshot) => AppointmentDetailsContent(
-              appointment: appointment,
-              resultSummary: resultSnapshot.data,
-              resultLoading:
-                  resultSnapshot.connectionState == ConnectionState.waiting,
-              resultError: resultSnapshot.hasError,
-              error: _error,
-              cancelling: _cancelling,
-              onCancel: () => _cancel(appointment),
-              onRefresh: _refresh,
+      backgroundColor: DawaColors.canvas,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1160),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: DawaBreakpoints.pagePadding(context),
+                  ),
+                  child: DawaAppHeader(
+                    title: 'Appointment details',
+                    onBack: () => Navigator.maybePop(context),
+                  ),
+                ),
+              ),
             ),
-          );
-        },
+            Expanded(
+              child: FutureBuilder<Appointment?>(
+                future: _appointment,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return _DetailsError(onRetry: _refresh);
+                  }
+                  final appointment = snapshot.data;
+                  if (appointment == null) {
+                    return const _MissingAppointment();
+                  }
+                  return FutureBuilder<AppointmentResultSummary?>(
+                    future: _resultSummary,
+                    builder: (context, resultSnapshot) =>
+                        AppointmentDetailsContent(
+                      appointment: appointment,
+                      resultSummary: resultSnapshot.data,
+                      resultLoading: resultSnapshot.connectionState ==
+                          ConnectionState.waiting,
+                      resultError: resultSnapshot.hasError,
+                      error: _error,
+                      cancelling: _cancelling,
+                      onCancel: () => _cancel(appointment),
+                      onRefresh: _refresh,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -274,6 +287,49 @@ class AppointmentDetailsContent extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _VisitInformation(appointment: appointment),
+              if (appointment.isUpcoming) ...[
+                const SizedBox(height: 16),
+                DawaCard(
+                  onTap: () => showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => DawaAppointmentReminderSheet(
+                      appointment: appointment,
+                    ),
+                  ),
+                  semanticLabel: 'Set an appointment reminder',
+                  child: Row(
+                    children: [
+                      const DawaIconBadge(
+                        icon: Icons.notifications_active_outlined,
+                        color: DawaColors.gold,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Set a reminder',
+                              style: context.dawaSectionTitle,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Choose when and how you would like to be reminded.',
+                              style: context.dawaCaption,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: DawaColors.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               if (error != null) ...[
                 const SizedBox(height: 16),
                 _InlineError(message: error!),

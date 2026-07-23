@@ -12,6 +12,12 @@ import '/auth/base_auth_user_provider.dart';
 import '/main.dart';
 import '/features/profile/profile_completion_page.dart';
 import '/features/settings/dawa_mom_settings_page.dart';
+import '/features/auth/dawa_auth_pages.dart';
+import '/features/learning/presentation/dawa_learning_detail_pages.dart';
+import '/features/learning/presentation/dawa_library_page.dart';
+import '/features/learning/presentation/dawa_quest_pages.dart';
+import '/features/notifications/dawa_notifications_page.dart';
+import '/features/onboarding/dawa_onboarding_page.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
 import '/index.dart';
@@ -82,59 +88,154 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
       refreshListenable: appStateNotifier,
       navigatorKey: appNavigatorKey,
       errorBuilder: (context, state) =>
-          appStateNotifier.loggedIn ? NavBarPage() : RegisterWidget(),
+          appStateNotifier.loggedIn ? NavBarPage() : const DawaWelcomePage(),
       routes: [
         FFRoute(
           name: '_initialize',
           path: '/',
-          builder: (context, _) =>
-              appStateNotifier.loggedIn ? NavBarPage() : RegisterWidget(),
+          builder: (context, _) => appStateNotifier.loggedIn
+              ? NavBarPage()
+              : const DawaWelcomePage(),
         ),
         FFRoute(
           name: HomeWidget.routeName,
           path: HomeWidget.routePath,
+          requireAuth: true,
           builder: (context, params) =>
               params.isEmpty ? NavBarPage(initialPage: 'Home') : HomeWidget(),
         ),
         FFRoute(
           name: LoginWidget.routeName,
           path: LoginWidget.routePath,
-          builder: (context, params) => LoginWidget(),
+          builder: (context, params) => const DawaLoginPage(),
         ),
         FFRoute(
           name: RegisterWidget.routeName,
           path: RegisterWidget.routePath,
-          builder: (context, params) => RegisterWidget(),
+          builder: (context, params) => const DawaRegistrationPage(),
         ),
         FFRoute(
           name: CreateAccountWidget.routeName,
           path: CreateAccountWidget.routePath,
+          requireAuth: true,
           builder: (context, params) => CreateAccountWidget(),
         ),
         FFRoute(
           name: ProfileWidget.routeName,
           path: ProfileWidget.routePath,
+          requireAuth: true,
           builder: (context, params) => NavBarPage(initialPage: 'Settings'),
         ),
         FFRoute(
           name: DawaMomSettingsPage.routeName,
           path: DawaMomSettingsPage.routePath,
+          requireAuth: true,
           builder: (context, params) => NavBarPage(initialPage: 'Settings'),
         ),
         FFRoute(
           name: PeriodTrackerWidget.routeName,
           path: PeriodTrackerWidget.routePath,
+          requireAuth: true,
           builder: (context, params) =>
               NavBarPage(initialPage: 'PeriodTracker'),
         ),
         FFRoute(
+          name: DawaLearnPage.routeName,
+          path: DawaLearnPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => params.isEmpty
+              ? NavBarPage(initialPage: 'Learn')
+              : const DawaLearnPage(),
+        ),
+        FFRoute(
+          name: DawaArticlePage.routeName,
+          path: DawaArticlePage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaArticlePage(),
+        ),
+        FFRoute(
+          name: DawaMythFactPage.routeName,
+          path: DawaMythFactPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaMythFactPage(),
+        ),
+        FFRoute(
+          name: DawaAudioLessonPage.routeName,
+          path: DawaAudioLessonPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaAudioLessonPage(),
+        ),
+        FFRoute(
+          name: DawaPregnancyGuidesPage.routeName,
+          path: DawaPregnancyGuidesPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaPregnancyGuidesPage(),
+        ),
+        FFRoute(
+          name: DawaPregnancyGuideDetailPage.routeName,
+          path: DawaPregnancyGuideDetailPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => DawaPregnancyGuideDetailPage(
+            guideId: params.getParam('guideId', ParamType.String) ?? '',
+          ),
+        ),
+        FFRoute(
+          name: DawaLibraryPage.routeName,
+          path: DawaLibraryPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaLibraryPage(),
+        ),
+        FFRoute(
+          name: DawaQuestHubPage.routeName,
+          path: DawaQuestHubPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaQuestHubPage(),
+        ),
+        FFRoute(
+          name: DawaQuestModulePage.routeName,
+          path: DawaQuestModulePage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaQuestModulePage(),
+        ),
+        FFRoute(
+          name: DawaClinicLessonPage.routeName,
+          path: DawaClinicLessonPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaClinicLessonPage(),
+        ),
+        FFRoute(
+          name: DawaQuestCheckpointPage.routeName,
+          path: DawaQuestCheckpointPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaQuestCheckpointPage(),
+        ),
+        FFRoute(
+          name: DawaQuestCompletePage.routeName,
+          path: DawaQuestCompletePage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaQuestCompletePage(),
+        ),
+        FFRoute(
+          name: DawaNotificationsPage.routeName,
+          path: DawaNotificationsPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaNotificationsPage(),
+        ),
+        FFRoute(
+          name: DawaOnboardingPage.routeName,
+          path: DawaOnboardingPage.routePath,
+          builder: (context, params) => const DawaOnboardingPage(),
+        ),
+        FFRoute(
           name: ProfileCompletionPage.routeName,
           path: ProfileCompletionPage.routePath,
+          requireAuth: true,
           builder: (context, params) => const ProfileCompletionPage(),
         ),
         FFRoute(
           name: EncountersWidget.routeName,
           path: EncountersWidget.routePath,
+          requireAuth: true,
           builder: (context, params) => params.isEmpty
               ? NavBarPage(initialPage: 'Encounters')
               : EncountersWidget(),
@@ -142,6 +243,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: EncounterDetailsWidget.routeName,
           path: EncounterDetailsWidget.routePath,
+          requireAuth: true,
           builder: (context, params) => EncounterDetailsWidget(
             encounterDets: params.getParam(
               'encounterDets',
@@ -154,6 +256,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: EditProfileWidget.routeName,
           path: EditProfileWidget.routePath,
+          requireAuth: true,
           builder: (context, params) => EditProfileWidget(
             motherDets: params.getParam(
               'motherDets',
@@ -166,6 +269,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: WeekWidget.routeName,
           path: WeekWidget.routePath,
+          requireAuth: true,
           builder: (context, params) => WeekWidget(
             week: params.getParam(
               'week',
@@ -176,6 +280,7 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: AppointmentDetailsWidget.routeName,
           path: AppointmentDetailsWidget.routePath,
+          requireAuth: true,
           builder: (context, params) => AppointmentDetailsWidget(
             appointmentId: params.getParam(
               'appointmentId',
@@ -192,17 +297,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
         FFRoute(
           name: WelcomeWidget.routeName,
           path: WelcomeWidget.routePath,
-          builder: (context, params) => WelcomeWidget(),
+          builder: (context, params) => const DawaWelcomePage(),
         ),
         FFRoute(
           name: ForgotPasswordWidget.routeName,
           path: ForgotPasswordWidget.routePath,
-          builder: (context, params) => ForgotPasswordWidget(
-            incrementer: params.getParam(
-              'incrementer',
-              ParamType.int,
-            ),
-          ),
+          builder: (context, params) => const DawaPasswordRecoveryPage(),
         )
       ].map((r) => r.toRoute(appStateNotifier)).toList(),
     );

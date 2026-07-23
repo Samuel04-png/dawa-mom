@@ -263,7 +263,7 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
           FFAppState().motherRef = currentMotherRef;
         }
 
-        if (MediaQuery.sizeOf(context).width >= 700) {
+        if (_usesDedicatedAppointments) {
           return DawaMomResponsiveDashboard(
             onOpenRudo: () => DawaMomResponsiveShell.openRudo(context),
           );

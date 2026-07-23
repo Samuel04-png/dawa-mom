@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 import '/auth/login/login_widget.dart';
 import '/auth/supabase_auth/auth_util.dart';
 import '/components/period_setup/period_setup_flow.dart';
-import '/components/responsive/responsive_layout.dart';
+import '/design_system/dawa_components.dart';
+import '/design_system/dawa_design_tokens.dart';
+import '/design_system/dawa_page_scaffold.dart';
+import '/features/learning/data/dawa_learning_repository.dart';
+import '/features/learning/presentation/dawa_quest_pages.dart';
 import '/features/onboarding/dawa_mom_walkthrough.dart';
+import '/features/preferences/dawa_language_sheet.dart';
+import '/features/preferences/dawa_user_preferences_repository.dart';
 import '/features/profile/data/health_profile_repository.dart';
 import '/features/profile/profile_completion_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -29,12 +35,20 @@ class DawaMomSettingsPage extends StatefulWidget {
 class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
   late final HealthProfileRepository _profiles;
   late Future<HealthProfileSnapshot> _profile;
+  late final DawaUserPreferencesRepository _preferencesRepository;
+  late Future<DawaUserPreferences> _preferences;
+  late final DawaLearningRepository _learningRepository;
+  late Future<DawaLearningState> _learningState;
 
   @override
   void initState() {
     super.initState();
     _profiles = widget._profileRepository ?? HealthProfileRepository();
     _profile = _profiles.load();
+    _preferencesRepository = DawaUserPreferencesRepository();
+    _preferences = _preferencesRepository.load();
+    _learningRepository = DawaLearningRepository();
+    _learningState = _learningRepository.load();
   }
 
   Future<void> _refresh() async {
@@ -51,6 +65,27 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
   Future<void> _openCompletionHub() async {
     await context.pushNamed(ProfileCompletionPage.routeName);
     if (mounted) await _refresh();
+  }
+
+  Future<void> _chooseLanguage(DawaUserPreferences value) async {
+    final result = await showDawaLanguageSheet(
+      context,
+      initialValue: value,
+    );
+    if (result == null) return;
+    final saved = await _preferencesRepository.save(result);
+    if (mounted) setState(() => _preferences = Future.value(saved));
+  }
+
+  Future<void> _showRewards(DawaLearningState value) async {
+    final next = await showDawaRewardDialog(
+      context,
+      repository: _learningRepository,
+      state: value,
+    );
+    if (next != null && mounted) {
+      setState(() => _learningState = Future.value(next));
+    }
   }
 
   Future<void> _setupPeriod(HealthProfileSnapshot profile) async {
@@ -181,121 +216,393 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-    return Scaffold(
-      backgroundColor: theme.primaryBackground,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        elevation: 0,
-        backgroundColor: theme.primaryBackground,
-        foregroundColor: theme.primaryText,
-        title: Text(
-          'Settings',
-          style: theme.headlineSmall.copyWith(fontWeight: FontWeight.w600),
-        ),
-      ),
-      body: FutureBuilder<HealthProfileSnapshot>(
-        future: _profile,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError || snapshot.data == null) {
-            return DawaMomEmptyState(
-              icon: Icons.cloud_off_rounded,
-              title: 'Settings could not be loaded',
-              description: 'Check your connection and try again.',
-              actionLabel: 'Retry',
-              onAction: _refresh,
-            );
-          }
-          final profile = snapshot.data!;
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: ResponsivePageContainer(
-                maxWidth: 1040,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final account = _AccountCard(
-                      profile: profile,
-                      onEdit: _editProfile,
-                    );
-                    final healthSettings = _HealthSettings(
-                      profile: profile,
-                      onOpenCompletion: _openCompletionHub,
-                      onSetupPeriod: () => _setupPeriod(profile),
-                    );
-                    final privacySettings = _PrivacySettings(
-                      onChangePassword: _changePassword,
-                    );
-                    final supportSettings = _SupportSettings(
-                      onReplayTour: () => showDawaMomWalkthrough(context),
-                    );
-                    final accountActions = _AccountActions(
-                      onLogout: _logout,
-                      onDelete: _deleteAccount,
-                    );
-                    if (constraints.maxWidth >= 860) {
-                      return Column(
-                        children: [
-                          account,
-                          const SizedBox(height: 18),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    healthSettings,
-                                    const SizedBox(height: 16),
-                                    supportSettings,
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 18),
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    privacySettings,
-                                    const SizedBox(height: 16),
-                                    accountActions,
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-                      );
-                    }
-                    return Column(
-                      children: [
-                        account,
-                        ...[
-                          healthSettings,
-                          privacySettings,
-                          supportSettings,
-                          accountActions,
-                        ].expand(
-                          (section) => [
-                            const SizedBox(height: 14),
-                            section,
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                    );
-                  },
-                ),
+    return FutureBuilder<HealthProfileSnapshot>(
+      future: _profile,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const DawaPageScaffold(
+            scrollable: false,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return DawaPageScaffold(
+            child: DawaCard(
+              child: Column(
+                children: [
+                  const DawaIconBadge(
+                    icon: Icons.cloud_off_rounded,
+                    size: 58,
+                  ),
+                  const SizedBox(height: 10),
+                  Text('Profile could not be loaded',
+                      style: context.dawaSectionTitle),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Check your connection and try again.',
+                    style: context.dawaCaption,
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: _refresh,
+                    child: const Text('Retry'),
+                  ),
+                ],
               ),
             ),
           );
-        },
-      ),
+        }
+        final profile = snapshot.data!;
+        return RefreshIndicator(
+          onRefresh: _refresh,
+          child: DawaPageScaffold(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DawaAppHeader(
+                  title: 'My profile',
+                  notificationUnread: true,
+                  onNotifications: () => context.push('/notifications'),
+                ),
+                const SizedBox(height: 8),
+                DawaCard(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final image = SizedBox(
+                        width: constraints.maxWidth < 480 ? 100 : 132,
+                        height: 132,
+                        child: Image.asset(
+                          DawaArtwork.motherGreeting,
+                          fit: BoxFit.contain,
+                          excludeFromSemantics: true,
+                        ),
+                      );
+                      final details = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profile.name.isEmpty
+                                ? 'Dawa Mom member'
+                                : profile.name,
+                            style: context.dawaTitle.copyWith(fontSize: 21),
+                          ),
+                          const SizedBox(height: 4),
+                          if (profile.phone.isNotEmpty)
+                            Text('☎  ${profile.phone}',
+                                style: context.dawaCaption),
+                          if (profile.email.isNotEmpty)
+                            Text(profile.email, style: context.dawaCaption),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: _editProfile,
+                            icon: const Icon(Icons.edit_outlined, size: 17),
+                            label: const Text('Edit profile'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(44, 42),
+                            ),
+                          ),
+                        ],
+                      );
+                      return Row(
+                        children: [
+                          image,
+                          const SizedBox(width: 14),
+                          Expanded(child: details),
+                          if (constraints.maxWidth >= 600)
+                            SizedBox(
+                              width: 120,
+                              height: 130,
+                              child: Image.asset(
+                                DawaArtwork.motherBabyLine,
+                                fit: BoxFit.contain,
+                                excludeFromSemantics: true,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const DawaSectionHeader(
+                  title: 'Health summary',
+                  actionLabel: 'View all',
+                ),
+                const SizedBox(height: 8),
+                DawaCard(
+                  child: DawaResponsiveGrid(
+                    mobileColumns: 2,
+                    tabletColumns: 4,
+                    desktopColumns: 4,
+                    children: [
+                      _ProfileSummaryFact(
+                        icon: Icons.pregnant_woman_rounded,
+                        color: DawaColors.purple,
+                        label: 'Pregnancy',
+                        value: profile.pregnancyWeek == null
+                            ? 'Not recorded'
+                            : '${profile.pregnancyWeek} weeks',
+                        helper: profile.trimester == null
+                            ? 'Update profile'
+                            : 'Trimester ${profile.trimester}',
+                      ),
+                      _ProfileSummaryFact(
+                        icon: Icons.water_drop_rounded,
+                        color: DawaColors.pink,
+                        label: 'Cycle tracking',
+                        value: profile.periodComplete ? 'Set up' : 'Not set up',
+                        helper: profile.periodComplete
+                            ? 'Tracking active'
+                            : 'Add last period',
+                      ),
+                      _ProfileSummaryFact(
+                        icon: Icons.fact_check_outlined,
+                        color: DawaColors.green,
+                        label: 'Profile',
+                        value: '${profile.completedSections}/4 sections',
+                        helper: profile.isComplete
+                            ? 'Up to date'
+                            : 'Needs attention',
+                      ),
+                      _ProfileSummaryFact(
+                        icon: Icons.local_hospital_outlined,
+                        color: DawaColors.primary,
+                        label: 'Care link',
+                        value: profile.isMappedToDawaClinician
+                            ? 'Connected'
+                            : 'Pending',
+                        helper: profile.patientSyncNeedsAttention
+                            ? 'Review required'
+                            : 'Dawa care',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FutureBuilder<DawaLearningState>(
+                  future: _learningState,
+                  builder: (context, learningSnapshot) {
+                    final state =
+                        learningSnapshot.data ?? const DawaLearningState();
+                    return DawaCard(
+                      onTap: learningSnapshot.connectionState ==
+                              ConnectionState.done
+                          ? () => _showRewards(state)
+                          : null,
+                      semanticLabel: 'Dawa rewards. ${state.coins} points.',
+                      color: DawaColors.softBlue,
+                      child: Row(
+                        children: [
+                          const DawaIconBadge(
+                            icon: Icons.workspace_premium_rounded,
+                            size: 52,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Dawa Rewards',
+                                    style: context.dawaCaption),
+                                Text('${state.coins} points',
+                                    style: context.dawaTitle),
+                                const SizedBox(height: 6),
+                                DawaProgressBar(
+                                  value: state.coins / 1000,
+                                  semanticLabel: 'Free scan reward progress',
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const Icon(Icons.redeem_rounded,
+                              color: DawaColors.primary, size: 36),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: DawaColors.primary),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                Text('Settings', style: context.dawaSectionTitle),
+                const SizedBox(height: 8),
+                FutureBuilder<DawaUserPreferences>(
+                  future: _preferences,
+                  builder: (context, preferenceSnapshot) {
+                    final preferences =
+                        preferenceSnapshot.data ?? const DawaUserPreferences();
+                    return DawaCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      child: Column(
+                        children: [
+                          _DawaSettingsRow(
+                            icon: Icons.language_rounded,
+                            title: 'Language',
+                            trailing: preferences.language,
+                            onTap: preferenceSnapshot.connectionState ==
+                                    ConnectionState.done
+                                ? () => _chooseLanguage(preferences)
+                                : null,
+                          ),
+                          _DawaSettingsRow(
+                            icon: Icons.notifications_none_rounded,
+                            title: 'Notifications',
+                            onTap: () => context.push('/notifications'),
+                          ),
+                          _DawaSettingsRow(
+                            icon: Icons.health_and_safety_outlined,
+                            title: 'Health profile',
+                            onTap: _openCompletionHub,
+                          ),
+                          _DawaSettingsRow(
+                            icon: Icons.water_drop_outlined,
+                            title: 'Period Tracker setup',
+                            trailing:
+                                profile.periodComplete ? 'Set up' : 'Not set',
+                            onTap: () => _setupPeriod(profile),
+                          ),
+                          _DawaSettingsRow(
+                            icon: Icons.lock_outline_rounded,
+                            title: 'Privacy',
+                            onTap: _changePassword,
+                          ),
+                          _DawaSettingsRow(
+                            icon: Icons.help_outline_rounded,
+                            title: 'Help & support',
+                            onTap: () => showDawaMomWalkthrough(context),
+                            showDivider: false,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _openCompletionHub,
+                        icon: const Icon(Icons.person_outline_rounded),
+                        label: const Text('Health profile'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => context.go('/encounters'),
+                        icon: const Icon(Icons.description_outlined),
+                        label: const Text('View care records'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text('Account and profile', style: context.dawaSectionTitle),
+                const SizedBox(height: 8),
+                _HealthSettings(
+                  profile: profile,
+                  onOpenCompletion: _openCompletionHub,
+                  onSetupPeriod: () => _setupPeriod(profile),
+                ),
+                const SizedBox(height: 12),
+                _PrivacySettings(onChangePassword: _changePassword),
+                const SizedBox(height: 12),
+                _SupportSettings(
+                  onReplayTour: () => showDawaMomWalkthrough(context),
+                ),
+                const SizedBox(height: 12),
+                _AccountActions(
+                  onLogout: _logout,
+                  onDelete: _deleteAccount,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
+}
+
+class _ProfileSummaryFact extends StatelessWidget {
+  const _ProfileSummaryFact({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.helper,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final String helper;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: '$label. $value. $helper.',
+        child: Column(
+          children: [
+            DawaIconBadge(icon: icon, color: color),
+            const SizedBox(height: 6),
+            Text(label,
+                textAlign: TextAlign.center, style: context.dawaCaption),
+            Text(value,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: context.dawaSectionTitle),
+            Text(helper,
+                textAlign: TextAlign.center, style: context.dawaCaption),
+          ],
+        ),
+      );
+}
+
+class _DawaSettingsRow extends StatelessWidget {
+  const _DawaSettingsRow({
+    required this.icon,
+    required this.title,
+    this.trailing,
+    this.onTap,
+    this.showDivider = true,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? trailing;
+  final VoidCallback? onTap;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          ListTile(
+            minTileHeight: 48,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            leading: Icon(icon, color: DawaColors.primary, size: 21),
+            title: Text(title, style: context.dawaBody),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (trailing != null)
+                  Text(trailing!, style: context.dawaCaption),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right_rounded,
+                    color: DawaColors.muted),
+              ],
+            ),
+            onTap: onTap,
+          ),
+          if (showDivider) const Divider(height: 1),
+        ],
+      );
 }
 
 class _SettingsCard extends StatelessWidget {
@@ -328,124 +635,6 @@ class _SettingsCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AccountCard extends StatelessWidget {
-  const _AccountCard({required this.profile, required this.onEdit});
-
-  final HealthProfileSnapshot profile;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-    return _SettingsCard(
-      title: 'Account and profile',
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final avatar = CircleAvatar(
-              radius: 34,
-              backgroundColor: theme.primary.withValues(alpha: 0.1),
-              backgroundImage: const AssetImage(
-                'assets/images/transparent assets/Frame_41.png',
-              ),
-            );
-            final details = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  profile.name.isEmpty ? 'Dawa Mom member' : profile.name,
-                  style: theme.titleMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  profile.email,
-                  style: theme.bodySmall.copyWith(color: theme.secondaryText),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 14,
-                  runSpacing: 5,
-                  children: [
-                    _ProfileFact(
-                      icon: Icons.phone_outlined,
-                      text: profile.phone,
-                    ),
-                    _ProfileFact(
-                      icon: Icons.work_outline_rounded,
-                      text: profile.occupation,
-                    ),
-                    _ProfileFact(
-                      icon: Icons.location_on_outlined,
-                      text: profile.address,
-                    ),
-                  ],
-                ),
-              ],
-            );
-            final editButton = FilledButton.tonalIcon(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('Edit profile'),
-            );
-
-            if (constraints.maxWidth < 520) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      avatar,
-                      const SizedBox(width: 16),
-                      Expanded(child: details),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: editButton,
-                  ),
-                ],
-              );
-            }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                avatar,
-                const SizedBox(width: 16),
-                Expanded(child: details),
-                const SizedBox(width: 12),
-                editButton,
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileFact extends StatelessWidget {
-  const _ProfileFact({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    if (text.isEmpty) return const SizedBox.shrink();
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16),
-        const SizedBox(width: 5),
-        Flexible(child: Text(text)),
-      ],
     );
   }
 }

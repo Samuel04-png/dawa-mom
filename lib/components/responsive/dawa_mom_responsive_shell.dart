@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '/components/branding/dawa_mom_logo.dart';
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 class DawaMomShellDestination {
@@ -152,7 +153,7 @@ class _DawaMomResponsiveShellState extends State<DawaMomResponsiveShell> {
         children: [
           Positioned.fill(child: shell),
           _buildRudoSurface(context),
-          if (_rudoController.isClosed)
+          if (_rudoController.isClosed && width >= 700)
             Positioned(
               right: width < 700
                   ? 16
@@ -414,29 +415,47 @@ class _MobileShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
     return Scaffold(
+      backgroundColor: DawaColors.canvas,
+      extendBody: true,
       body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex >= 0 && currentIndex < destinations.length
-            ? currentIndex
-            : 0,
-        onTap: onDestinationSelected,
-        backgroundColor: theme.secondaryBackground,
-        selectedItemColor: theme.primary,
-        unselectedItemColor: theme.secondaryText,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        items: destinations
-            .map(
-              (destination) => BottomNavigationBarItem(
-                icon: Icon(destination.icon),
-                activeIcon: Icon(destination.selectedIcon),
-                label: destination.label,
-              ),
-            )
-            .toList(),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: DawaColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: DawaColors.line),
+            boxShadow: DawaShadows.card,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: BottomNavigationBar(
+            currentIndex:
+                currentIndex >= 0 && currentIndex < destinations.length
+                    ? currentIndex
+                    : 0,
+            onTap: onDestinationSelected,
+            backgroundColor: DawaColors.surface,
+            selectedItemColor: DawaColors.primary,
+            unselectedItemColor: DawaColors.muted,
+            selectedFontSize: 10,
+            unselectedFontSize: 10,
+            iconSize: 23,
+            elevation: 0,
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+            type: BottomNavigationBarType.fixed,
+            items: destinations
+                .map(
+                  (destination) => BottomNavigationBarItem(
+                    icon: Icon(destination.icon),
+                    activeIcon: Icon(destination.selectedIcon),
+                    label: destination.label,
+                  ),
+                )
+                .toList(),
+          ),
+        ),
       ),
     );
   }

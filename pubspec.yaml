@@ -139,6 +139,13 @@ flutter:
     - assets/pdfs/
     - assets/jsons/
     - assets/Video_Not_a_GIF.mp4
+    - dawa_mom_screens/assets/illustrations/
+    - dawa_mom_screens/assets/characters/bana_chenjela/
+    - dawa_mom_screens/assets/characters/cervical_health/
+    - dawa_mom_screens/assets/characters/clinicians/
+    - dawa_mom_screens/assets/characters/cycle/
+    - dawa_mom_screens/assets/characters/main_mother/
+    - dawa_mom_screens/assets/characters/pregnancy/
 
   fonts:
     - family: Poppins
