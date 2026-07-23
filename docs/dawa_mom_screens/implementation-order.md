@@ -34,4 +34,18 @@ timeline
         : Captured six 390 px visual baselines
         : Exercised 390, 768, 1024, 1366, and 1440 px layouts
         : Passed analyzer, 72 Flutter tests, web release build, and Android debug build
+    Completion refinement
+        : Re-audited all 31 references against live routes and captures
+        : Expanded onboarding and the replayable six-step product tour
+        : Added two health games, completion motion, haptics, and a subtle generated chime
+        : Added Rewards, achievements, history, active vouchers, and support surfaces
+    Reward hardening
+        : Added one-time 10-point game awards to the server ledger
+        : Preserved voucher codes and scoped local reward data by signed-in owner
+        : Verified new game awards and replay idempotency in clean PostgreSQL 17
+    Final refinement verification
+        : Captured twelve 390 px visual baselines
+        : Exercised games and rewards at all five product widths
+        : Exercised the live web app at 390 and 1440 px with no console errors
+        : Passed analyzer, 82 Flutter tests, web release build, and Android debug build
 ```

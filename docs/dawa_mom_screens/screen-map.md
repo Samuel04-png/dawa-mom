@@ -36,6 +36,19 @@ This table was created before implementation and updated after verification. All
 | `learning3.png` | Pregnancy guide list | Mobile | `/learn/pregnancy` | no route | `DawaPregnancyGuidesPage` | pregnancy, clinic, nutrition characters | health profile + learning repository, Rudo | profile/mother data + local content | Same learning migration | search/filter/save/progress | widget + filtering + golden | duration/type/status exposed | Implemented; personalises when profile data exists |
 | `library.png` | Saved/offline content | Mobile | `/learn/library` | no route | `DawaLibraryPage` | cervical, pregnancy, audio characters | learning preferences/download service | preference/progress persistence | Same learning migration | tab/search/offline/download state | widget + filtering + golden | offline state in text; menu labelled | Implemented route with local-first state |
 
+## Product-completion surfaces added after the reference audit
+
+| Added surface | Route/state | Widget | Assets | Data/backend | Tests and accessibility | Status |
+|---|---|---|---|---|---|---|
+| Games and rewards onboarding | `/onboarding`, step 4 | `DawaOnboardingPage` | Bana celebration | existing walkthrough persistence | browser flow, capture, labelled progress | Implemented |
+| Health games hub | `/learn/games` | `DawaGamesHubPage` | Bana and pregnancy characters | learning state/balance | five-width rendering, rules and urgent-care text | Implemented |
+| Myth Match | `/learn/games/myth-match` | `DawaHealthGamePage` | Bana explaining | owner-scoped completion RPC | pass/fail/replay test; live feedback semantics | Implemented |
+| Plate Builder | `/learn/games/plate-builder` | `DawaHealthGamePage` | pregnant mother | owner-scoped completion RPC | pass/fail/replay test; non-color answer state | Implemented |
+| Game completion | passing overlay | `DawaGameCompletionDialog` | Bana celebration | idempotent award result | animated visual capture; score/reward announced | Implemented |
+| Rewards center | `/learn/rewards` | `DawaRewardsPage` | mother reward | learning state, award ledger, redemption ledger/RPC | five-width rendering, activity/voucher tests | Implemented |
+| Reward activity | Rewards overlay | reward history sheet | existing icons | completed IDs and server coin values | scroll-safe, labelled activity rows | Implemented |
+| Help and support | Profile overlay | support bottom sheet | existing Dawa components | Rudo and Care routes | urgent-care text; keyboard-reachable actions | Implemented |
+
 ## Existing architecture reused
 
 - Navigation: `GoRouter` in `lib/flutter_flow/nav/nav.dart` and the responsive shell in `lib/components/responsive`.

@@ -12,7 +12,7 @@ Route and backend checks below refer to the implemented application state.
 | `start.png` | `/welcome` → onboarding/login | Existing auth session redirect retained | 390 capture; welcome rendered at all five target widths |
 | `authentication.png` | `/register` | Real email/phone registration through `SupabaseAuthManager` | 390 capture; validation widget test |
 | `autnentication 2.png` | `/forgotPassword` | Real email recovery and phone OTP initiation retained | Shared responsive auth scaffold |
-| `onboarding.png` | onboarding care page | Completion persists through `AppWalkthroughService` | Responsive data-driven page |
+| `onboarding.png` | onboarding care page | Completion persists through `AppWalkthroughService` | Responsive data-driven page; live browser verified |
 | `onboarding3.png` | onboarding tracker page | Same persisted walkthrough state | Responsive data-driven page |
 | `onboardin2.png` | onboarding learning page | Same persisted walkthrough state | Responsive data-driven page |
 | `onboarding 2.png` | `/login` | Real email/phone password auth and migration fallback | Shared responsive auth scaffold |
@@ -28,7 +28,7 @@ Route and backend checks below refer to the implemented application state.
 | `choose language2.png` | language sheet expanded state | Same repository and remote row | Scroll-safe radio selection |
 | `choose language3.png` | language sheet alternate selection | Same repository and remote row | Scroll-safe radio selection |
 | `notifications.png` | `/notifications` | Derived from real appointments/cycle/learning; read IDs sync; appointment reminders honor saved preferences | Responsive list with category filters |
-| `redeem reward.png` | reward dialog from quest/profile | No client-issued voucher: only the server RPC can debit and return a unique voucher | Bounded focusable dialog |
+| `redeem reward.png` | reward dialog from Rewards | No client-issued voucher: only the server RPC can debit and return a unique voucher; issued code remains visible and copyable | Bounded focusable dialog and 390 capture |
 | `learn.png` | `/learn` / Learn primary tab | Bundled reviewed content; bookmark/progress/reward state syncs when signed in | 390 capture and all five target widths |
 | `learn concept1.png` | `/learn/article/cervical-awareness` | Saved/completed state through learning repository | Readable max-width article |
 | `learn concept 2.png` | `/learn/quests` | Real persisted progress, streak, and server-controlled coins | Responsive quest hub |
@@ -51,10 +51,21 @@ The render harness saves the following 390×844 application captures:
 - `verification/care.png`
 - `verification/myth-fact.png`
 - `verification/language-sheet.png`
+- `verification/onboarding-track.png`
+- `verification/games-hub.png`
+- `verification/myth-match-game.png`
+- `verification/rewards-center.png`
+- `verification/game-complete-modal.png`
+- `verification/reward-redemption-modal.png`
 
 The harness is `tool/dawa_visual_capture_test.dart`. It loads the production
 Poppins weights and Material icons, precaches all artwork, fails on render
-exceptions, and generated all six captures successfully.
+exceptions, and generated all twelve captures successfully.
+
+The new completion surfaces add `/learn/games`,
+`/learn/games/myth-match`, `/learn/games/plate-builder`, and
+`/learn/rewards`. They are documented reference-by-reference in
+`refinement-audit.md`.
 
 ## Responsive verification
 
@@ -65,7 +76,7 @@ Automated rendering covers 390×844, 768×1024, 1024×768, 1366×900, and
 - tablet uses a navigation rail and promoted two-column layouts;
 - desktop uses the labelled/collapsible sidebar and constrained content;
 - welcome, Learn, Care, settings, appointment details, result summaries, Rudo,
-  and the shared shell render without overflow.
+  the shared shell, games hub, game play, and Rewards render without overflow.
 
 ## Accessibility verification
 
@@ -78,6 +89,9 @@ Automated rendering covers 390×844, 768×1024, 1024×768, 1366×900, and
   reachable.
 - Major custom actions and save controls use at least 44 logical pixels.
 - Content order follows the visual order and long pages/sheets scroll.
+- Game answers expose selected/correct state in text and semantics.
+- The completion chime is quiet, generated in memory and paired with haptics;
+  failure or reduced platform support never blocks the reward.
 
 ## Known visual deviations
 
@@ -117,8 +131,21 @@ rather than reproducing non-functional screenshot content.
   reminder writes are rejected, owner writes succeed, the learning award is
   applied only once, and repeat reward redemption returns the same voucher
   without a second debit.
+- The additive game-reward migration was applied to a second clean PostgreSQL
+  17 database. Myth Match awarded 10 points, replay awarded 0, Plate Builder
+  awarded 10, and the final 200-point state contained exactly two ledger rows.
+- Local saved/completed/offline/pending IDs, point balance, streak and voucher
+  keys are scoped by authenticated owner with a one-time legacy-cache migration.
 - The Supabase CLI is installed (`2.109.1`). Its full local stack could not
   start because this machine had no cached Supabase image set and the Docker
   credential helper stalled. The independent PostgreSQL validation therefore
   exercised this migration without modifying the remote project or production
   data.
+
+## Live browser verification
+
+The actual Flutter web build was served locally and exercised at 390×844 and
+1440×900. The flow covered Welcome → Track onboarding → Care onboarding →
+Learn onboarding → Games/Rewards onboarding → Registration plus blank-form
+validation. Navigation, responsive promotion and field errors rendered
+correctly, and browser console inspection returned no errors or warnings.
