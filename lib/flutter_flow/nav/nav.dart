@@ -13,11 +13,14 @@ import '/main.dart';
 import '/features/profile/profile_completion_page.dart';
 import '/features/settings/dawa_mom_settings_page.dart';
 import '/features/auth/dawa_auth_pages.dart';
+import '/features/games/domain/dawa_health_game.dart';
+import '/features/games/presentation/dawa_games_pages.dart';
 import '/features/learning/presentation/dawa_learning_detail_pages.dart';
 import '/features/learning/presentation/dawa_library_page.dart';
 import '/features/learning/presentation/dawa_quest_pages.dart';
 import '/features/notifications/dawa_notifications_page.dart';
 import '/features/onboarding/dawa_onboarding_page.dart';
+import '/features/rewards/presentation/dawa_rewards_page.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
 import '/index.dart';
@@ -214,6 +217,28 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           path: DawaQuestCompletePage.routePath,
           requireAuth: true,
           builder: (context, params) => const DawaQuestCompletePage(),
+        ),
+        FFRoute(
+          name: DawaGamesHubPage.routeName,
+          path: DawaGamesHubPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaGamesHubPage(),
+        ),
+        FFRoute(
+          name: DawaHealthGamePage.routeName,
+          path: DawaHealthGamePage.routePath,
+          requireAuth: true,
+          builder: (context, params) => DawaHealthGamePage(
+            game: DawaHealthGameCatalog.byRouteSlug(
+              params.getParam('gameId', ParamType.String) ?? '',
+            ),
+          ),
+        ),
+        FFRoute(
+          name: DawaRewardsPage.routeName,
+          path: DawaRewardsPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaRewardsPage(),
         ),
         FFRoute(
           name: DawaNotificationsPage.routeName,

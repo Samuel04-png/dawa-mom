@@ -26,6 +26,8 @@ abstract final class DawaArtwork {
       'dawa_mom_screens/assets/characters/bana_chenjela/CHAR-BANA-Celebrating_Reward.png';
   static const banaExplain =
       'dawa_mom_screens/assets/characters/bana_chenjela/CHAR-BANA-Explaining.png';
+  static const banaReassure =
+      'dawa_mom_screens/assets/characters/bana_chenjela/CHAR-BANA-Reassuring.png';
   static const clinicianDoctor =
       'dawa_mom_screens/assets/characters/clinicians/CHAR-CLINICIAN-Doctor-Explaining.png';
   static const clinicianMidwife =

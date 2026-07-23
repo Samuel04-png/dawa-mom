@@ -60,6 +60,17 @@ class _DawaOnboardingPageState extends State<DawaOnboardingPage> {
         (Icons.fact_check_rounded, 'Myth vs Fact'),
       ],
     ),
+    _OnboardingStep(
+      title: 'Play, learn and earn',
+      description:
+          'Build confidence with short health games, earn Dawa points once per game and unlock meaningful care rewards.',
+      asset: DawaArtwork.banaCelebrate,
+      cards: [
+        (Icons.sports_esports_rounded, 'Health games'),
+        (Icons.monetization_on_rounded, '+10 points'),
+        (Icons.card_giftcard_rounded, 'Care rewards'),
+      ],
+    ),
   ];
 
   @override

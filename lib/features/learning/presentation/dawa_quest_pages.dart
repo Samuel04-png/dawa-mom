@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '/design_system/dawa_components.dart';
@@ -27,17 +28,6 @@ class _DawaQuestHubPageState extends State<DawaQuestHubPage> {
     super.initState();
     _repository = widget.repository ?? DawaLearningRepository();
     _state = _repository.load();
-  }
-
-  Future<void> _showReward(DawaLearningState state) async {
-    final next = await showDawaRewardDialog(
-      context,
-      repository: _repository,
-      state: state,
-    );
-    if (next != null && mounted) {
-      setState(() => _state = Future.value(next));
-    }
   }
 
   @override
@@ -207,7 +197,7 @@ class _DawaQuestHubPageState extends State<DawaQuestHubPage> {
                     Expanded(
                       child: DawaCard(
                         onTap: snapshot.connectionState == ConnectionState.done
-                            ? () => _showReward(state)
+                            ? () => context.push('/learn/rewards')
                             : null,
                         semanticLabel:
                             'My rewards. Current balance ${state.coins} coins',
@@ -1179,6 +1169,7 @@ class _DawaRewardDialog extends StatefulWidget {
 class _DawaRewardDialogState extends State<_DawaRewardDialog> {
   bool _busy = false;
   String? _error;
+  DawaRewardRedemption? _redemption;
 
   Future<void> _redeem() async {
     setState(() {
@@ -1186,11 +1177,13 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
       _error = null;
     });
     try {
-      final next = await widget.repository.redeem(
+      final result = await widget.repository.redeemReward(
         widget.initialState,
         cost: 1000,
       );
-      if (mounted) Navigator.pop(context, next);
+      if (mounted) {
+        setState(() => _redemption = result);
+      }
     } on DawaLearningException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -1201,6 +1194,8 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
   @override
   Widget build(BuildContext context) => Dialog(
         insetPadding: const EdgeInsets.all(20),
+        elevation: 8,
+        shadowColor: const Color(0x330C2878),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DawaRadii.large),
         ),
@@ -1215,73 +1210,160 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
                   alignment: Alignment.centerRight,
                   child: IconButton(
                     tooltip: 'Close reward dialog',
-                    onPressed: _busy ? null : () => Navigator.pop(context),
+                    onPressed: _busy
+                        ? null
+                        : () => Navigator.pop(
+                              context,
+                              _redemption?.state,
+                            ),
                     icon: const Icon(Icons.close_rounded),
                   ),
                 ),
                 Text(
-                  'Redeem reward',
+                  _redemption == null
+                      ? 'Redeem reward'
+                      : _redemption!.alreadyRedeemed
+                          ? 'Your voucher'
+                          : 'Reward redeemed!',
                   style: context.dawaTitle,
                 ),
                 Text(
-                  'You’re just a few healthy actions away from great care.',
+                  _redemption == null
+                      ? 'You’re just a few healthy actions away from great care.'
+                      : 'Show this code at a participating Dawa clinic.',
                   textAlign: TextAlign.center,
                   style: context.dawaCaption,
                 ),
                 const SizedBox(height: 12),
-                const Icon(Icons.redeem_rounded,
-                    color: DawaColors.primary, size: 78),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: .84, end: 1),
+                  duration: const Duration(milliseconds: 420),
+                  curve: Curves.easeOutBack,
+                  builder: (context, value, child) =>
+                      Transform.scale(scale: value, child: child),
+                  child: Icon(
+                    _redemption == null
+                        ? Icons.redeem_rounded
+                        : Icons.verified_rounded,
+                    color: _redemption == null
+                        ? DawaColors.primary
+                        : DawaColors.green,
+                    size: 78,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 DawaCard(
-                  color: DawaColors.softBlue,
-                  child: Row(
-                    children: [
-                      const DawaIconBadge(
-                        icon: Icons.card_giftcard_rounded,
-                        color: DawaColors.green,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  color: _redemption == null
+                      ? DawaColors.softBlue
+                      : DawaColors.softGreen,
+                  borderColor: _redemption == null
+                      ? DawaColors.line
+                      : DawaColors.green.withValues(alpha: .35),
+                  child: _redemption == null
+                      ? Row(
                           children: [
-                            Text('Free scan voucher',
-                                style: context.dawaSectionTitle),
-                            const Text(
-                              '1000 points',
-                              style: TextStyle(
-                                color: DawaColors.green,
-                                fontWeight: FontWeight.w600,
+                            const DawaIconBadge(
+                              icon: Icons.card_giftcard_rounded,
+                              color: DawaColors.green,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Free scan voucher',
+                                      style: context.dawaSectionTitle),
+                                  const Text(
+                                    '1000 points',
+                                    style: TextStyle(
+                                      color: DawaColors.green,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Use at a participating Dawa clinic.',
+                                    style: context.dawaCaption,
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              'Use at a participating Dawa clinic.',
-                              style: context.dawaCaption,
-                            ),
                           ],
+                        )
+                      : Semantics(
+                          label:
+                              'Free scan voucher code ${_redemption!.voucherCode}',
+                          child: Column(
+                            children: [
+                              Text(
+                                'FREE SCAN VOUCHER',
+                                style: context.dawaCaption.copyWith(
+                                  color: DawaColors.green,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              SelectionArea(
+                                child: Text(
+                                  _redemption!.voucherCode,
+                                  textAlign: TextAlign.center,
+                                  style: context.dawaTitle.copyWith(
+                                    color: DawaColors.green,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 7),
+                              TextButton.icon(
+                                onPressed: () async {
+                                  await Clipboard.setData(
+                                    ClipboardData(
+                                      text: _redemption!.voucherCode,
+                                    ),
+                                  );
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Voucher code copied'),
+                                      ),
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.copy_rounded, size: 18),
+                                label: const Text('Copy code'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
                 ),
-                const SizedBox(height: 10),
-                DawaCard(
-                  child: Column(
-                    children: [
-                      _BalanceRow(
-                        label: 'Current balance',
-                        value: '${widget.initialState.coins} points',
-                      ),
-                      const Divider(),
-                      _BalanceRow(
-                        label: 'Balance after redemption',
-                        value:
-                            '${(widget.initialState.coins - 1000).clamp(0, 999999)} points',
-                        color: DawaColors.green,
-                      ),
-                    ],
+                if (_redemption == null) ...[
+                  const SizedBox(height: 10),
+                  DawaCard(
+                    child: Column(
+                      children: [
+                        _BalanceRow(
+                          label: 'Current balance',
+                          value: '${widget.initialState.coins} points',
+                        ),
+                        const Divider(),
+                        _BalanceRow(
+                          label: 'Balance after redemption',
+                          value:
+                              '${(widget.initialState.coins - 1000).clamp(0, 999999)} points',
+                          color: DawaColors.green,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ] else ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _redemption!.alreadyRedeemed
+                        ? 'This is the same secure code issued for your earlier redemption.'
+                        : 'Your new balance is ${_redemption!.state.coins} points. Keep this code for your clinic visit.',
+                    textAlign: TextAlign.center,
+                    style: context.dawaCaption,
+                  ),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 10),
                   Semantics(
@@ -1295,31 +1377,39 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
                   ),
                 ],
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _busy ? null : () => Navigator.pop(context),
-                        child: const Text('Maybe later'),
+                if (_redemption != null)
+                  DawaPrimaryButton(
+                    label: 'Done',
+                    icon: Icons.check_rounded,
+                    onPressed: () => Navigator.pop(context, _redemption!.state),
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed:
+                              _busy ? null : () => Navigator.pop(context),
+                          child: const Text('Maybe later'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _busy ? null : _redeem,
-                        child: _busy
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('Redeem now'),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _busy ? null : _redeem,
+                          child: _busy
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Redeem now'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),

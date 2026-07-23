@@ -223,7 +223,7 @@ class _LearningContent extends StatelessWidget {
                 color: DawaColors.gold,
                 value: '${state.coins} coins',
                 label: 'My rewards',
-                onTap: () => context.push('/learn/quests'),
+                onTap: () => context.push('/learn/rewards'),
               ),
             ),
           ],
@@ -274,7 +274,7 @@ class _LearningContent extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: () => context.push('/learn/quests'),
+                onPressed: () => context.push('/learn/rewards'),
                 child: const Text('How it works'),
               ),
             ],
@@ -388,6 +388,44 @@ class _FeaturedLearningContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        DawaCard(
+          color: DawaColors.softPurple,
+          borderColor: DawaColors.purple.withValues(alpha: .25),
+          onTap: () => context.push('/learn/games'),
+          semanticLabel: 'Open health games and earn reward points',
+          child: Row(
+            children: [
+              SizedBox(
+                width: 72,
+                height: 78,
+                child: Image.asset(
+                  DawaArtwork.banaCelebrate,
+                  fit: BoxFit.contain,
+                  excludeFromSemantics: true,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Play health games', style: context.dawaSectionTitle),
+                    Text(
+                      'Test your knowledge • Earn 10 points',
+                      style: context.dawaCaption,
+                    ),
+                  ],
+                ),
+              ),
+              const DawaStatusPill(
+                label: 'Play',
+                icon: Icons.sports_esports_rounded,
+                color: DawaColors.purple,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
@@ -405,7 +443,7 @@ class _FeaturedLearningContent extends StatelessWidget {
                 color: DawaColors.gold,
                 value: '${state.coins} coins',
                 label: 'My rewards',
-                onTap: () => context.push('/learn/quests'),
+                onTap: () => context.push('/learn/rewards'),
               ),
             ),
           ],

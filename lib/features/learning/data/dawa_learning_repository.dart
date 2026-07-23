@@ -35,6 +35,20 @@ class DawaLearningState {
       );
 }
 
+class DawaRewardRedemption {
+  const DawaRewardRedemption({
+    required this.state,
+    required this.rewardCode,
+    required this.voucherCode,
+    required this.alreadyRedeemed,
+  });
+
+  final DawaLearningState state;
+  final String rewardCode;
+  final String voucherCode;
+  final bool alreadyRedeemed;
+}
+
 double dawaQuestProgress(DawaLearningState state) {
   if (state.completedIds.contains('screening-without-fear')) return 1;
   if (state.completedIds.contains('screening-checkpoint')) return 0.75;
@@ -61,6 +75,10 @@ class DawaLearningRepository {
   static const _pendingCompletionKey = 'dawa_learning_pending_completions';
   static const _coinsKey = 'dawa_learning_coins';
   static const _streakKey = 'dawa_learning_streak';
+  static const _freeScanVoucherKey = 'dawa_reward_free_scan_voucher';
+  static const _localOwnerKey = 'dawa_learning_local_owner';
+
+  String? _preparedStorageScope;
 
   Future<SharedPreferences> get _prefs async =>
       _preferences ??= await SharedPreferences.getInstance();
@@ -75,15 +93,19 @@ class DawaLearningRepository {
   }
 
   Future<DawaLearningState> load() async {
+    await _prepareOwnerScopedStorage();
     final prefs = await _prefs;
     final local = DawaLearningState(
-      savedIds: (prefs.getStringList(_savedKey) ?? const <String>[]).toSet(),
+      savedIds:
+          (prefs.getStringList(_keyFor(_savedKey)) ?? const <String>[]).toSet(),
       completedIds:
-          (prefs.getStringList(_completedKey) ?? const <String>[]).toSet(),
+          (prefs.getStringList(_keyFor(_completedKey)) ?? const <String>[])
+              .toSet(),
       offlineIds:
-          (prefs.getStringList(_offlineKey) ?? const <String>[]).toSet(),
-      coins: prefs.getInt(_coinsKey) ?? 180,
-      streak: prefs.getInt(_streakKey) ?? 1,
+          (prefs.getStringList(_keyFor(_offlineKey)) ?? const <String>[])
+              .toSet(),
+      coins: prefs.getInt(_keyFor(_coinsKey)) ?? 180,
+      streak: prefs.getInt(_keyFor(_streakKey)) ?? 1,
     );
 
     final client = _supabase;
@@ -178,20 +200,25 @@ class DawaLearningRepository {
   Future<DawaLearningState> redeem(
     DawaLearningState state, {
     required int cost,
+  }) async =>
+      (await redeemReward(state, cost: cost)).state;
+
+  Future<DawaRewardRedemption> redeemReward(
+    DawaLearningState state, {
+    required int cost,
   }) async {
-    if (state.coins < cost) {
-      throw const DawaLearningException(
-        'You do not have enough points for this reward yet.',
-      );
-    }
-    // Server-backed redemption is intentionally not simulated. The current
-    // screen can preview the reward; an issued voucher requires the RPC
-    // introduced by the optional backend migration and a successful response.
     final client = _supabase;
     final userId = client?.auth.currentUser?.id;
     if (client == null || userId == null) {
       throw const DawaLearningException(
         'Please sign in before redeeming a reward.',
+      );
+    }
+    if (state.coins < cost) {
+      final previous = await loadRedemption(state: state);
+      if (previous != null) return previous;
+      throw const DawaLearningException(
+        'You do not have enough points for this reward yet.',
       );
     }
     try {
@@ -204,17 +231,71 @@ class DawaLearningRepository {
       );
       final data = result is Map ? Map<String, dynamic>.from(result) : null;
       final balance = data?['coin_balance'] as int?;
-      if (balance == null) {
+      final voucherCode = data?['voucher_code']?.toString();
+      if (balance == null || voucherCode == null || voucherCode.isEmpty) {
         throw const DawaLearningException(
           'The reward service did not confirm a voucher.',
         );
       }
-      return _persist(state.copyWith(coins: balance));
+      final next = await _persist(state.copyWith(coins: balance));
+      await (await _prefs).setString(_keyFor(_freeScanVoucherKey), voucherCode);
+      return DawaRewardRedemption(
+        state: next,
+        rewardCode: data?['reward_code']?.toString() ?? 'free_scan_voucher',
+        voucherCode: voucherCode,
+        alreadyRedeemed: data?['already_redeemed'] as bool? ?? false,
+      );
     } on PostgrestException catch (error) {
       debugPrint('Reward redemption unavailable: ${error.code}');
+      if (error.code == '23514') {
+        throw const DawaLearningException(
+          'You do not have enough points for this reward yet.',
+        );
+      }
       throw const DawaLearningException(
         'Reward redemption is not available yet. Your points were not changed.',
       );
+    }
+  }
+
+  Future<DawaRewardRedemption?> loadRedemption({
+    DawaLearningState? state,
+  }) async {
+    await _prepareOwnerScopedStorage();
+    final current = state ?? await load();
+    final prefs = await _prefs;
+    final localVoucher = prefs.getString(_keyFor(_freeScanVoucherKey));
+    if (localVoucher != null && localVoucher.isNotEmpty) {
+      return DawaRewardRedemption(
+        state: current,
+        rewardCode: 'free_scan_voucher',
+        voucherCode: localVoucher,
+        alreadyRedeemed: true,
+      );
+    }
+
+    final client = _supabase;
+    final userId = client?.auth.currentUser?.id;
+    if (client == null || userId == null) return null;
+    try {
+      final row = await client
+          .from('dawa_mom_reward_redemptions')
+          .select('reward_code, voucher_code')
+          .eq('profile_id', userId)
+          .eq('reward_code', 'free_scan_voucher')
+          .maybeSingle();
+      final voucherCode = row?['voucher_code']?.toString();
+      if (voucherCode == null || voucherCode.isEmpty) return null;
+      await prefs.setString(_keyFor(_freeScanVoucherKey), voucherCode);
+      return DawaRewardRedemption(
+        state: current,
+        rewardCode: row?['reward_code']?.toString() ?? 'free_scan_voucher',
+        voucherCode: voucherCode,
+        alreadyRedeemed: true,
+      );
+    } on PostgrestException catch (error) {
+      debugPrint('Reward voucher lookup unavailable: ${error.code}');
+      return null;
     }
   }
 
@@ -226,13 +307,23 @@ class DawaLearningRepository {
   }
 
   Future<void> _saveLocal(DawaLearningState state) async {
+    await _prepareOwnerScopedStorage();
     final prefs = await _prefs;
     await Future.wait([
-      prefs.setStringList(_savedKey, state.savedIds.toList()..sort()),
-      prefs.setStringList(_completedKey, state.completedIds.toList()..sort()),
-      prefs.setStringList(_offlineKey, state.offlineIds.toList()..sort()),
-      prefs.setInt(_coinsKey, state.coins),
-      prefs.setInt(_streakKey, state.streak),
+      prefs.setStringList(
+        _keyFor(_savedKey),
+        state.savedIds.toList()..sort(),
+      ),
+      prefs.setStringList(
+        _keyFor(_completedKey),
+        state.completedIds.toList()..sort(),
+      ),
+      prefs.setStringList(
+        _keyFor(_offlineKey),
+        state.offlineIds.toList()..sort(),
+      ),
+      prefs.setInt(_keyFor(_coinsKey), state.coins),
+      prefs.setInt(_keyFor(_streakKey), state.streak),
     ]);
   }
 
@@ -251,13 +342,19 @@ class DawaLearningRepository {
     }
   }
 
-  Future<Set<String>> _pendingCompletionIds() async =>
-      ((await _prefs).getStringList(_pendingCompletionKey) ?? const <String>[])
-          .toSet();
+  Future<Set<String>> _pendingCompletionIds() async {
+    await _prepareOwnerScopedStorage();
+    return ((await _prefs).getStringList(_keyFor(_pendingCompletionKey)) ??
+            const <String>[])
+        .toSet();
+  }
 
   Future<void> _setPendingCompletionIds(Set<String> ids) async {
-    await (await _prefs)
-        .setStringList(_pendingCompletionKey, ids.toList()..sort());
+    await _prepareOwnerScopedStorage();
+    await (await _prefs).setStringList(
+      _keyFor(_pendingCompletionKey),
+      ids.toList()..sort(),
+    );
   }
 
   Future<void> _flushPendingCompletions(SupabaseClient client) async {
@@ -278,6 +375,45 @@ class DawaLearningRepository {
     if (remaining.length != pending.length) {
       await _setPendingCompletionIds(remaining);
     }
+  }
+
+  String _keyFor(String base) {
+    final userId = _supabase?.auth.currentUser?.id;
+    return userId == null ? base : '${base}_$userId';
+  }
+
+  Future<void> _prepareOwnerScopedStorage() async {
+    final userId = _supabase?.auth.currentUser?.id;
+    final scope = userId ?? 'guest';
+    if (_preparedStorageScope == scope) return;
+    _preparedStorageScope = scope;
+    if (userId == null) return;
+
+    final prefs = await _prefs;
+    final owner = prefs.getString(_localOwnerKey);
+    if (owner != null && owner != userId) return;
+    if (!prefs.containsKey(_keyFor(_completedKey))) {
+      for (final base in [
+        _savedKey,
+        _completedKey,
+        _offlineKey,
+        _pendingCompletionKey,
+      ]) {
+        final legacy = prefs.getStringList(base);
+        if (legacy != null) {
+          await prefs.setStringList(_keyFor(base), legacy);
+        }
+      }
+      for (final base in [_coinsKey, _streakKey]) {
+        final legacy = prefs.getInt(base);
+        if (legacy != null) await prefs.setInt(_keyFor(base), legacy);
+      }
+      final voucher = prefs.getString(_freeScanVoucherKey);
+      if (voucher != null && voucher.isNotEmpty) {
+        await prefs.setString(_keyFor(_freeScanVoucherKey), voucher);
+      }
+    }
+    await prefs.setString(_localOwnerKey, userId);
   }
 }
 

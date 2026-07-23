@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '/components/branding/dawa_mom_logo.dart';
+import '/design_system/dawa_components.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import 'app_walkthrough_service.dart';
 
@@ -51,31 +52,37 @@ class _DawaMomWalkthroughState extends State<DawaMomWalkthrough> {
       title: 'Welcome to Dawa Mom',
       description:
           'Maternal-health support, appointments and cycle tracking in one place.',
-      image: 'assets/images/register-page-img.png',
+      image: DawaArtwork.motherGreeting,
     ),
     _WalkthroughStep(
       title: 'Book appointments',
       description:
           'Choose a clinic, clinician, date and available appointment time.',
-      image: 'assets/images/female-doctor.png',
+      image: DawaArtwork.clinicianDoctor,
     ),
     _WalkthroughStep(
       title: 'Track your cycle',
       description:
           'Record periods and view estimated cycle information when it is useful to you.',
-      image: 'assets/images/transparent assets/Menstrual_calendar-pana.png',
+      image: DawaArtwork.cycleCalendar,
+    ),
+    _WalkthroughStep(
+      title: 'Play, learn and earn',
+      description:
+          'Complete short health games, collect one-time Dawa points and follow your rewards progress.',
+      image: DawaArtwork.banaCelebrate,
     ),
     _WalkthroughStep(
       title: 'Complete your health profile',
       description:
           'Add relevant health information for more personalised guidance.',
-      image: 'assets/images/transparent assets/Status_update-pana.png',
+      image: DawaArtwork.motherLearning,
     ),
     _WalkthroughStep(
       title: 'Ask Rudo',
       description:
           'Open the Rudo assistant whenever you need health support and guidance.',
-      image: 'assets/images/female-doctor2.png',
+      image: DawaArtwork.banaExplain,
     ),
   ];
 

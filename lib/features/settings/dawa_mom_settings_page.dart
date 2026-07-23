@@ -6,8 +6,8 @@ import '/components/period_setup/period_setup_flow.dart';
 import '/design_system/dawa_components.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
+import '/components/responsive/dawa_mom_responsive_shell.dart';
 import '/features/learning/data/dawa_learning_repository.dart';
-import '/features/learning/presentation/dawa_quest_pages.dart';
 import '/features/onboarding/dawa_mom_walkthrough.dart';
 import '/features/preferences/dawa_language_sheet.dart';
 import '/features/preferences/dawa_user_preferences_repository.dart';
@@ -78,14 +78,125 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
   }
 
   Future<void> _showRewards(DawaLearningState value) async {
-    final next = await showDawaRewardDialog(
-      context,
-      repository: _learningRepository,
-      state: value,
+    await context.push('/learn/rewards');
+    if (mounted) setState(() => _learningState = _learningRepository.load());
+  }
+
+  void _showSupport() {
+    final pageContext = context;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => DawaBottomSheetFrame(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const DawaIconBadge(
+                  icon: Icons.support_agent_rounded,
+                  color: DawaColors.green,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('How can we help?', style: pageContext.dawaTitle),
+                ),
+                IconButton(
+                  tooltip: 'Close support',
+                  onPressed: () => Navigator.pop(sheetContext),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DawaCard(
+              onTap: () {
+                Navigator.pop(sheetContext);
+                DawaMomResponsiveShell.openRudo(pageContext);
+              },
+              semanticLabel: 'Ask Rudo for general health guidance',
+              color: DawaColors.softBlue,
+              child: Row(
+                children: [
+                  const DawaIconBadge(
+                    icon: Icons.chat_bubble_outline_rounded,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Ask Rudo', style: pageContext.dawaSectionTitle),
+                        Text(
+                          'General guidance and help finding the right feature.',
+                          style: pageContext.dawaCaption,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: DawaColors.primary),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            DawaCard(
+              onTap: () {
+                Navigator.pop(sheetContext);
+                pageContext.go('/encounters');
+              },
+              semanticLabel: 'Open care and appointments',
+              child: Row(
+                children: [
+                  const DawaIconBadge(
+                    icon: Icons.medical_services_outlined,
+                    color: DawaColors.green,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Care and appointments',
+                            style: pageContext.dawaSectionTitle),
+                        Text(
+                          'Book a visit or review an upcoming appointment.',
+                          style: pageContext.dawaCaption,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: DawaColors.primary),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            DawaCard(
+              color: DawaColors.softPink,
+              borderColor: DawaColors.pink.withValues(alpha: .3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.emergency_rounded, color: DawaColors.danger),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'For severe pain, heavy bleeding, trouble breathing, fainting, or pregnancy danger signs, seek urgent local medical care now.',
+                      style: pageContext.dawaCaption.copyWith(
+                        color: DawaColors.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-    if (next != null && mounted) {
-      setState(() => _learningState = Future.value(next));
-    }
   }
 
   Future<void> _setupPeriod(HealthProfileSnapshot profile) async {
@@ -471,9 +582,14 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
                             onTap: _changePassword,
                           ),
                           _DawaSettingsRow(
+                            icon: Icons.tour_outlined,
+                            title: 'Replay app tour',
+                            onTap: () => showDawaMomWalkthrough(context),
+                          ),
+                          _DawaSettingsRow(
                             icon: Icons.help_outline_rounded,
                             title: 'Help & support',
-                            onTap: () => showDawaMomWalkthrough(context),
+                            onTap: _showSupport,
                             showDivider: false,
                           ),
                         ],
@@ -514,6 +630,7 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
                 const SizedBox(height: 12),
                 _SupportSettings(
                   onReplayTour: () => showDawaMomWalkthrough(context),
+                  onSupport: _showSupport,
                 ),
                 const SizedBox(height: 12),
                 _AccountActions(
@@ -696,8 +813,12 @@ class _PrivacySettings extends StatelessWidget {
 }
 
 class _SupportSettings extends StatelessWidget {
-  const _SupportSettings({required this.onReplayTour});
+  const _SupportSettings({
+    required this.onReplayTour,
+    required this.onSupport,
+  });
   final VoidCallback onReplayTour;
+  final VoidCallback onSupport;
 
   @override
   Widget build(BuildContext context) => _SettingsCard(
@@ -710,6 +831,14 @@ class _SupportSettings extends StatelessWidget {
             subtitle: const Text('Review the main Dawa Mom features'),
             trailing: const Icon(Icons.play_arrow_rounded),
             onTap: onReplayTour,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.help_outline_rounded),
+            title: const Text('Help and support'),
+            subtitle: const Text('Ask Rudo or open care and appointments'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: onSupport,
           ),
           const ListTile(
             contentPadding: EdgeInsets.zero,
