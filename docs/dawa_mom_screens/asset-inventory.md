@@ -10,6 +10,11 @@ The supplied `dawa_mom_screens` package contains 174 usable image files:
 - 41 legacy/application images
 - 4 `.DS_Store` metadata files, deliberately excluded from the application
 
+Implementation added one non-destructive production derivative,
+`mother-baby-line-transparent.png`, extracted from the supplied line art so the
+welcome/authentication artwork can cross the curved background without an RGB
+rectangle. The supplied source remains unchanged.
+
 All 31 screen references are `941 × 1672` PNGs (9:16 portrait). They are treated as a mobile baseline; tablet and desktop are responsive adaptations rather than separate supplied designs.
 
 ## Screen references
@@ -82,6 +87,7 @@ The exact production filenames share the prefix visible in the folder, for examp
 | `mother-baby-line-crop-v3.png` | 330×600 | No | Authentication/onboarding ornament |
 | `mother-baby-line-crop.png` | 470×680 | No | Authentication/onboarding ornament |
 | `mother-baby-line-penpot.png` | 152×240 | No | Compact authentication ornament |
+| `mother-baby-line-transparent.png` | 998×1575 | Yes | Background-extracted production derivative for welcome/authentication |
 | `pregnant-mother-chroma.png` | 1024×1536 | No | Source/reference only |
 | `pregnant-mother-penpot.png` | 160×240 | Yes | Compact onboarding hero |
 | `pregnant-mother.png` | 1024×1536 | Yes | Large onboarding hero |
