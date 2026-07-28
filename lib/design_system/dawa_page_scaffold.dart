@@ -8,8 +8,13 @@ class DawaPageScaffold extends StatelessWidget {
     required this.child,
     this.maxWidth = 1180,
     this.scrollable = true,
-    this.includeBottomWave = true,
+    this.includeBottomWave = false,
     this.padding,
+    this.header,
+    this.floatingActionButton,
+    this.bottomNavigationBar,
+    this.reserveMobileNavigationSpace = false,
+    this.onRefresh,
   });
 
   final Widget child;
@@ -17,48 +22,113 @@ class DawaPageScaffold extends StatelessWidget {
   final bool scrollable;
   final bool includeBottomWave;
   final EdgeInsetsGeometry? padding;
+  final Widget? header;
+  final Widget? floatingActionButton;
+  final Widget? bottomNavigationBar;
+  final bool reserveMobileNavigationSpace;
+  final RefreshCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final mobileNavigationSpace =
+        DawaBreakpoints.isMobile(context) && reserveMobileNavigationSpace
+            ? DawaLayout.mobileNavigationHeight +
+                DawaLayout.mobileNavigationWaveClearance
+            : 0.0;
+    final bottomPadding =
+        mobileNavigationSpace + safeBottom + DawaLayout.bottomContentGap;
     final effectivePadding = padding ??
         EdgeInsets.fromLTRB(
           DawaBreakpoints.pagePadding(context),
-          4,
+          DawaSpacing.xxs,
           DawaBreakpoints.pagePadding(context),
-          DawaBreakpoints.isMobile(context) ? 112 : 32,
+          bottomPadding,
         );
+    final resolvedPadding =
+        effectivePadding.resolve(Directionality.of(context));
+    final pageContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (header != null) ...[
+          header!,
+          const SizedBox(height: DawaSpacing.xs),
+        ],
+        child,
+      ],
+    );
     final content = Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Padding(padding: effectivePadding, child: child),
+        child: SizedBox(
+          width: double.infinity,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ColoredBox(
+                color: DawaColors.canvas,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    resolvedPadding.left,
+                    resolvedPadding.top,
+                    resolvedPadding.right,
+                    0,
+                  ),
+                  child: pageContent,
+                ),
+              ),
+              SizedBox(height: resolvedPadding.bottom),
+            ],
+          ),
+        ),
       ),
     );
 
-    return Material(
-      color: DawaColors.canvas,
-      child: Stack(
+    return Scaffold(
+      backgroundColor: DawaColors.canvas,
+      resizeToAvoidBottomInset: true,
+      floatingActionButton: floatingActionButton,
+      bottomNavigationBar: bottomNavigationBar,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
+          const ColoredBox(color: DawaColors.canvas),
           if (includeBottomWave)
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 98,
-              child:
-                  IgnorePointer(child: CustomPaint(painter: DawaWavePainter())),
+            const Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                width: double.infinity,
+                height: DawaLayout.bottomWaveHeight,
+                child: IgnorePointer(
+                  ignoring: true,
+                  child: CustomPaint(painter: DawaWavePainter()),
+                ),
+              ),
             ),
-          Positioned.fill(
-            child: SafeArea(
-              bottom: false,
-              child: scrollable
-                  ? SingleChildScrollView(
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      child: content,
-                    )
-                  : content,
-            ),
+          SafeArea(
+            bottom: false,
+            child: scrollable
+                ? Builder(
+                    builder: (context) {
+                      final scrollView = SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        child: content,
+                      );
+                      final refresh = onRefresh;
+                      return refresh == null
+                          ? scrollView
+                          : RefreshIndicator(
+                              onRefresh: refresh,
+                              child: scrollView,
+                            );
+                    },
+                  )
+                : content,
           ),
         ],
       ),
@@ -104,6 +174,23 @@ class DawaWavePainter extends CustomPainter {
       ..lineTo(0, size.height)
       ..close();
     canvas.drawPath(bluePath, blue);
+
+    final thread = Paint()
+      ..color = Colors.white.withValues(alpha: 0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    for (double x = 10; x < size.width; x += 28) {
+      canvas.drawLine(
+        Offset(x, size.height - 15),
+        Offset(x + 7, size.height - 8),
+        thread,
+      );
+      canvas.drawLine(
+        Offset(x + 7, size.height - 8),
+        Offset(x + 14, size.height - 15),
+        thread,
+      );
+    }
   }
 
   @override

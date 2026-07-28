@@ -49,7 +49,7 @@ AppointmentResultSummary _summary() => AppointmentResultSummary(
       appointmentId: '00000000-0000-4000-8000-000000000011',
       version: 1,
       clinicianDisplayName: 'Dr Fae',
-      clinicName: 'Dawa Mom',
+      clinicName: 'DawaMom',
       appointmentDate: DateTime(2026, 7, 22),
       completedAt: DateTime(2026, 7, 22, 14, 30),
       overallStatus: 'follow_up',

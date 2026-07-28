@@ -1,12 +1,15 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:go_router/go_router.dart';
 
+import '/content/dawa_learning_asset_registry.dart';
 import '/design_system/dawa_components.dart';
+import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
 import '/features/learning/data/dawa_learning_repository.dart';
+import '/services/voice_service.dart';
 import '../domain/dawa_health_game.dart';
 import '../services/dawa_game_feedback.dart';
 
@@ -82,7 +85,7 @@ class _DawaGamesHubPageState extends State<DawaGamesHubPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Games support learning and do not replace advice from a qualified health professional.',
+              'Games help you learn. They do not replace care from a trained health worker.',
               style: context.dawaCaption,
             ),
             const SizedBox(height: 18),
@@ -180,6 +183,491 @@ class _DawaGamesHubPageState extends State<DawaGamesHubPage> {
       );
 }
 
+class DawaCycleGamesHubPage extends StatefulWidget {
+  const DawaCycleGamesHubPage({super.key, this.repository});
+
+  final DawaLearningRepository? repository;
+
+  @override
+  State<DawaCycleGamesHubPage> createState() => _DawaCycleGamesHubPageState();
+}
+
+class _DawaCycleGamesHubPageState extends State<DawaCycleGamesHubPage> {
+  late final DawaLearningRepository _repository;
+  late Future<DawaLearningState> _state;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? DawaLearningRepository();
+    _state = _repository.load();
+  }
+
+  Future<void> _openGame(DawaHealthGame game) async {
+    await context.push(game.route);
+    if (mounted) setState(() => _state = _repository.load());
+  }
+
+  @override
+  Widget build(BuildContext context) => DawaPageScaffold(
+        maxWidth: 980,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DawaAppHeader(
+              title: 'Understand Your Cycle',
+              eyebrow: 'QUICK LEARNING GAMES',
+              onBack: context.pop,
+              onNotifications: () => context.push('/notifications'),
+            ),
+            FutureBuilder<DawaLearningState>(
+              future: _state,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const DawaLoadingSkeleton(
+                    layout: DawaSkeletonLayout.content,
+                    label: 'Loading cycle games',
+                  );
+                }
+                final state = snapshot.data!;
+                final games = DawaHealthGameCatalog.cycleGames;
+                final completed = games
+                    .where((game) => state.completedIds.contains(game.id))
+                    .length;
+                final active = state.gameProgress.values
+                    .where(
+                      (progress) =>
+                          games.any((game) => game.id == progress.gameId) &&
+                          !state.completedIds.contains(progress.gameId),
+                    )
+                    .toList()
+                  ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+                final continuing = active.firstOrNull;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _CycleGamesIntro(
+                      completed: completed,
+                      total: games.length,
+                      pointsAvailable: games
+                          .where(
+                            (game) => !state.completedIds.contains(game.id),
+                          )
+                          .fold(0, (sum, game) => sum + game.rewardCoins),
+                    ),
+                    if (continuing != null) ...[
+                      const SizedBox(height: DawaSpacing.sm),
+                      _ContinueCycleGameCard(
+                        game: DawaHealthGameCatalog.byId(continuing.gameId),
+                        progress: continuing,
+                        onTap: () => _openGame(
+                          DawaHealthGameCatalog.byId(continuing.gameId),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: DawaSpacing.md),
+                    const DawaSectionHeader(
+                      title: 'Choose a quick game',
+                      subtitle:
+                          'No timers • tap-based answers • explanations after every round',
+                    ),
+                    const SizedBox(height: DawaSpacing.sm),
+                    _CycleGameLayout(
+                      games: games,
+                      state: state,
+                      onOpen: _openGame,
+                    ),
+                    const SizedBox(height: DawaSpacing.md),
+                    DawaCard(
+                      color: DawaColors.softGreen,
+                      borderColor: DawaColors.green.withValues(alpha: .25),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const DawaIconBadge(
+                            icon: Icons.health_and_safety_outlined,
+                            color: DawaColors.green,
+                          ),
+                          const SizedBox(width: DawaSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              'Games support learning and do not diagnose a condition. Urgent safety guidance always comes before points.',
+                              style: context.dawaCaption,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      );
+}
+
+class _CycleGamesIntro extends StatelessWidget {
+  const _CycleGamesIntro({
+    required this.completed,
+    required this.total,
+    required this.pointsAvailable,
+  });
+
+  final int completed;
+  final int total;
+  final int pointsAvailable;
+
+  @override
+  Widget build(BuildContext context) => DawaCard(
+        featured: true,
+        padding: const EdgeInsets.all(14),
+        color: DawaColors.softBlue,
+        borderColor: DawaColors.primary.withValues(alpha: .18),
+        semanticLabel:
+            '$completed of $total cycle games complete. $pointsAvailable points available.',
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 76,
+              child: DawaContextualImage(
+                assetId: 'period_tracking_01',
+                variant: DawaImageVariant.compactThumbnail,
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Learn through quick games and simple challenges',
+                    style: context.dawaSectionTitle.copyWith(fontSize: 17),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Learn what cycle days, symptoms and period estimates mean through short games.',
+                    style: context.dawaCaption,
+                  ),
+                  const SizedBox(height: 8),
+                  DawaProgressBar(
+                    value: total == 0 ? 0 : completed / total,
+                    semanticLabel: '$completed of $total cycle games completed',
+                    color: DawaColors.green,
+                  ),
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      Text(
+                        '$completed of $total complete',
+                        style: context.dawaCaption.copyWith(
+                          color: DawaColors.greenDark,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '$pointsAvailable points available',
+                        style: context.dawaCaption.copyWith(
+                          color: DawaColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _ContinueCycleGameCard extends StatelessWidget {
+  const _ContinueCycleGameCard({
+    required this.game,
+    required this.progress,
+    required this.onTap,
+  });
+
+  final DawaHealthGame game;
+  final DawaGameProgress progress;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final round = (progress.roundIndex + 1).clamp(1, game.questions.length);
+    return DawaCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(12),
+      semanticLabel:
+          'Continue ${game.title}, round $round of ${game.questions.length}.',
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: DawaContextualImage(
+              assetId: game.visualAssetId,
+              variant: DawaImageVariant.cardSideImage,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CONTINUE PLAYING',
+                  style: context.dawaCaption.copyWith(
+                    color: DawaColors.green,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(game.title, style: context.dawaSectionTitle),
+                const SizedBox(height: 5),
+                DawaProgressBar(
+                  value: progress.roundIndex / game.questions.length,
+                  semanticLabel: 'Round $round of ${game.questions.length}',
+                  color: DawaColors.primary,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Round $round of ${game.questions.length}'
+                  '${progress.pendingSync ? ' • pending sync' : ''}',
+                  style: context.dawaCaption,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.play_circle_fill_rounded,
+            color: DawaColors.primary,
+            size: 34,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CycleGameLayout extends StatelessWidget {
+  const _CycleGameLayout({
+    required this.games,
+    required this.state,
+    required this.onOpen,
+  });
+
+  final List<DawaHealthGame> games;
+  final DawaLearningState state;
+  final ValueChanged<DawaHealthGame> onOpen;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final textScale = MediaQuery.textScalerOf(context).scale(1);
+          final useGrid = constraints.maxWidth >= 328 && textScale <= 1.2;
+          if (!useGrid) {
+            return Column(
+              children: [
+                for (var index = 0; index < games.length; index++) ...[
+                  _CycleGameListCard(
+                    game: games[index],
+                    completed: state.completedIds.contains(games[index].id),
+                    progress: state.gameProgress[games[index].id],
+                    onTap: () => onOpen(games[index]),
+                  ),
+                  if (index < games.length - 1)
+                    const SizedBox(height: DawaSpacing.sm),
+                ],
+              ],
+            );
+          }
+          final columns = constraints.maxWidth >= 720 ? 3 : 2;
+          const spacing = 12.0;
+          final width =
+              (constraints.maxWidth - spacing * (columns - 1)) / columns;
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              for (final game in games)
+                SizedBox(
+                  width: width,
+                  child: _CycleGameGridCard(
+                    game: game,
+                    completed: state.completedIds.contains(game.id),
+                    progress: state.gameProgress[game.id],
+                    onTap: () => onOpen(game),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+}
+
+class _CycleGameGridCard extends StatelessWidget {
+  const _CycleGameGridCard({
+    required this.game,
+    required this.completed,
+    required this.progress,
+    required this.onTap,
+  });
+
+  final DawaHealthGame game;
+  final bool completed;
+  final DawaGameProgress? progress;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => DawaCard(
+        padding: EdgeInsets.zero,
+        onTap: onTap,
+        semanticLabel:
+            '${game.title}. ${completed ? 'Completed' : progress != null ? 'In progress' : 'Not started'}. ${game.durationMinutes} minutes.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DawaContextualImage(
+              assetId: game.visualAssetId,
+              variant: DawaImageVariant.moduleThumbnail,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(DawaRadii.medium),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    game.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.dawaSectionTitle.copyWith(fontSize: 15),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    game.subtitle,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.dawaCaption,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 5,
+                    children: [
+                      DawaStatusPill(
+                        label: '${game.durationMinutes} min',
+                        icon: Icons.schedule_rounded,
+                        color: DawaColors.primary,
+                      ),
+                      DawaStatusPill(
+                        label: completed
+                            ? 'Replay'
+                            : progress != null
+                                ? 'Continue'
+                                : 'Play',
+                        icon: completed
+                            ? Icons.check_circle_outline_rounded
+                            : progress != null
+                                ? Icons.play_arrow_rounded
+                                : Icons.play_arrow_rounded,
+                        color: completed
+                            ? DawaColors.green
+                            : progress != null
+                                ? DawaColors.primary
+                                : DawaColors.primary,
+                      ),
+                      Text(
+                        '+${game.rewardCoins} pts',
+                        style: context.dawaCaption.copyWith(
+                          color: DawaColors.gold,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _CycleGameListCard extends StatelessWidget {
+  const _CycleGameListCard({
+    required this.game,
+    required this.completed,
+    required this.progress,
+    required this.onTap,
+  });
+
+  final DawaHealthGame game;
+  final bool completed;
+  final DawaGameProgress? progress;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => DawaCard(
+        padding: const EdgeInsets.all(12),
+        onTap: onTap,
+        semanticLabel:
+            '${game.title}. ${completed ? 'Completed' : progress != null ? 'In progress' : 'Not started'}.',
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 88,
+              child: DawaContextualImage(
+                assetId: game.visualAssetId,
+                variant: DawaImageVariant.cardSideImage,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(game.title, style: context.dawaSectionTitle),
+                  const SizedBox(height: 3),
+                  Text(
+                    game.subtitle,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.dawaCaption,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${game.durationMinutes} min • '
+                    '${completed ? 'Replay' : progress != null ? 'Continue round ${progress!.roundIndex + 1}' : 'Play • +${game.rewardCoins} points'}',
+                    style: context.dawaCaption.copyWith(
+                      color:
+                          completed ? DawaColors.greenDark : DawaColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: DawaColors.primary,
+            ),
+          ],
+        ),
+      );
+}
+
 class DawaHealthGamePage extends StatefulWidget {
   const DawaHealthGamePage({
     super.key,
@@ -203,6 +691,7 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
   late final DawaLearningRepository _repository;
   late final DawaGameFeedback _feedback;
   late Future<DawaLearningState> _state;
+  VoiceService? _voiceService;
   var _questionIndex = 0;
   var _score = 0;
   DawaGameAnswer? _answer;
@@ -218,12 +707,45 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
     _repository = widget.repository ?? DawaLearningRepository();
     _feedback = widget.feedback ?? DawaGameFeedbackService();
     _state = _repository.load();
+    unawaited(_restoreProgress());
   }
 
   @override
   void dispose() {
     unawaited(_feedback.dispose());
+    final voice = _voiceService;
+    if (voice != null) unawaited(voice.dispose());
     super.dispose();
+  }
+
+  Future<void> _restoreProgress() async {
+    final state = await _state;
+    final progress = state.gameProgress[widget.game.id];
+    if (!mounted ||
+        progress == null ||
+        state.completedIds.contains(widget.game.id)) {
+      return;
+    }
+    setState(() {
+      _questionIndex =
+          progress.roundIndex.clamp(0, widget.game.questions.length - 1);
+      _score = progress.correctAnswers.clamp(0, widget.game.questions.length);
+    });
+  }
+
+  void _speakInstructions() {
+    final question = _question;
+    final answerLabels =
+        question.answers.map((answer) => answer.$2).join('. Or ');
+    final text =
+        '${widget.game.instructions} ${question.prompt} Choose: $answerLabels.';
+    final voice = _voiceService ??= VoiceService();
+    unawaited(
+      voice.speakText(
+        text,
+        Localizations.localeOf(context).languageCode,
+      ),
+    );
   }
 
   void _select(DawaGameAnswer answer) {
@@ -239,9 +761,20 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
   Future<void> _continue() async {
     if (_answer == null || _busy) return;
     if (_questionIndex < widget.game.questions.length - 1) {
+      setState(() => _busy = true);
+      final current = await _state;
+      final next = await _repository.saveGameProgress(
+        current,
+        gameId: widget.game.id,
+        roundIndex: _questionIndex + 1,
+        correctAnswers: _score,
+      );
+      if (!mounted) return;
       setState(() {
+        _state = Future.value(next);
         _questionIndex += 1;
         _answer = null;
+        _busy = false;
       });
       return;
     }
@@ -259,24 +792,26 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
           message:
               'You scored $_score of ${widget.game.questions.length}. Review the explanations and try once more.',
           asset: DawaArtwork.banaReassure,
+          visualAssetId: widget.game.visualAssetId,
           primaryLabel: 'Try again',
           passed: false,
           score: _score,
           total: widget.game.questions.length,
         ),
       );
-      if (replay == true) _reset();
+      if (replay == true) await _reset();
       return;
     }
 
     setState(() => _busy = true);
     final current = await _state;
     final alreadyCompleted = current.completedIds.contains(widget.game.id);
-    final next = await _repository.complete(
+    var next = await _repository.complete(
       current,
       widget.game.id,
       rewardCoins: widget.game.rewardCoins,
     );
+    next = await _repository.clearGameProgress(next, widget.game.id);
     if (!mounted) return;
     setState(() {
       _state = Future.value(next);
@@ -292,25 +827,32 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
         title: alreadyCompleted ? 'Brilliant replay!' : 'Game complete!',
         message: alreadyCompleted
             ? 'Your knowledge is getting stronger. You already collected this game’s reward.'
-            : 'You earned ${widget.game.rewardCoins} Dawa points for completing ${widget.game.title}.',
+            : widget.game.activity == DawaGameActivity.kitBuilder
+                ? 'Your period-kit checklist is saved. You also earned ${widget.game.rewardCoins} Dawa points.'
+                : 'You earned ${widget.game.rewardCoins} Dawa points for completing ${widget.game.title}.',
         asset: DawaArtwork.banaCelebrate,
+        visualAssetId: widget.game.completionAssetId,
         primaryLabel: 'Play again',
-        secondaryLabel: 'View rewards',
+        secondaryLabel: widget.game.relatedActionLabel,
         passed: true,
         score: _score,
         total: widget.game.questions.length,
         rewardCoins: alreadyCompleted ? 0 : widget.game.rewardCoins,
         onSecondary: () {
           Navigator.pop(dialogContext, false);
-          pageContext.push('/learn/rewards');
+          pageContext.push(widget.game.relatedActionRoute);
         },
       ),
     );
-    if (replay == true) _reset();
+    if (replay == true) await _reset();
   }
 
-  void _reset() {
+  Future<void> _reset() async {
+    final current = await _state;
+    final next = await _repository.clearGameProgress(current, widget.game.id);
+    if (!mounted) return;
     setState(() {
+      _state = Future.value(next);
       _questionIndex = 0;
       _score = 0;
       _answer = null;
@@ -349,9 +891,36 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            DawaCard(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.volume_up_outlined,
+                    color: DawaColors.primary,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      widget.game.instructions,
+                      style: context.dawaCaption,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Listen to instructions',
+                    onPressed: _speakInstructions,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    color: DawaColors.primary,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 14),
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 260),
               switchInCurve: Curves.easeOutCubic,
               transitionBuilder: (child, animation) => FadeTransition(
                 opacity: animation,
@@ -367,37 +936,19 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
                 key: ValueKey(_questionIndex),
                 game: widget.game,
                 question: _question,
+                onListen: _speakInstructions,
               ),
             ),
             const SizedBox(height: 14),
-            Semantics(
-              label: 'Choose one answer',
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _AnswerButton(
-                      label: _question.firstLabel,
-                      answer: DawaGameAnswer.first,
-                      selectedAnswer: _answer,
-                      correctAnswer: _question.correctAnswer,
-                      onPressed: () => _select(DawaGameAnswer.first),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _AnswerButton(
-                      label: _question.secondLabel,
-                      answer: DawaGameAnswer.second,
-                      selectedAnswer: _answer,
-                      correctAnswer: _question.correctAnswer,
-                      onPressed: () => _select(DawaGameAnswer.second),
-                    ),
-                  ),
-                ],
-              ),
+            _AnswerChoices(
+              question: _question,
+              selectedAnswer: _answer,
+              onSelect: _select,
             ),
             AnimatedSize(
-              duration: const Duration(milliseconds: 220),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
               curve: Curves.easeOut,
               child: _answer == null
                   ? const SizedBox.shrink()
@@ -407,24 +958,35 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
                         liveRegion: true,
                         container: true,
                         label:
-                            '${_isCorrect ? 'Correct' : 'Not quite'}. ${_question.explanation}',
+                            '${_question.urgentGuidance ? 'Urgent care guidance' : _isCorrect ? 'Correct' : widget.game.isCycleGame ? 'Good try' : 'Not quite'}. ${_question.explanation}',
                         child: DawaCard(
-                          color: _isCorrect
-                              ? DawaColors.softGreen
-                              : DawaColors.softPink,
-                          borderColor:
-                              (_isCorrect ? DawaColors.green : DawaColors.pink)
-                                  .withValues(alpha: .35),
+                          color: _question.urgentGuidance
+                              ? DawaColors.softPink
+                              : _isCorrect
+                                  ? DawaColors.softGreen
+                                  : DawaColors.softBlue,
+                          borderColor: (_question.urgentGuidance
+                                  ? DawaColors.pink
+                                  : _isCorrect
+                                      ? DawaColors.green
+                                      : DawaColors.primary)
+                              .withValues(alpha: .35),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               DawaIconBadge(
                                 icon: _isCorrect
-                                    ? Icons.check_rounded
-                                    : Icons.lightbulb_outline_rounded,
-                                color: _isCorrect
-                                    ? DawaColors.green
-                                    : DawaColors.pink,
+                                    ? _question.urgentGuidance
+                                        ? Icons.emergency_rounded
+                                        : Icons.check_rounded
+                                    : _question.urgentGuidance
+                                        ? Icons.emergency_rounded
+                                        : Icons.lightbulb_outline_rounded,
+                                color: _question.urgentGuidance
+                                    ? DawaColors.pink
+                                    : _isCorrect
+                                        ? DawaColors.green
+                                        : DawaColors.primary,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -433,8 +995,14 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
                                   children: [
                                     Text(
                                       _isCorrect
-                                          ? 'That’s right!'
-                                          : 'Not quite',
+                                          ? _question.urgentGuidance
+                                              ? 'Urgent care guidance'
+                                              : 'That’s right!'
+                                          : _question.urgentGuidance
+                                              ? 'Urgent care guidance'
+                                              : widget.game.isCycleGame
+                                                  ? 'Good try. Here is the safer answer.'
+                                                  : 'Not quite',
                                       style: context.dawaSectionTitle,
                                     ),
                                     const SizedBox(height: 3),
@@ -455,17 +1023,23 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
             DawaPrimaryButton(
               label: _questionIndex == widget.game.questions.length - 1
                   ? 'Finish game'
-                  : 'Next question',
+                  : _question.urgentGuidance && _answer != null
+                      ? 'I understand • Next round'
+                      : widget.game.isCycleGame
+                          ? 'Next round'
+                          : 'Next question',
               busy: _busy,
               onPressed: _answer == null ? null : _continue,
             ),
-            const SizedBox(height: 10),
-            Center(
-              child: Text(
-                'Score $_score • Pass with ${widget.game.passingScore}/${widget.game.questions.length}',
-                style: context.dawaCaption,
+            if (!(_question.urgentGuidance && _answer != null)) ...[
+              const SizedBox(height: 10),
+              Center(
+                child: Text(
+                  'Score $_score • Pass with ${widget.game.passingScore}/${widget.game.questions.length}',
+                  style: context.dawaCaption,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       );
@@ -477,6 +1051,7 @@ class DawaGameCompletionDialog extends StatelessWidget {
     required this.title,
     required this.message,
     required this.asset,
+    this.visualAssetId,
     required this.primaryLabel,
     required this.passed,
     required this.score,
@@ -489,6 +1064,7 @@ class DawaGameCompletionDialog extends StatelessWidget {
   final String title;
   final String message;
   final String asset;
+  final String? visualAssetId;
   final String primaryLabel;
   final String? secondaryLabel;
   final bool passed;
@@ -526,11 +1102,17 @@ class DawaGameCompletionDialog extends StatelessWidget {
                           passed ? DawaColors.softGreen : DawaColors.softBlue,
                       shape: BoxShape.circle,
                     ),
-                    child: Image.asset(
-                      asset,
-                      fit: BoxFit.contain,
-                      excludeFromSemantics: true,
-                    ),
+                    child: visualAssetId == null
+                        ? Image.asset(
+                            asset,
+                            fit: BoxFit.contain,
+                            excludeFromSemantics: true,
+                          )
+                        : DawaContextualImage(
+                            assetId: visualAssetId!,
+                            variant: DawaImageVariant.compactThumbnail,
+                            borderRadius: BorderRadius.circular(77),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -575,18 +1157,24 @@ class DawaGameCompletionDialog extends StatelessWidget {
                     if (secondaryLabel != null) ...[
                       Expanded(
                         child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(primaryLabel),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
                           onPressed: onSecondary,
                           child: Text(secondaryLabel!),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                    ],
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(primaryLabel),
+                    ] else
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(primaryLabel),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -608,83 +1196,17 @@ class _GamesHero extends StatelessWidget {
   final int coins;
 
   @override
-  Widget build(BuildContext context) => DawaCard(
-        padding: EdgeInsets.zero,
-        color: DawaColors.softBlue,
+  Widget build(BuildContext context) => DawaIllustratedHeroCard(
+        category: 'PLAY • LEARN • GROW',
+        title: 'Healthy choices become easier with practice',
+        subtitle: '$completed of $total games completed • $coins Dawa points',
+        illustrationPath: DawaArtwork.banaCelebrate,
+        progress: total == 0 ? 0 : completed / total,
+        progressLabel: 'Health game progress',
+        backgroundColor: DawaColors.softBlue,
         borderColor: DawaColors.primary.withValues(alpha: .18),
-        child: SizedBox(
-          height: DawaBreakpoints.isMobile(context) ? 210 : 228,
-          child: Stack(
-            children: [
-              Positioned(
-                right: DawaBreakpoints.isMobile(context) ? -8 : 24,
-                bottom: 0,
-                width: DawaBreakpoints.isMobile(context) ? 146 : 210,
-                height: 210,
-                child: Image.asset(
-                  DawaArtwork.banaCelebrate,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.bottomCenter,
-                  excludeFromSemantics: true,
-                ),
-              ),
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: DawaBreakpoints.isMobile(context) ? 210 : 440,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'PLAY • LEARN • GROW',
-                            style: TextStyle(
-                              color: DawaColors.green,
-                              fontFamily: 'Poppins',
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            'Healthy choices become easier with practice.',
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.dawaDisplay.copyWith(
-                              fontSize:
-                                  DawaBreakpoints.isMobile(context) ? 20 : 24,
-                            ),
-                          ),
-                          const SizedBox(height: 9),
-                          Text(
-                            '$completed of $total games completed • $coins points',
-                            style: context.dawaCaption.copyWith(
-                              color: DawaColors.ink,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: 190,
-                            child: DawaProgressBar(
-                              value: total == 0 ? 0 : completed / total,
-                              semanticLabel: 'Health games completed',
-                              color: DawaColors.green,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        semanticLabel:
+            '$completed of $total health games completed. $coins Dawa points.',
       );
 }
 
@@ -704,17 +1226,16 @@ class _GameCard extends StatelessWidget {
         onTap: onTap,
         semanticLabel:
             '${game.title}. ${completed ? 'Completed, replay available' : '${game.rewardCoins} point reward'}',
-        child: SizedBox(
-          height: 154,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 148),
           child: Row(
             children: [
               SizedBox(
-                width: 105,
-                height: 140,
-                child: Image.asset(
-                  game.asset,
-                  fit: BoxFit.contain,
-                  excludeFromSemantics: true,
+                width: DawaBreakpoints.isMobile(context) ? 96 : 112,
+                child: DawaContextualImage(
+                  assetId: game.visualAssetId,
+                  variant: DawaImageVariant.cardSideImage,
+                  heroTag: 'game-${game.id}-${game.visualAssetId}',
                 ),
               ),
               const SizedBox(width: 12),
@@ -734,8 +1255,6 @@ class _GameCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       game.subtitle,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
                       style: context.dawaCaption,
                     ),
                     const SizedBox(height: 8),
@@ -762,41 +1281,139 @@ class _QuestionCard extends StatelessWidget {
     super.key,
     required this.game,
     required this.question,
+    required this.onListen,
   });
 
   final DawaHealthGame game;
   final DawaGameQuestion question;
+  final VoidCallback onListen;
 
   @override
   Widget build(BuildContext context) => DawaCard(
         color: DawaColors.softBlue,
         borderColor: DawaColors.primary.withValues(alpha: .16),
-        child: Column(
-          children: [
-            SizedBox(
-              height: DawaBreakpoints.isMobile(context) ? 205 : 240,
-              child: Image.asset(
-                game.asset,
-                fit: BoxFit.contain,
-                excludeFromSemantics: true,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 300 ||
+                MediaQuery.textScalerOf(context).scale(1) > 1.3;
+            final visual = SizedBox(
+              width: stacked ? 132 : 116,
+              child: DawaContextualImage(
+                assetId: game.visualAssetId,
+                variant: DawaImageVariant.cardSideImage,
+                borderRadius: BorderRadius.circular(DawaRadii.small),
               ),
-            ),
-            const SizedBox(height: 8),
-            Semantics(
-              header: true,
-              child: Text(
-                question.prompt,
-                textAlign: TextAlign.center,
-                style: context.dawaTitle.copyWith(fontSize: 21),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Choose the best answer.',
-              textAlign: TextAlign.center,
-              style: context.dawaCaption,
-            ),
-          ],
+            );
+            final copy = Column(
+              crossAxisAlignment: stacked
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.start,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    question.prompt,
+                    textAlign: stacked ? TextAlign.center : TextAlign.start,
+                    style: context.dawaTitle.copyWith(fontSize: 20),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  mainAxisAlignment: stacked
+                      ? MainAxisAlignment.center
+                      : MainAxisAlignment.start,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Choose the best answer.',
+                        style: context.dawaCaption,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Replay spoken question',
+                      onPressed: onListen,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.volume_up_outlined,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+            if (stacked) {
+              return Column(
+                children: [
+                  visual,
+                  const SizedBox(height: 10),
+                  copy,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                visual,
+                const SizedBox(width: 14),
+                Expanded(child: copy),
+              ],
+            );
+          },
+        ),
+      );
+}
+
+class _AnswerChoices extends StatelessWidget {
+  const _AnswerChoices({
+    required this.question,
+    required this.selectedAnswer,
+    required this.onSelect,
+  });
+
+  final DawaGameQuestion question;
+  final DawaGameAnswer? selectedAnswer;
+  final ValueChanged<DawaGameAnswer> onSelect;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: 'Choose one answer',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final answers = question.answers;
+            final stacked = answers.length > 2 ||
+                constraints.maxWidth < 330 ||
+                MediaQuery.textScalerOf(context).scale(1) > 1.25;
+            final buttons = [
+              for (final answer in answers)
+                _AnswerButton(
+                  label: answer.$2,
+                  answer: answer.$1,
+                  selectedAnswer: selectedAnswer,
+                  correctAnswer: question.correctAnswer,
+                  onPressed: () => onSelect(answer.$1),
+                ),
+            ];
+            if (stacked) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var index = 0; index < buttons.length; index++) ...[
+                    buttons[index],
+                    if (index < buttons.length - 1) const SizedBox(height: 8),
+                  ],
+                ],
+              );
+            }
+            return Row(
+              children: [
+                for (var index = 0; index < buttons.length; index++) ...[
+                  Expanded(child: buttons[index]),
+                  if (index < buttons.length - 1) const SizedBox(width: 10),
+                ],
+              ],
+            );
+          },
         ),
       );
 }
@@ -825,7 +1442,7 @@ class _AnswerButton extends StatelessWidget {
     final color = correct
         ? DawaColors.green
         : incorrect
-            ? DawaColors.danger
+            ? DawaColors.pink
             : DawaColors.primary;
     return Semantics(
       button: true,
@@ -851,7 +1468,9 @@ class _AnswerButton extends StatelessWidget {
           children: [
             if (correct || incorrect) ...[
               Icon(
-                correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                correct
+                    ? Icons.check_circle_rounded
+                    : Icons.lightbulb_outline_rounded,
                 size: 19,
               ),
               const SizedBox(width: 7),

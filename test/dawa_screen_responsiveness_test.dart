@@ -5,6 +5,7 @@ import 'package:dawa_mom/features/games/presentation/dawa_games_pages.dart';
 import 'package:dawa_mom/features/games/services/dawa_game_feedback.dart';
 import 'package:dawa_mom/features/learning/data/dawa_learning_repository.dart';
 import 'package:dawa_mom/features/learning/presentation/dawa_learn_page.dart';
+import 'package:dawa_mom/features/onboarding/dawa_onboarding_page.dart';
 import 'package:dawa_mom/features/rewards/presentation/dawa_rewards_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +15,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const sizes = [
+    Size(320, 568),
+    Size(360, 800),
     Size(390, 844),
+    Size(412, 915),
     Size(768, 1024),
     Size(1024, 768),
     Size(1366, 900),
@@ -37,7 +41,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull, reason: 'Failed at $size');
-      expect(find.text('Dawa Mom'), findsOneWidget);
+      expect(find.text('DawaMom'), findsOneWidget);
       expect(find.text('Get started'), findsOneWidget);
       expect(find.textContaining('Already have an account?'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
@@ -67,6 +71,47 @@ void main() {
       expect(find.text('Learn'), findsOneWidget);
       expect(find.text('Cervical cancer awareness'), findsOneWidget);
       expect(find.text('Audio lessons in your language'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('onboarding remains polished and overflow-free on target devices',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    for (final size in const [
+      Size(360, 800),
+      Size(390, 844),
+      Size(412, 915),
+      Size(768, 1024),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: DawaTheme.light(),
+          home: const DawaOnboardingPage(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Book a visit with ease'), findsOneWidget);
+      expect(find.text('Continue'), findsOneWidget);
+      expect(find.byKey(const ValueKey('skip-onboarding')), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'Failed at $size');
+
+      for (final title in const [
+        'Health answers you can trust',
+        'Know your cycle',
+        'Learn, play and earn',
+      ]) {
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(find.text(title), findsOneWidget);
+        expect(tester.takeException(), isNull,
+            reason: '$title failed at $size');
+      }
+      expect(find.text('Get started'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     }
   });

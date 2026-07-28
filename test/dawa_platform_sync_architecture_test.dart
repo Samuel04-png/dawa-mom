@@ -16,7 +16,8 @@ void main() {
   test('cross-project delivery is durable, idempotent, and server-only', () {
     final sql = migration.readAsStringSync();
 
-    expect(sql, contains('create table if not exists public.integration_outbox'));
+    expect(
+        sql, contains('create table if not exists public.integration_outbox'));
     expect(sql, contains('for update skip locked'));
     expect(sql, contains('processed_integration_events_source_event_unique'));
     expect(sql, contains('pg_advisory_xact_lock'));

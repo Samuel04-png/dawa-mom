@@ -170,7 +170,7 @@ async function loadAppointmentContext(
 
   return {
     appointment,
-    patientName: textValue(mother?.name, textValue(patient?.display_name, "Dawa Mom member")),
+    patientName: textValue(mother?.name, textValue(patient?.display_name, "DawaMom member")),
     patientEmail,
     clinicianName: textValue(doctor?.name, "Clinician"),
     clinicianEmail,
@@ -189,14 +189,14 @@ function buildMessage(
     if (!context.patientEmail) {
       throw new DeliveryError("Patient email is unavailable", false);
     }
-    const subject = "We received your Dawa Mom appointment request";
+    const subject = "We received your DawaMom appointment request";
     const text = [
       `Hello ${context.patientName},`,
       "We received your appointment request. It is pending until the clinic confirms it.",
       `When: ${when}`,
       `Clinician: ${context.clinicianName}`,
       `Clinic: ${context.clinicName}`,
-      "You can review the request in Dawa Mom.",
+      "You can review the request in DawaMom.",
     ].join("\n\n");
     return {
       to: context.patientEmail,
@@ -207,14 +207,14 @@ function buildMessage(
         <p><strong>When:</strong> ${escapeHtml(when)}<br>
         <strong>Clinician:</strong> ${escapeHtml(context.clinicianName)}<br>
         <strong>Clinic:</strong> ${escapeHtml(context.clinicName)}</p>
-        <p>You can review the request in Dawa Mom.</p>`,
+        <p>You can review the request in DawaMom.</p>`,
     };
   }
 
   if (!context.clinicianEmail) {
     throw new DeliveryError("Clinician email is unavailable", false);
   }
-  const subject = `New Dawa Mom appointment request · ${when}`;
+  const subject = `New DawaMom appointment request · ${when}`;
   const reasonText = reason ? `\n\nReason: ${reason}` : "";
   const reasonHtml = reason
     ? `<br><strong>Reason:</strong> ${escapeHtml(reason)}`
@@ -223,13 +223,13 @@ function buildMessage(
     to: context.clinicianEmail,
     subject,
     text: [
-      "A patient submitted a new appointment request through Dawa Mom.",
+      "A patient submitted a new appointment request through DawaMom.",
       `Patient: ${context.patientName}`,
       `When: ${when}`,
       `Clinic: ${context.clinicName}${reasonText}`,
       "This request is pending. Review it in the authorised clinician workflow.",
     ].join("\n\n"),
-    html: `<p>A patient submitted a new appointment request through Dawa Mom.</p>
+    html: `<p>A patient submitted a new appointment request through DawaMom.</p>
       <p><strong>Patient:</strong> ${escapeHtml(context.patientName)}<br>
       <strong>When:</strong> ${escapeHtml(when)}<br>
       <strong>Clinic:</strong> ${escapeHtml(context.clinicName)}${reasonHtml}</p>

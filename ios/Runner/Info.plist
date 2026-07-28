@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Dawa Mom</string>
+	<string>DawaMom</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -53,9 +53,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Dawa Mom uses the microphone so you can talk to Rudo.</string>
+	<string>DawaMom uses the microphone so you can talk to Rudo.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Dawa Mom uses speech recognition to transcribe your voice messages to Rudo.</string>
+	<string>DawaMom uses speech recognition to transcribe your voice messages to Rudo.</string>
 
 
 

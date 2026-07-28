@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
@@ -158,11 +158,12 @@ class _DawaRewardsPageState extends State<DawaRewardsPage> {
               future: _snapshot,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(),
-                    ),
+                  return const Column(
+                    children: [
+                      DawaLoadingSkeleton(lines: 3),
+                      SizedBox(height: DawaSpacing.sm),
+                      DawaLoadingSkeleton(lines: 2),
+                    ],
                   );
                 }
                 final value = snapshot.data ??
@@ -230,7 +231,7 @@ class _DawaRewardsPageState extends State<DawaRewardsPage> {
                     const SizedBox(height: 18),
                     const DawaSectionHeader(
                       title: 'Achievements',
-                      subtitle: 'Milestones from your learning journey',
+                      subtitle: 'The health steps you have finished',
                     ),
                     const SizedBox(height: 10),
                     _Achievements(state: value.state),
@@ -280,79 +281,17 @@ class _RewardsHero extends StatelessWidget {
   final DawaLearningState state;
 
   @override
-  Widget build(BuildContext context) => DawaCard(
-        color: DawaColors.softBlue,
+  Widget build(BuildContext context) => DawaIllustratedHeroCard(
+        category: 'YOUR HEALTHY-ACTION BALANCE',
+        title: '${state.coins} Dawa points',
+        subtitle:
+            '${(1000 - state.coins).clamp(0, 1000)} points until your clinic scan voucher',
+        illustrationPath: DawaArtwork.banaCelebrate,
+        progress: state.coins / 1000,
+        progressLabel: 'Reward progress',
+        backgroundColor: DawaColors.softBlue,
         borderColor: DawaColors.primary.withValues(alpha: .18),
-        padding: EdgeInsets.zero,
-        child: SizedBox(
-          height: DawaBreakpoints.isMobile(context) ? 205 : 225,
-          child: Stack(
-            children: [
-              Positioned(
-                right: DawaBreakpoints.isMobile(context) ? -6 : 28,
-                bottom: 0,
-                width: DawaBreakpoints.isMobile(context) ? 145 : 205,
-                height: 210,
-                child: Image.asset(
-                  DawaArtwork.motherReward,
-                  fit: BoxFit.contain,
-                  excludeFromSemantics: true,
-                ),
-              ),
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: DawaBreakpoints.isMobile(context) ? 210 : 450,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'YOUR HEALTHY-ACTION BALANCE',
-                            style: TextStyle(
-                              color: DawaColors.green,
-                              fontFamily: 'Poppins',
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Semantics(
-                            label: '${state.coins} Dawa reward points',
-                            child: Text(
-                              '${state.coins}',
-                              style: context.dawaDisplay.copyWith(fontSize: 42),
-                            ),
-                          ),
-                          Text('Dawa points', style: context.dawaSectionTitle),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: 190,
-                            child: DawaProgressBar(
-                              value: state.coins / 1000,
-                              semanticLabel: 'Progress to free scan voucher',
-                              color: DawaColors.green,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            '${(1000 - state.coins).clamp(0, 1000)} points to the free scan voucher',
-                            style: context.dawaCaption,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        semanticLabel: '${state.coins} Dawa reward points',
       );
 }
 
@@ -385,10 +324,13 @@ class _ScanRewardCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Free scan voucher', style: context.dawaSectionTitle),
+                    Text(
+                      'Clinic scan voucher',
+                      style: context.dawaSectionTitle,
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                      '1000 points • Participating Dawa clinics',
+                      '1000 points • Eligible participating Dawa clinics',
                       style: context.dawaCaption,
                     ),
                   ],
@@ -416,21 +358,41 @@ class _ScanRewardCard extends StatelessWidget {
           const SizedBox(height: 12),
           DawaProgressBar(
             value: alreadyRedeemed ? 1 : state.coins / 1000,
-            semanticLabel: 'Free scan reward progress',
+            semanticLabel: 'Clinic scan reward progress',
             color: DawaColors.green,
           ),
           const SizedBox(height: 12),
-          DawaPrimaryButton(
-            label: alreadyRedeemed
-                ? 'View voucher'
-                : available
-                    ? 'Redeem voucher'
-                    : '${1000 - state.coins} points to go',
-            icon: alreadyRedeemed
-                ? Icons.confirmation_number_outlined
-                : Icons.redeem_rounded,
-            onPressed: alreadyRedeemed || available ? onRedeem : null,
-          ),
+          if (alreadyRedeemed || available)
+            DawaPrimaryButton(
+              label: alreadyRedeemed ? 'View voucher' : 'Redeem voucher',
+              icon: alreadyRedeemed
+                  ? Icons.confirmation_number_outlined
+                  : Icons.redeem_rounded,
+              onPressed: onRedeem,
+            )
+          else
+            DawaCard(
+              color: DawaColors.softBlue,
+              borderColor: DawaColors.primary.withValues(alpha: .12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.lock_outline_rounded,
+                    color: DawaColors.primary,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      '${1000 - state.coins} more points unlock redemption.',
+                      style: context.dawaCaption.copyWith(
+                        color: DawaColors.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

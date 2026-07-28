@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:intl/intl.dart';
 
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -600,7 +600,7 @@ class _PatientSafetyNote extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'This patient-friendly summary was confirmed by ${summary.clinicianDisplayName}. Contact ${summary.clinicName} if you have questions or your symptoms change.',
+              'This simple summary was checked by ${summary.clinicianDisplayName}. Contact ${summary.clinicName} if you have questions or your symptoms change.',
               style: theme.bodySmall.copyWith(
                 color: theme.secondaryText,
                 height: 1.45,
@@ -712,14 +712,14 @@ _StatusSpec _overallStatus(String value, FlutterFlowTheme theme) {
   return switch (value) {
     'routine' => const _StatusSpec(
         title: 'Routine care',
-        description: 'Your clinician recorded routine care guidance.',
+        description: 'Your health worker added care advice.',
         icon: Icons.check_circle_outline_rounded,
         foreground: Color(0xFF15803D),
         background: Color(0xFFECFDF3),
       ),
     'urgent' => _StatusSpec(
         title: 'Urgent care instruction',
-        description: 'Please follow the urgent care guidance shown below.',
+        description: 'Please follow the urgent care steps shown below.',
         icon: Icons.warning_amber_rounded,
         foreground: theme.error,
         background: const Color(0xFFFFF1F2),
@@ -734,7 +734,7 @@ _StatusSpec _overallStatus(String value, FlutterFlowTheme theme) {
     _ => _StatusSpec(
         title: 'Follow-up recommended',
         description:
-            'Please review the follow-up guidance from your clinician.',
+            'Please read what your health worker wants you to do next.',
         icon: Icons.event_repeat_rounded,
         foreground: theme.primary,
         background: theme.primary.withValues(alpha: 0.075),

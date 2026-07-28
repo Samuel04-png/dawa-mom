@@ -40,7 +40,7 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
     await _pumpRewards(tester, preferences);
 
-    expect(find.text('215'), findsOneWidget);
+    expect(find.text('215 Dawa points'), findsOneWidget);
     expect(find.text('Play a health game'), findsOneWidget);
     expect(find.text('Game changer'), findsOneWidget);
     expect(find.text('2 healthy actions completed'), findsOneWidget);

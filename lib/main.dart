@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:provider/provider.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -12,7 +12,7 @@ import 'auth/supabase_auth/auth_util.dart';
 
 import 'backend/supabase/supabase_config.dart';
 import '/components/responsive/dawa_mom_responsive_shell.dart';
-import '/features/onboarding/app_walkthrough_service.dart';
+import '/features/onboarding/dawa_main_app_tour.dart';
 import '/features/settings/dawa_mom_settings_page.dart';
 import '/features/period_tracker/presentation/dawa_cycle_tracker_page.dart';
 import '/features/appointments/presentation/dawa_care_page.dart';
@@ -31,6 +31,7 @@ void main() async {
   await initSupabase();
 
   await FlutterFlowTheme.initialize();
+  await DawaLocaleController.instance.initialize();
 
   final appState = FFAppState(); // Initialize FFAppState
   await appState.initializePersistedState();
@@ -83,11 +84,14 @@ class _MyAppState extends State<MyApp> {
   StreamSubscription<dynamic>? _jwtTokenStreamSub;
   Timer? _authFallbackTimer;
   final authUserSub = authenticatedUserStream.listen((_) {});
+  late final DawaLocaleController _localeController;
 
   @override
   void initState() {
     super.initState();
 
+    _localeController = DawaLocaleController.instance
+      ..addListener(_handleLocaleChanged);
     _appStateNotifier = AppStateNotifier.instance;
     _router = createRouter(_appStateNotifier);
     if (_skipSplash) {
@@ -130,6 +134,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _localeController.removeListener(_handleLocaleChanged);
     _authFallbackTimer?.cancel();
     _userStreamSub?.cancel();
     _jwtTokenStreamSub?.cancel();
@@ -137,18 +142,25 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'DawaMom',
+      locale: _localeController.locale,
       scrollBehavior: MyAppScrollBehavior(),
       localizationsDelegates: [
+        const DawaMaterialLocalizationsDelegate(),
+        const DawaCupertinoLocalizationsDelegate(),
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('en', '')],
+      supportedLocales: DawaLanguages.locales,
       theme: DawaTheme.light().copyWith(
         appBarTheme: const AppBarTheme(
           systemOverlayStyle: SystemUiOverlayStyle.dark,
@@ -223,29 +235,99 @@ class _NavBarPageState extends State<NavBarPage> {
 
   int _currentIndex = 0;
   Widget? _overridePage;
-  bool _walkthroughChecked = false;
+  bool _tourEligibilityChecked = false;
+  bool _replayPending = false;
+  late final MainAppTourService _tourService;
+  late final DawaMainAppTourController _tourController;
+  final GlobalKey _homeJourneyTourKey =
+      GlobalKey(debugLabel: 'home journey tour target');
+  final GlobalKey _rewardsTourKey =
+      GlobalKey(debugLabel: 'rewards tour target');
+  final GlobalKey _notificationsTourKey =
+      GlobalKey(debugLabel: 'notifications tour target');
+  late final List<GlobalKey> _navigationTourKeys = List.generate(
+    _destinations.length,
+    (index) =>
+        GlobalKey(debugLabel: '${_destinations[index].label} tour target'),
+  );
 
   @override
   void initState() {
     super.initState();
     _currentIndex = _indexForPage(widget.initialPage);
     _overridePage = widget.page;
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _maybeShowWalkthrough());
+    _tourService = MainAppTourService();
+    _tourController = DawaMainAppTourController(
+      service: _tourService,
+      onStepChanged: _showTourStep,
+    )..addListener(_tourStateChanged);
   }
 
-  Future<void> _maybeShowWalkthrough() async {
-    if (_walkthroughChecked) return;
-    _walkthroughChecked = true;
-    final shouldShow = await AppWalkthroughService().shouldShow();
-    if (shouldShow && mounted) await context.push('/onboarding');
+  @override
+  void dispose() {
+    _tourController
+      ..removeListener(_tourStateChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _tourStateChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _handleHomeReady() {
+    if (_replayPending) {
+      _replayPending = false;
+      _tourController.start(replay: true);
+      return;
+    }
+    if (_tourController.active) {
+      _tourController.refreshTarget();
+      return;
+    }
+    _maybeStartMainTour();
+  }
+
+  Future<void> _maybeStartMainTour() async {
+    if (_tourEligibilityChecked ||
+        _overridePage != null ||
+        _currentIndex != 0) {
+      return;
+    }
+    _tourEligibilityChecked = true;
+    final shouldShow = await _tourService.shouldShow();
+    if (shouldShow && mounted && _overridePage == null && _currentIndex == 0) {
+      _tourController.start();
+    }
+  }
+
+  void _replayTour() {
+    _replayPending = true;
+    safeSetState(() {
+      _overridePage = null;
+      _currentIndex = 0;
+    });
+  }
+
+  void _showTourStep(DawaMainAppTourStep step) {
+    final index = dawaMainAppTourTabFor(step.target);
+    if (!mounted) return;
+    safeSetState(() {
+      _overridePage = null;
+      _currentIndex = index;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
     final pages = <Widget>[
-      HomeWidget(),
+      HomeWidget(
+        onDashboardReady: _handleHomeReady,
+        journeyTourKey: _homeJourneyTourKey,
+        rewardsTourKey: _rewardsTourKey,
+        notificationsTourKey: _notificationsTourKey,
+      ),
       const DawaCycleTrackerPage(),
       const DawaCarePage(),
       const DawaLearnPage(),
@@ -253,9 +335,10 @@ class _NavBarPageState extends State<NavBarPage> {
     ];
     final child = _overridePage ?? pages[_currentIndex];
 
-    return DawaMomResponsiveShell(
+    final shell = DawaMomResponsiveShell(
       currentIndex: _currentIndex,
       destinations: _destinations,
+      navigationTargetKeys: _navigationTourKeys,
       onDestinationSelected: (index) => safeSetState(() {
         _overridePage = null;
         _currentIndex = index;
@@ -264,12 +347,35 @@ class _NavBarPageState extends State<NavBarPage> {
       rudoChatBuilder: (rudoContext, rudoController) => AIChatModal(
         userPhoneNumber: currentPhoneNumber,
         userName: currentUserDisplayName.trim().isEmpty
-            ? 'Dawa Mom member'
+            ? 'DawaMom member'
             : currentUserDisplayName.trim(),
         onClose: rudoController.close,
         onMinimize: rudoController.minimize,
       ),
       child: child,
+    );
+    return DawaMainAppTourScope(
+      onReplay: _replayTour,
+      child: Stack(
+        children: [
+          Positioned.fill(child: shell),
+          if (_tourController.active)
+            Positioned.fill(
+              child: DawaMainAppTourOverlay(
+                controller: _tourController,
+                targetKeys: {
+                  DawaMainAppTourTarget.homeJourney: _homeJourneyTourKey,
+                  DawaMainAppTourTarget.track: _navigationTourKeys[1],
+                  DawaMainAppTourTarget.care: _navigationTourKeys[2],
+                  DawaMainAppTourTarget.learn: _navigationTourKeys[3],
+                  DawaMainAppTourTarget.rewards: _rewardsTourKey,
+                  DawaMainAppTourTarget.notifications: _notificationsTourKey,
+                  DawaMainAppTourTarget.profile: _navigationTourKeys[4],
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 

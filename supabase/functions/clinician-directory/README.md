@@ -1,8 +1,8 @@
 # Clinician directory proxy
 
-This authenticated Dawa Mom Edge Function is the future server-to-server adapter for the separate Dawa Clinician project. Flutter never receives the cross-project secret.
+This authenticated DawaMom Edge Function is the future server-to-server adapter for the separate Dawa Clinician project. Flutter never receives the cross-project secret.
 
-Until Dawa Clinician implements the endpoint, the Flutter repository falls back to Dawa Mom's narrow `get_bookable_clinicians` RPC over imported cache rows.
+Until Dawa Clinician implements the endpoint, the Flutter repository falls back to DawaMom's narrow `get_bookable_clinicians` RPC over imported cache rows.
 
 Required secrets for activation:
 

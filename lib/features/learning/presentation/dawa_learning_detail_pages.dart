@@ -1,8 +1,12 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import '/localization/dawa_localized_material.dart';
 import 'package:go_router/go_router.dart';
 
 import '/components/responsive/dawa_mom_responsive_shell.dart';
+import '/content/dawa_learning_asset_registry.dart';
 import '/design_system/dawa_components.dart';
+import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
 import '/features/profile/data/health_profile_repository.dart';
@@ -51,60 +55,21 @@ class _DawaArticlePageState extends State<DawaArticlePage> {
               onProfile: () => context.go('/settings'),
             ),
             const SizedBox(height: 8),
-            DawaCard(
-              padding: EdgeInsets.zero,
-              child: SizedBox(
-                height: DawaBreakpoints.isMobile(context) ? 250 : 300,
-                child: Stack(
-                  children: [
-                    const Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: DawaColors.softBlue,
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 18,
-                      bottom: 0,
-                      width: DawaBreakpoints.isMobile(context) ? 150 : 210,
-                      height: 240,
-                      child: Image.asset(
-                        DawaArtwork.cervicalAwareness,
-                        fit: BoxFit.contain,
-                        excludeFromSemantics: true,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 430),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const DawaStatusPill(
-                              label: 'FEATURED',
-                              icon: Icons.auto_awesome_outlined,
-                              color: DawaColors.purple,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Cervical cancer\nawareness',
-                              style: context.dawaDisplay.copyWith(fontSize: 28),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Early screening can save lives. Learn the facts and protect your future.',
-                              style: context.dawaBody,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            DawaIllustratedHeroCard(
+              category: 'FEATURED • CERVICAL HEALTH',
+              title: 'Cervical cancer awareness',
+              subtitle:
+                  'Screening can find changes early. Learn what happens and when to talk to a health worker.',
+              illustrationPath: DawaArtwork.cervicalAwareness,
+              contextualAssetId: 'cervical_awareness_01',
+              illustrationAspectRatio: .9,
+              illustrationAlignment: Alignment.bottomCenter,
+              primaryActionLabel: 'Find screening',
+              onPrimaryAction: () => context.go('/encounters'),
+              secondaryActionLabel: 'Start quest',
+              onSecondaryAction: () => context.push('/learn/quests/screening'),
+              semanticLabel:
+                  'Cervical cancer awareness article and screening actions',
             ),
             const SizedBox(height: 10),
             FutureBuilder<DawaLearningState>(
@@ -113,20 +78,30 @@ class _DawaArticlePageState extends State<DawaArticlePage> {
                 final state = snapshot.data ?? const DawaLearningState();
                 final saved = state.savedIds.contains('cervical-awareness');
                 return DawaCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Row(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       const DawaStatusPill(
                         label: 'Women’s health',
                         icon: Icons.female_rounded,
                         color: DawaColors.purple,
                       ),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.schedule_rounded,
-                          size: 16, color: DawaColors.muted),
-                      const SizedBox(width: 5),
-                      Text('6 min read', style: context.dawaCaption),
-                      const Spacer(),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 16,
+                            color: DawaColors.muted,
+                          ),
+                          const SizedBox(width: 5),
+                          Text('6 min read', style: context.dawaCaption),
+                        ],
+                      ),
                       TextButton.icon(
                         onPressed:
                             snapshot.connectionState == ConnectionState.done
@@ -148,17 +123,42 @@ class _DawaArticlePageState extends State<DawaArticlePage> {
             const _ArticleSection(
               title: 'What is cervical cancer?',
               body:
-                  'Cervical cancer starts in the cells of the cervix — the lower part of the womb that connects to the vagina. Persistent infection with certain high-risk types of human papillomavirus (HPV) can cause cell changes over time.',
+                  'Cervical cancer starts in the cervix. The cervix is the lower part of the womb. Some types of HPV can cause cell changes over time.',
+              icon: Icons.info_outline_rounded,
+              color: DawaColors.softBlue,
+              accent: DawaColors.primary,
             ),
             const _ArticleSection(
               title: 'Warning signs',
               body:
-                  'Early cervical changes may not cause symptoms. Later warning signs can include unusual bleeding, pelvic pain, pain during sex, or unusual discharge. These symptoms can have other causes, but they should be checked by a clinician.',
+                  'Early changes in the cervix may not make you feel ill. Warning signs can include unusual bleeding, lower belly pain, pain during sex, or unusual discharge. Other things can cause these signs, but a health worker should check them.',
+              icon: Icons.warning_amber_rounded,
+              color: DawaColors.softPink,
+              accent: DawaColors.pink,
             ),
             const _ArticleSection(
-              title: 'When to get screened',
+              title: 'Who should ask about screening?',
               body:
-                  'Screening schedules differ by age, health history and local guidance. Ask a qualified clinician which screening test and interval are right for you. Screening and HPV vaccination are important prevention tools.',
+                  'When you need screening depends on your age and health. Ask a health worker which test is right for you. The HPV vaccine and screening can help prevent cervical cancer.',
+              icon: Icons.groups_2_outlined,
+              color: DawaColors.softPurple,
+              accent: DawaColors.purple,
+            ),
+            const _ArticleSection(
+              title: 'What happens during screening?',
+              body:
+                  'A trained health worker explains the test, answers your questions and takes a small sample. Many visits are short. You can ask the health worker to pause at any time.',
+              icon: Icons.medical_services_outlined,
+              color: DawaColors.softGreen,
+              accent: DawaColors.green,
+            ),
+            const _ArticleSection(
+              title: 'When to contact a health worker',
+              body:
+                  'Contact a clinic if you notice unusual bleeding, persistent pelvic pain, pain during sex or unusual discharge. Seek urgent local care for severe pain, heavy bleeding, fainting or trouble breathing.',
+              icon: Icons.support_agent_rounded,
+              color: DawaColors.surface,
+              accent: DawaColors.primary,
             ),
             DawaCard(
               color: DawaColors.softGreen,
@@ -222,34 +222,43 @@ class _DawaArticlePageState extends State<DawaArticlePage> {
 }
 
 class _ArticleSection extends StatelessWidget {
-  const _ArticleSection({required this.title, required this.body});
+  const _ArticleSection({
+    required this.title,
+    required this.body,
+    this.icon = Icons.eco_outlined,
+    this.color = DawaColors.surface,
+    this.accent = DawaColors.green,
+  });
 
   final String title;
   final String body;
+  final IconData icon;
+  final Color color;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 3),
-              child:
-                  Icon(Icons.eco_outlined, color: DawaColors.green, size: 18),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: context.dawaSectionTitle),
-                  const SizedBox(height: 5),
-                  Text(body, style: context.dawaBody),
-                ],
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DawaCard(
+          color: color,
+          borderColor: accent.withValues(alpha: 0.18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DawaIconBadge(icon: icon, color: accent, size: 38),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: context.dawaSectionTitle),
+                    const SizedBox(height: 5),
+                    Text(body, style: context.dawaBody),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 }
@@ -275,7 +284,9 @@ class DawaPregnancyGuideDetailPage extends StatefulWidget {
 class _DawaPregnancyGuideDetailPageState
     extends State<DawaPregnancyGuideDetailPage> {
   late final DawaLearningRepository _repository;
+  late final VoiceService _voiceService;
   late Future<DawaLearningState> _state;
+  bool _speaking = false;
 
   bool get _isClinic => widget.guideId == 'clinic-visit';
 
@@ -283,7 +294,14 @@ class _DawaPregnancyGuideDetailPageState
   void initState() {
     super.initState();
     _repository = widget.repository ?? DawaLearningRepository();
+    _voiceService = VoiceService();
     _state = _repository.load();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_voiceService.dispose());
+    super.dispose();
   }
 
   Future<void> _toggleSaved(DawaLearningState state) async {
@@ -294,6 +312,32 @@ class _DawaPregnancyGuideDetailPageState
   Future<void> _complete(DawaLearningState state) async {
     final next = await _repository.complete(state, widget.guideId);
     if (mounted) setState(() => _state = Future.value(next));
+  }
+
+  Future<void> _listenToGuide(String title, String subtitle) async {
+    if (_speaking) {
+      await _voiceService.stopPlayback();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    setState(() => _speaking = true);
+    try {
+      await _voiceService.speakText(
+        '$title. $subtitle. '
+            '${_isClinic ? 'Take your questions, medicines and health records. Tell the health worker about any new symptoms. Ask them to explain each test or medicine. Before you leave, ask what happens next.' : 'Build a balanced plate using familiar foods. Add vegetables or fruit, beans or another protein food, and a staple food. Wash food, use safe water and cook meat and eggs well.'}',
+        'English',
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Audio is not available on this device right now.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _speaking = false);
+    }
   }
 
   @override
@@ -328,50 +372,19 @@ class _DawaPregnancyGuideDetailPageState
         children: [
           DawaAppHeader(title: 'Pregnancy guide', onBack: context.pop),
           const SizedBox(height: 8),
-          DawaCard(
-            color: _isClinic ? DawaColors.softBlue : DawaColors.softGreen,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final copy = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DawaStatusPill(
-                      label: _isClinic ? 'Clinic visits' : 'Nutrition',
-                      icon: _isClinic
-                          ? Icons.medical_services_outlined
-                          : Icons.restaurant_outlined,
-                      color: _isClinic ? DawaColors.primary : DawaColors.green,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      title,
-                      style: context.dawaDisplay.copyWith(fontSize: 27),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(subtitle, style: context.dawaBody),
-                  ],
-                );
-                final art = SizedBox(
-                  width: 170,
-                  height: 205,
-                  child: Image.asset(
-                    asset,
-                    fit: BoxFit.contain,
-                    excludeFromSemantics: true,
-                  ),
-                );
-                if (constraints.maxWidth < 560) {
-                  return Column(children: [art, copy]);
-                }
-                return Row(
-                  children: [
-                    Expanded(child: copy),
-                    const SizedBox(width: 16),
-                    art,
-                  ],
-                );
-              },
-            ),
+          DawaIllustratedHeroCard(
+            category: _isClinic ? 'CLINIC VISITS' : 'PREGNANCY NUTRITION',
+            title: title,
+            subtitle: subtitle,
+            illustrationPath: asset,
+            contextualAssetId:
+                _isClinic ? 'clinic_visit_01' : 'second_trimester_foods_01',
+            illustrationAspectRatio: .9,
+            backgroundColor:
+                _isClinic ? DawaColors.softBlue : DawaColors.softGreen,
+            borderColor: (_isClinic ? DawaColors.primary : DawaColors.green)
+                .withValues(alpha: 0.18),
+            semanticLabel: '$title pregnancy guide',
           ),
           const SizedBox(height: 12),
           FutureBuilder<DawaLearningState>(
@@ -380,39 +393,67 @@ class _DawaPregnancyGuideDetailPageState
               final state = snapshot.data ?? const DawaLearningState();
               final saved = state.savedIds.contains(widget.guideId);
               final completed = state.completedIds.contains(widget.guideId);
-              return Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed:
-                          snapshot.connectionState == ConnectionState.done
-                              ? () => _toggleSaved(state)
-                              : null,
-                      icon: Icon(
-                        saved
-                            ? Icons.bookmark_rounded
-                            : Icons.bookmark_border_rounded,
-                      ),
-                      label: Text(saved ? 'Saved' : 'Save guide'),
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final complete = FilledButton.icon(
+                    onPressed:
+                        snapshot.connectionState == ConnectionState.done &&
+                                !completed
+                            ? () => _complete(state)
+                            : null,
+                    icon: Icon(
+                      completed
+                          ? Icons.check_circle_rounded
+                          : Icons.check_rounded,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed:
-                          snapshot.connectionState == ConnectionState.done &&
-                                  !completed
-                              ? () => _complete(state)
-                              : null,
-                      icon: Icon(
-                        completed
-                            ? Icons.check_circle_rounded
-                            : Icons.check_rounded,
-                      ),
-                      label: Text(completed ? 'Completed' : 'Mark complete'),
+                    label: Text(completed ? 'Completed' : 'Mark complete'),
+                  );
+                  final save = OutlinedButton.icon(
+                    onPressed: snapshot.connectionState == ConnectionState.done
+                        ? () => _toggleSaved(state)
+                        : null,
+                    icon: Icon(
+                      saved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
                     ),
-                  ),
-                ],
+                    label: Text(saved ? 'Saved' : 'Save guide'),
+                  );
+                  final listen = OutlinedButton.icon(
+                    onPressed: () => _listenToGuide(title, subtitle),
+                    icon: Icon(
+                      _speaking
+                          ? Icons.stop_circle_outlined
+                          : Icons.volume_up_outlined,
+                    ),
+                    label: Text(_speaking ? 'Stop audio' : 'Listen'),
+                  );
+                  if (constraints.maxWidth < 540) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        complete,
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(child: save),
+                            const SizedBox(width: 8),
+                            Expanded(child: listen),
+                          ],
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(flex: 2, child: complete),
+                      const SizedBox(width: 8),
+                      Expanded(child: save),
+                      const SizedBox(width: 8),
+                      Expanded(child: listen),
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -426,7 +467,7 @@ class _DawaPregnancyGuideDetailPageState
             const _ArticleSection(
               title: 'During the visit',
               body:
-                  'Share new symptoms honestly and ask the clinician to explain anything you do not understand. You can ask what each test or medicine is for.',
+                  'Tell the health worker about new symptoms. Ask them to explain anything you do not understand. You can ask what each test or medicine is for.',
             ),
             const _ArticleSection(
               title: 'Before you go home',
@@ -452,7 +493,7 @@ class _DawaPregnancyGuideDetailPageState
             const _ArticleSection(
               title: 'Keep food safe',
               body:
-                  'Wash produce, cook animal foods thoroughly, use safe water and store food safely. Ask a clinician before using herbal products or changing prescribed supplements.',
+                  'Wash food, cook meat and eggs well, use safe water and store food safely. Ask a health worker before using herbs or changing vitamins they gave you.',
             ),
             DawaCard(
               color: DawaColors.softGreen,
@@ -584,14 +625,9 @@ class _DawaMythFactPageState extends State<DawaMythFactPage> {
                   const SizedBox(height: 20),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final art = SizedBox(
-                        width: 170,
-                        height: 210,
-                        child: Image.asset(
-                          DawaArtwork.cycleCramps,
-                          fit: BoxFit.contain,
-                          excludeFromSemantics: true,
-                        ),
+                      const art = DawaContextualImage(
+                        assetId: 'myths_vs_fact_01',
+                        variant: DawaImageVariant.moduleThumbnail,
                       );
                       final copy = Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,14 +656,20 @@ class _DawaMythFactPageState extends State<DawaMythFactPage> {
                         ],
                       );
                       if (constraints.maxWidth < 620) {
-                        return Column(children: [art, copy]);
+                        return Column(
+                          children: [
+                            art,
+                            const SizedBox(height: 18),
+                            copy,
+                          ],
+                        );
                       }
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(child: copy),
                           const SizedBox(width: 20),
-                          art,
+                          const SizedBox(width: 230, child: art),
                         ],
                       );
                     },
@@ -700,7 +742,7 @@ class _DawaMythFactPageState extends State<DawaMythFactPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Clinician tip: regular check-ups, safe movement, hydration and balanced nutrition support a safer pregnancy.',
+                      'Health worker tip: regular visits, safe movement, enough water and balanced meals support a safer pregnancy.',
                       style: context.dawaBody,
                     ),
                   ),
@@ -794,48 +836,37 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
+                  const DawaContextualImage(
+                    assetId: 'pregnancy_basics_01',
+                    variant: DawaImageVariant.articleHeader,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(DawaRadii.medium),
+                    ),
+                  ),
                   Container(
-                    height: 250,
-                    padding: const EdgeInsets.all(20),
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(20, 17, 20, 18),
                     decoration: const BoxDecoration(
                       color: DawaColors.softBlue,
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(16)),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'AUDIO LESSON',
-                                style: TextStyle(
-                                  color: DawaColors.primary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 7),
-                              Text(
-                                'Pregnancy basics',
-                                style:
-                                    context.dawaDisplay.copyWith(fontSize: 27),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(_language, style: context.dawaCaption),
-                            ],
+                        const Text(
+                          'AUDIO LESSON',
+                          style: TextStyle(
+                            color: DawaColors.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        SizedBox(
-                          width: 150,
-                          child: Image.asset(
-                            DawaArtwork.pregnancyPhone,
-                            fit: BoxFit.contain,
-                            excludeFromSemantics: true,
-                          ),
+                        const SizedBox(height: 7),
+                        Text(
+                          'Pregnancy basics',
+                          style: context.dawaDisplay.copyWith(fontSize: 27),
                         ),
+                        const SizedBox(height: 6),
+                        Text(_language, style: context.dawaCaption),
                       ],
                     ),
                   ),
@@ -1034,7 +1065,7 @@ class _DawaPregnancyGuidesPageState extends State<DawaPregnancyGuidesPage> {
           const SizedBox(height: 10),
           TextField(
             onChanged: (value) => setState(() => _query = value),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Search pregnancy guides...',
               prefixIcon: Icon(Icons.search_rounded),
             ),
@@ -1046,9 +1077,11 @@ class _DawaPregnancyGuidesPageState extends State<DawaPregnancyGuidesPage> {
               children: [
                 for (final filter in [
                   'All',
-                  'Pregnancy',
+                  'Pregnancy basics',
                   'Nutrition',
                   'Clinic visits',
+                  'Antenatal',
+                  'Postpartum',
                   'Warning signs'
                 ])
                   Padding(
@@ -1082,7 +1115,7 @@ class _DawaPregnancyGuidesPageState extends State<DawaPregnancyGuidesPage> {
                         children: [
                           Text(
                             week == null
-                                ? 'Pregnancy guidance for every stage'
+                                ? 'Pregnancy tips for every stage'
                                 : 'Guidance for pregnancy week $week',
                             style: context.dawaSectionTitle,
                           ),
@@ -1133,11 +1166,9 @@ class _DawaPregnancyGuidesPageState extends State<DawaPregnancyGuidesPage> {
                         children: [
                           SizedBox(
                             width: 92,
-                            height: 104,
-                            child: Image.asset(
-                              guide.asset,
-                              fit: BoxFit.contain,
-                              excludeFromSemantics: true,
+                            child: DawaContextualImage(
+                              assetId: guide.visualAssetId,
+                              variant: DawaImageVariant.cardSideImage,
                             ),
                           ),
                           const SizedBox(width: 13),
@@ -1214,7 +1245,7 @@ class _DawaPregnancyGuidesPageState extends State<DawaPregnancyGuidesPage> {
                       Text('Need personal help? Ask Rudo',
                           style: context.dawaSectionTitle),
                       Text(
-                        'Chat with the digital health assistant for general guidance.',
+                        'Ask Rudo for general health help.',
                         style: context.dawaCaption,
                       ),
                     ],

@@ -1,13 +1,15 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:intl/intl.dart';
 
 import '/backend/backend.dart';
+import '/content/dawa_learning_asset_registry.dart';
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/domain/appointment.dart';
 import '/features/appointments/domain/appointment_result_summary.dart';
 import '/features/appointments/presentation/dawa_appointment_reminder_sheet.dart';
 import '/features/appointments/presentation/appointment_result_summary_view.dart';
 import '/design_system/dawa_components.dart';
+import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
@@ -156,7 +158,14 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
                 future: _appointment,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Padding(
+                      padding: EdgeInsets.all(DawaSpacing.md),
+                      child: DawaPageSkeleton(
+                        label: 'Loading appointment details',
+                        showHero: true,
+                        cardCount: 2,
+                      ),
+                    );
                   }
                   if (snapshot.hasError) {
                     return _DetailsError(onRetry: _refresh);
@@ -233,7 +242,7 @@ class AppointmentDetailsContent extends StatelessWidget {
         : appointment.integrationStatus == 'failed'
             ? 'Your appointment is saved, but the clinic connection needs attention. It will be retried safely.'
             : appointment.status == 'pending'
-                ? 'Your request is waiting for confirmation. Dawa Mom will update this page when the clinic responds.'
+                ? 'Your request is waiting for confirmation. DawaMom will update this page when the clinic responds.'
                 : 'This appointment is ${_statusLabel(appointment.status).toLowerCase()}.';
 
     return SingleChildScrollView(
@@ -260,8 +269,7 @@ class AppointmentDetailsContent extends StatelessWidget {
                 const _SectionHeading(
                   eyebrow: 'YOUR RESULTS',
                   title: 'Consultation results',
-                  subtitle:
-                      'A clear, high-level summary shared by your clinician.',
+                  subtitle: 'A simple summary shared by your health worker.',
                 ),
                 const SizedBox(height: 12),
                 if (resultSummary != null)
@@ -288,6 +296,8 @@ class AppointmentDetailsContent extends StatelessWidget {
               const SizedBox(height: 12),
               _VisitInformation(appointment: appointment),
               if (appointment.isUpcoming) ...[
+                const SizedBox(height: 16),
+                const _AppointmentPreparationCard(),
                 const SizedBox(height: 16),
                 DawaCard(
                   onTap: () => showModalBottomSheet<void>(
@@ -361,6 +371,54 @@ class AppointmentDetailsContent extends StatelessWidget {
   static String _statusLabel(String status) => status.isEmpty
       ? 'Pending'
       : '${status[0].toUpperCase()}${status.substring(1)}';
+}
+
+class _AppointmentPreparationCard extends StatelessWidget {
+  const _AppointmentPreparationCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    return DawaCard(
+      semanticLabel: 'How to prepare for this appointment',
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 104,
+            child: DawaContextualImage(
+              assetId: 'clinic_visit_03',
+              variant: DawaImageVariant.cardSideImage,
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Prepare for your visit',
+                  style: theme.titleMedium.copyWith(
+                    color: theme.primaryText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Bring any medicines or records you have, and write down questions you want to ask.',
+                  style: theme.bodySmall.copyWith(
+                    color: theme.secondaryText,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AppointmentHero extends StatelessWidget {
@@ -533,12 +591,16 @@ class _HeroMeta extends StatelessWidget {
         children: [
           Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: 16),
           const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -606,8 +668,8 @@ class _VisitInformation extends StatelessWidget {
       children: [
         _InformationRow(
           icon: Icons.person_outline_rounded,
-          label: 'Clinician',
-          value: appointment.clinicianName ?? 'Clinician',
+          label: 'Health worker',
+          value: appointment.clinicianName ?? 'Health worker',
         ),
         if (appointment.clinicianTitle?.isNotEmpty == true ||
             appointment.clinicianSpeciality?.isNotEmpty == true)

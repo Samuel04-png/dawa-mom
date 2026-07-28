@@ -86,15 +86,56 @@ void main() {
     expect(find.text('Cancel appointment'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('upcoming appointment includes accessible preparation imagery',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light(),
+        home: Scaffold(
+          body: AppointmentDetailsContent(
+            appointment: _appointment(
+              'confirmed',
+              date: DateTime.now().add(const Duration(days: 2)),
+            ),
+            resultLoading: false,
+            resultError: false,
+            cancelling: false,
+            onCancel: () {},
+            onRefresh: () async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Prepare for your visit'),
+      300,
+    );
+
+    expect(find.text('Prepare for your visit'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(
+        'Educational image about preparing for a clinic visit',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
-Appointment _appointment(String status) => Appointment(
+Appointment _appointment(String status, {DateTime? date}) => Appointment(
       id: '00000000-0000-4000-8000-000000000001',
       motherId: '00000000-0000-4000-8000-000000000002',
       patientId: '00000000-0000-4000-8000-000000000003',
       clinicianId: '00000000-0000-4000-8000-000000000004',
       clinicId: '00000000-0000-4000-8000-000000000005',
-      date: DateTime(2026, 7, 22),
+      date: date ?? DateTime(2026, 7, 22),
       startTime: '14:00',
       endTime: '14:30',
       appointmentType: 'maternal_health',
@@ -107,7 +148,7 @@ Appointment _appointment(String status) => Appointment(
       clinicianName: 'Dr Fae',
       clinicianTitle: 'Physician',
       clinicianSpeciality: 'Maternal health',
-      clinicName: 'Dawa Mom Clinic',
+      clinicName: 'DawaMom Clinic',
       clinicAddress: 'Lusaka',
     );
 
@@ -116,7 +157,7 @@ AppointmentResultSummary _summary() => AppointmentResultSummary(
       appointmentId: '00000000-0000-4000-8000-000000000001',
       version: 1,
       clinicianDisplayName: 'Dr Fae',
-      clinicName: 'Dawa Mom Clinic',
+      clinicName: 'DawaMom Clinic',
       appointmentDate: DateTime(2026, 7, 22),
       completedAt: DateTime(2026, 7, 22, 14, 30),
       overallStatus: 'follow_up',

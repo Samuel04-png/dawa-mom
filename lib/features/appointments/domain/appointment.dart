@@ -117,8 +117,7 @@ class Appointment {
           json['dawa_clinician_appointment_id']?.toString() ??
               json['external_appointment_id']?.toString(),
       integrationErrorCode: json['integration_error_code']?.toString(),
-      patientSafeStatusMessage:
-          json['patient_safe_status_message']?.toString(),
+      patientSafeStatusMessage: json['patient_safe_status_message']?.toString(),
     );
   }
 
@@ -140,17 +139,63 @@ class Appointment {
 
 @immutable
 class ClinicOption {
-  const ClinicOption({required this.id, required this.name, this.address});
+  const ClinicOption({
+    required this.id,
+    required this.name,
+    this.address,
+    this.distanceKm,
+    this.isOpen,
+    this.services = const [],
+    this.nextAvailableAt,
+    this.openingHours,
+    this.isPreferred,
+    this.phone,
+    this.latitude,
+    this.longitude,
+    this.accessibility = const [],
+    this.languages = const [],
+  });
 
   final String id;
   final String name;
   final String? address;
+  final double? distanceKm;
+  final bool? isOpen;
+  final List<String> services;
+  final DateTime? nextAvailableAt;
+  final String? openingHours;
+  final bool? isPreferred;
+  final String? phone;
+  final double? latitude;
+  final double? longitude;
+  final List<String> accessibility;
+  final List<String> languages;
 
   factory ClinicOption.fromJson(Map<String, dynamic> json) => ClinicOption(
         id: json['id'].toString(),
         name: json['name']?.toString() ?? 'Clinic',
         address: json['address']?.toString(),
+        distanceKm: double.tryParse(json['distance_km']?.toString() ?? ''),
+        isOpen: json['is_open'] as bool?,
+        services: _stringList(json['services']),
+        nextAvailableAt:
+            DateTime.tryParse(json['next_available_at']?.toString() ?? ''),
+        openingHours: json['opening_hours']?.toString(),
+        isPreferred: json['is_preferred'] as bool?,
+        phone: json['phone']?.toString(),
+        latitude: double.tryParse(json['latitude']?.toString() ?? ''),
+        longitude: double.tryParse(json['longitude']?.toString() ?? ''),
+        accessibility: _stringList(json['accessibility']),
+        languages: _stringList(json['languages']),
       );
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
 }
 
 @immutable
@@ -197,7 +242,7 @@ class ClinicianProfile {
     );
     return ClinicianProfile(
       id: json['id'].toString(),
-      displayName: json['display_name']?.toString() ?? 'Clinician',
+      displayName: json['display_name']?.toString() ?? 'Health worker',
       professionalTitle: json['professional_title']?.toString(),
       speciality: json['speciality']?.toString(),
       clinicId: json['clinic_id'].toString(),

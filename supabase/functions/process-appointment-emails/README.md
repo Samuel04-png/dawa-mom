@@ -5,7 +5,7 @@ This server-only Edge Function claims `appointment_email_outbox` rows, resolves 
 Required Supabase secrets:
 
 ```powershell
-supabase secrets set RESEND_API_KEY="re_..." APPOINTMENT_EMAIL_FROM="Dawa Mom <appointments@your-verified-domain.example>" APPOINTMENT_EMAIL_WORKER_SECRET="a-long-random-secret"
+supabase secrets set RESEND_API_KEY="re_..." APPOINTMENT_EMAIL_FROM="DawaMom <appointments@your-verified-domain.example>" APPOINTMENT_EMAIL_WORKER_SECRET="a-long-random-secret"
 ```
 
 Optional secrets:

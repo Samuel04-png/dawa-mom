@@ -228,15 +228,15 @@ class HealthProfileSnapshot {
       !pregnancyComplete,
       !periodComplete,
     ].where((value) => value).length;
-    if (missing > 1) return 'Your health profile needs more information.';
+    if (missing > 1) return 'Finish your profile to see tips made for you.';
     if (!personalComplete || !contactComplete) {
       return 'Complete your personal details.';
     }
     if (!periodComplete) {
-      return 'Set up your Period Tracker to receive estimates.';
+      return 'Add your last period to see cycle dates.';
     }
     if (!pregnancyComplete) {
-      return 'Add pregnancy information for personalised guidance.';
+      return 'Add your pregnancy choice to see the right tips.';
     }
     return 'Your health profile is up to date.';
   }

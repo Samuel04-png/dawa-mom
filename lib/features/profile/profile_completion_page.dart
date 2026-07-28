@@ -1,29 +1,32 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import '/components/period_setup/period_setup_flow.dart';
-import '/components/responsive/responsive_layout.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
+import '/design_system/dawa_components.dart';
+import '/design_system/dawa_design_tokens.dart';
+import '/design_system/dawa_page_scaffold.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/navbar/edit_profile/edit_profile_widget.dart';
 import 'data/health_profile_repository.dart';
 
 class ProfileCompletionPage extends StatefulWidget {
-  const ProfileCompletionPage({super.key});
+  const ProfileCompletionPage({super.key, this.repository});
 
   static const routeName = 'ProfileCompletion';
   static const routePath = '/profileCompletion';
+  final HealthProfileRepository? repository;
 
   @override
   State<ProfileCompletionPage> createState() => _ProfileCompletionPageState();
 }
 
 class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
-  final _repository = HealthProfileRepository();
+  late final HealthProfileRepository _repository;
   late Future<HealthProfileSnapshot> _profile;
   bool _retryingPatientSync = false;
 
   @override
   void initState() {
     super.initState();
+    _repository = widget.repository ?? HealthProfileRepository();
     _profile = _repository.load();
   }
 
@@ -91,7 +94,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Your profile sync has been queued and will retry safely.',
+            'We are trying the clinic connection again.',
           ),
         ),
       );
@@ -101,7 +104,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Complete your personal details, then try the clinic connection again.',
+            'Add your personal details, then try again.',
           ),
         ),
       );
@@ -111,232 +114,214 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
-    return Scaffold(
-      backgroundColor: theme.primaryBackground,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: theme.primaryBackground,
-        foregroundColor: theme.primaryText,
-        title: const Text('Complete health profile'),
-      ),
-      body: FutureBuilder<HealthProfileSnapshot>(
+  Widget build(BuildContext context) => FutureBuilder<HealthProfileSnapshot>(
         future: _profile,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const DawaPageScaffold(
+              maxWidth: 920,
+              reserveMobileNavigationSpace: false,
+              child: DawaPageSkeleton(
+                label: 'Loading your health profile',
+                showHero: true,
+                cardCount: 3,
+              ),
+            );
           }
           if (snapshot.hasError || snapshot.data == null) {
-            return DawaMomEmptyState(
-              icon: Icons.cloud_off_rounded,
-              title: 'Profile could not be loaded',
-              description: 'Check your connection and try again.',
-              actionLabel: 'Retry',
-              onAction: _refresh,
+            return DawaPageScaffold(
+              maxWidth: 920,
+              reserveMobileNavigationSpace: false,
+              child: Column(
+                children: [
+                  DawaAppHeader(
+                    title: 'Your health profile',
+                    onBack: () => Navigator.maybePop(context),
+                  ),
+                  const SizedBox(height: DawaSpacing.md),
+                  DawaErrorState(
+                    title: 'Your profile did not load',
+                    message: 'Check your internet, then try again.',
+                    onRetry: _refresh,
+                  ),
+                ],
+              ),
             );
           }
           final data = snapshot.data!;
-          return SingleChildScrollView(
-            child: ResponsivePageContainer(
-              maxWidth: 920,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      color: theme.secondaryBackground,
-                      border: Border.all(color: theme.alternate),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+          final cards = [
+            _CompletionCard(
+              step: 1,
+              color: DawaColors.primary,
+              icon: Icons.badge_outlined,
+              title: 'About you',
+              description: data.personalComplete
+                  ? 'Your name and date of birth are added.'
+                  : 'Add your name and date of birth.',
+              status: data.personalComplete
+                  ? _CompletionStatus.complete
+                  : _CompletionStatus.incomplete,
+              actionLabel: data.personalComplete ? 'Check' : 'Add now',
+              onTap: _editPersonal,
+            ),
+            _CompletionCard(
+              step: 2,
+              color: DawaColors.teal,
+              icon: Icons.contact_phone_outlined,
+              title: 'How to reach you',
+              description: data.contactComplete
+                  ? 'Your phone number and address are added.'
+                  : 'Add a phone number and address.',
+              status: data.contactComplete
+                  ? _CompletionStatus.complete
+                  : _CompletionStatus.incomplete,
+              actionLabel: data.contactComplete ? 'Check' : 'Add now',
+              onTap: _editPersonal,
+            ),
+            _CompletionCard(
+              step: 3,
+              color: DawaColors.purple,
+              icon: Icons.pregnant_woman_rounded,
+              title: 'Pregnancy choice',
+              description: _pregnancyDescription(data),
+              status: data.pregnancyComplete
+                  ? _CompletionStatus.complete
+                  : _CompletionStatus.incomplete,
+              actionLabel: data.pregnancyComplete ? 'Check' : 'Choose now',
+              onTap: () => _editPregnancy(data),
+            ),
+            _CompletionCard(
+              step: 4,
+              color: DawaColors.pink,
+              icon: Icons.water_drop_outlined,
+              title: 'Your period dates',
+              description: data.periodComplete
+                  ? 'Last period: ${DateFormat('d MMM y').format(data.lastPeriodStart!)}'
+                  : 'Add your last period to see cycle dates.',
+              status: data.periodComplete
+                  ? _CompletionStatus.complete
+                  : data.periodWasSkipped
+                      ? _CompletionStatus.skipped
+                      : _CompletionStatus.incomplete,
+              actionLabel: data.periodComplete ? 'Update' : 'Add period',
+              onTap: () => _setupPeriod(data),
+            ),
+          ];
+          return DawaPageScaffold(
+            maxWidth: 920,
+            reserveMobileNavigationSpace: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DawaAppHeader(
+                  title: 'Your health profile',
+                  onBack: () => Navigator.maybePop(context),
+                ),
+                const SizedBox(height: DawaSpacing.xs),
+                DawaIllustratedHeroCard(
+                  category: data.isComplete ? 'ALL DONE' : 'MADE FOR YOU',
+                  title: data.isComplete
+                      ? 'Your profile is ready'
+                      : 'Tell us a little about you',
+                  subtitle: data.isComplete
+                      ? 'DawaMom can now show care and tips that fit you.'
+                      : 'This helps DawaMom show the right care and tips.',
+                  illustrationPath: data.isComplete
+                      ? DawaArtwork.motherGreeting
+                      : DawaArtwork.motherLearning,
+                  progress: data.completedSections / 4,
+                  progressLabel: '${data.completedSections} of 4 steps done',
+                  backgroundColor: DawaColors.softBlue,
+                  semanticLabel:
+                      '${data.completedSections} of 4 profile steps done.',
+                ),
+                const SizedBox(height: DawaSpacing.md),
+                DawaCard(
+                  child: Row(
+                    children: [
+                      const DawaIconBadge(
+                        icon: Icons.auto_awesome_rounded,
+                        color: DawaColors.greenDark,
+                      ),
+                      const SizedBox(width: DawaSpacing.sm),
+                      Expanded(
+                        child: Text(
                           data.isComplete
-                              ? 'Your health profile is ready'
-                              : 'A few details will improve your experience',
-                          style: theme.headlineSmall.copyWith(
-                            fontWeight: FontWeight.w600,
+                              ? 'You can change any answer when you need to.'
+                              : 'Finish all four steps for better tips and faster booking.',
+                          style: context.dawaBody,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (data.patientSyncNeedsAttention) ...[
+                  const SizedBox(height: DawaSpacing.sm),
+                  DawaCard(
+                    child: Row(
+                      children: [
+                        const DawaIconBadge(
+                          icon: Icons.sync_problem_rounded,
+                          color: DawaColors.warning,
+                        ),
+                        const SizedBox(width: DawaSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            'Your answers are saved. We still need to connect them to the clinic.',
+                            style: context.dawaBody,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          data.dashboardPrompt,
-                          style: theme.bodyMedium.copyWith(
-                            color: theme.secondaryText,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(99),
-                          child: LinearProgressIndicator(
-                            value: data.completedSections / 4,
-                            minHeight: 8,
-                            backgroundColor:
-                                theme.primary.withValues(alpha: 0.1),
-                            color:
-                                data.isComplete ? theme.success : theme.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${data.completedSections} of 4 sections complete',
-                          style: theme.bodySmall.copyWith(
-                            color: theme.secondaryText,
+                        TextButton(
+                          onPressed:
+                              _retryingPatientSync ? null : _retryPatientSync,
+                          child: Text(
+                            _retryingPatientSync ? 'Trying...' : 'Try again',
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (data.patientSyncNeedsAttention) ...[
-                    const SizedBox(height: 14),
-                    DawaMomCard(
-                      child: Row(
-                        children: [
-                          Icon(Icons.sync_problem_rounded, color: theme.warning),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Your health profile is saved. The clinic connection needs another attempt.',
-                              style: theme.bodyMedium,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          TextButton(
-                            onPressed: _retryingPatientSync
-                                ? null
-                                : _retryPatientSync,
-                            child: Text(
-                              _retryingPatientSync ? 'Queuing...' : 'Retry',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cards = [
-                        _CompletionCard(
-                          icon: Icons.badge_outlined,
-                          title: 'Personal details',
-                          description: data.personalComplete
-                              ? 'Name and date of birth added'
-                              : 'Add your name and date of birth',
-                          status: data.personalComplete
-                              ? _CompletionStatus.complete
-                              : _CompletionStatus.incomplete,
-                          actionLabel:
-                              data.personalComplete ? 'Review' : 'Add details',
-                          onTap: _editPersonal,
-                        ),
-                        _CompletionCard(
-                          icon: Icons.contact_phone_outlined,
-                          title: 'Contact details',
-                          description: data.contactComplete
-                              ? 'Email, phone number and address added'
-                              : 'Add a phone number and address',
-                          status: data.contactComplete
-                              ? _CompletionStatus.complete
-                              : _CompletionStatus.incomplete,
-                          actionLabel:
-                              data.contactComplete ? 'Review' : 'Add details',
-                          onTap: _editPersonal,
-                        ),
-                        _CompletionCard(
-                          icon: Icons.pregnant_woman_rounded,
-                          title: 'Pregnancy information',
-                          description: _pregnancyDescription(data),
-                          status: data.pregnancyComplete
-                              ? _CompletionStatus.complete
-                              : _CompletionStatus.incomplete,
-                          actionLabel: data.pregnancyComplete
-                              ? 'Review'
-                              : 'Add information',
-                          onTap: () => _editPregnancy(data),
-                        ),
-                        _CompletionCard(
-                          icon: Icons.water_drop_outlined,
-                          title: 'Period Tracker',
-                          description: data.periodComplete
-                              ? 'Latest period: ${DateFormat('d MMM y').format(data.lastPeriodStart!)}'
-                              : 'Set up tracking to receive cycle estimates',
-                          status: data.periodComplete
-                              ? _CompletionStatus.complete
-                              : data.periodWasSkipped
-                                  ? _CompletionStatus.skipped
-                                  : _CompletionStatus.incomplete,
-                          actionLabel:
-                              data.periodComplete ? 'Update' : 'Set up tracker',
-                          onTap: () => _setupPeriod(data),
-                        ),
-                      ];
-                      if (constraints.maxWidth >= 700) {
-                        return GridView.count(
-                          crossAxisCount: 2,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 1.8,
-                          children: cards,
-                        );
-                      }
-                      return Column(
-                        children: cards
-                            .map(
-                              (card) => Padding(
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: card,
-                              ),
-                            )
-                            .toList(),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 22),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.maybePop(context),
-                    icon: Icon(
-                      data.isComplete
-                          ? Icons.check_circle_outline_rounded
-                          : Icons.save_outlined,
-                    ),
-                    label: Text(
-                      data.isComplete
-                          ? 'Return to dashboard'
-                          : 'Save and close',
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: theme.primary,
-                      minimumSize: const Size.fromHeight(50),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
                 ],
-              ),
+                const SizedBox(height: DawaSpacing.lg),
+                const DawaSectionHeader(
+                  title: 'Your four steps',
+                  subtitle: 'Tap any step to add or change an answer.',
+                ),
+                const SizedBox(height: DawaSpacing.sm),
+                DawaResponsiveGrid(
+                  mobileColumns: 1,
+                  tabletColumns: 2,
+                  desktopColumns: 2,
+                  spacing: DawaSpacing.md,
+                  runSpacing: DawaSpacing.md,
+                  children: cards,
+                ),
+                const SizedBox(height: DawaSpacing.xl),
+                DawaPrimaryButton(
+                  label: data.isComplete ? 'Back to home' : 'Close for now',
+                  icon: data.isComplete
+                      ? Icons.home_rounded
+                      : Icons.close_rounded,
+                  onPressed: () => Navigator.maybePop(context),
+                ),
+              ],
             ),
           );
         },
-      ),
-    );
-  }
+      );
 
   static String _pregnancyDescription(HealthProfileSnapshot data) {
     switch (data.pregnancyStatus) {
       case 'pregnant':
         return data.estimatedDueDate == null
             ? 'Currently pregnant'
-            : 'Estimated due date: ${DateFormat('d MMM y').format(data.estimatedDueDate!)}';
+            : 'Baby due around ${DateFormat('d MMM y').format(data.estimatedDueDate!)}.';
       case 'not_pregnant':
         return 'Not currently pregnant';
       case 'prefer_not_to_say':
-        return 'You chose not to provide this';
+        return 'You chose not to answer.';
       default:
-        return 'Not provided';
+        return 'Choose the answer that fits you.';
     }
   }
 }
@@ -345,6 +330,8 @@ enum _CompletionStatus { complete, incomplete, skipped }
 
 class _CompletionCard extends StatelessWidget {
   const _CompletionCard({
+    required this.step,
+    required this.color,
     required this.icon,
     required this.title,
     required this.description,
@@ -353,6 +340,8 @@ class _CompletionCard extends StatelessWidget {
     required this.onTap,
   });
 
+  final int step;
+  final Color color;
   final IconData icon;
   final String title;
   final String description;
@@ -362,55 +351,90 @@ class _CompletionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
     final statusColor = switch (status) {
-      _CompletionStatus.complete => theme.success,
-      _CompletionStatus.skipped => theme.warning,
-      _CompletionStatus.incomplete => theme.secondaryText,
+      _CompletionStatus.complete => DawaColors.greenDark,
+      _CompletionStatus.skipped => DawaColors.warning,
+      _CompletionStatus.incomplete => DawaColors.muted,
     };
     final statusLabel = switch (status) {
-      _CompletionStatus.complete => 'Complete',
+      _CompletionStatus.complete => 'Done',
       _CompletionStatus.skipped => 'Skipped',
-      _CompletionStatus.incomplete => 'Incomplete',
+      _CompletionStatus.incomplete => 'To do',
     };
-    return DawaMomCard(
+    final statusIcon = switch (status) {
+      _CompletionStatus.complete => Icons.check_rounded,
+      _CompletionStatus.skipped => Icons.fast_forward_rounded,
+      _CompletionStatus.incomplete => Icons.circle_outlined,
+    };
+    return DawaCard(
+      onTap: onTap,
+      semanticLabel: 'Step $step. $title. $statusLabel. $description',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: theme.primary),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: theme.bodySmall.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w600,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  DawaIconBadge(icon: icon, color: color, size: 48),
+                  Positioned(
+                    left: -5,
+                    top: -6,
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: Text(
+                        '$step',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(width: DawaSpacing.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: context.dawaSectionTitle.copyWith(fontSize: 16),
                 ),
+              ),
+              DawaStatusPill(
+                label: statusLabel,
+                icon: statusIcon,
+                color: statusColor,
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: theme.titleSmall.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: DawaSpacing.sm),
           Text(
             description,
-            style: theme.bodySmall.copyWith(color: theme.secondaryText),
+            style: context.dawaBody.copyWith(color: DawaColors.textSecondary),
           ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: onTap,
-            child: Text(actionLabel),
+          const SizedBox(height: DawaSpacing.xs),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                actionLabel,
+                style: context.dawaCaption.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Icon(Icons.arrow_forward_rounded, color: color, size: 18),
+            ],
           ),
         ],
       ),
@@ -449,6 +473,11 @@ class _PregnancyDialogState extends State<_PregnancyDialog> {
           : (_lnmp ?? now),
       firstDate: dueDate ? now : DateTime(now.year - 1),
       lastDate: dueDate ? DateTime(now.year + 2) : now,
+      helpText: context.tr(
+        dueDate ? 'Choose due date' : 'Choose first day of last period',
+      ),
+      cancelText: context.tr('Cancel'),
+      confirmText: context.tr('Save'),
     );
     if (picked == null) return;
     setState(() {
@@ -467,7 +496,7 @@ class _PregnancyDialogState extends State<_PregnancyDialog> {
               children: [
                 DropdownButtonFormField<String>(
                   initialValue: _status,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Pregnancy status',
                     border: OutlineInputBorder(),
                   ),
@@ -496,7 +525,7 @@ class _PregnancyDialogState extends State<_PregnancyDialog> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.calendar_today_outlined),
-                    title: const Text('Last menstrual period'),
+                    title: const Text('First day of your last period'),
                     subtitle: Text(
                       _lnmp == null
                           ? 'Optional'
@@ -507,7 +536,7 @@ class _PregnancyDialogState extends State<_PregnancyDialog> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.event_available_outlined),
-                    title: const Text('Estimated due date'),
+                    title: const Text('Due date'),
                     subtitle: Text(
                       _dueDate == null
                           ? 'Optional'

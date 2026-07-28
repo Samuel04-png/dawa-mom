@@ -1,9 +1,12 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/data/clinician_directory_repository.dart';
 import '/features/appointments/domain/appointment.dart';
+import '/design_system/dawa_components.dart';
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 export 'booking_bottom_sheet_model.dart';
@@ -11,7 +14,12 @@ export 'booking_bottom_sheet_model.dart';
 enum _BookingState { ready, loading, success, error }
 
 class BookingBottomSheetWidget extends StatefulWidget {
-  const BookingBottomSheetWidget({super.key});
+  const BookingBottomSheetWidget({
+    super.key,
+    this.initialClinicId,
+  });
+
+  final String? initialClinicId;
 
   @override
   State<BookingBottomSheetWidget> createState() =>
@@ -22,6 +30,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
   late final SupabaseClinicianDirectoryRepository _clinicianDirectory;
   late final AppointmentRepository _appointments;
   final _reasonController = TextEditingController();
+  final String _idempotencyKey = const Uuid().v4();
 
   List<ClinicOption> _clinics = const [];
   List<ClinicianProfile> _clinicians = const [];
@@ -82,9 +91,13 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
           _formError = 'No clinics are available for booking right now.';
         } else if (_clinicianDirectory.isUsingCachedDirectory) {
           _formError =
-              'Showing the latest safely cached clinician directory. Live appointment times require a connection.';
+              'Showing the last saved health worker list. Connect to the internet to see live times.';
         }
       });
+      if (widget.initialClinicId != null &&
+          clinics.any((clinic) => clinic.id == widget.initialClinicId)) {
+        await _selectClinic(widget.initialClinicId);
+      }
     } on AppointmentException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -128,10 +141,10 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
         _loadingClinicians = false;
         if (clinicians.isEmpty) {
           _clinicianError =
-              'No bookable clinicians are available at this clinic.';
+              'No health workers can be booked at this clinic right now.';
         } else if (_clinicianDirectory.isUsingCachedDirectory) {
           _formError =
-              'Showing the latest safely cached clinicians. Live appointment times require a connection.';
+              'Showing the last saved health worker list. Connect to the internet to see live times.';
         }
       });
     } catch (_) {
@@ -139,7 +152,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
       setState(() {
         _loadingClinicians = false;
         _clinicianError =
-            'Clinicians could not be loaded. Choose the clinic again to retry.';
+            'Health workers did not load. Choose the clinic again.';
       });
     }
   }
@@ -209,7 +222,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
     setState(() {
       _clinicError = _selectedClinic == null ? 'Please select a clinic.' : null;
       _clinicianError =
-          _selectedClinician == null ? 'Please select a clinician.' : null;
+          _selectedClinician == null ? 'Please choose a health worker.' : null;
       _dateError = _selectedDate.isBefore(normalizedToday)
           ? 'Please choose a date in the future.'
           : null;
@@ -240,6 +253,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
         date: _selectedDate,
         slot: slot,
         reason: _reasonController.text,
+        idempotencyKey: _idempotencyKey,
       );
       if (!mounted) return;
       setState(() => _bookingState = _BookingState.success);
@@ -302,10 +316,17 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
               ),
               Flexible(
                 child: _loadingDirectory
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(48),
-                          child: CircularProgressIndicator(),
+                    ? const SingleChildScrollView(
+                        padding: EdgeInsets.all(DawaSpacing.md),
+                        child: Column(
+                          children: [
+                            DawaLoadingSkeleton(
+                              label: 'Loading clinics',
+                              lines: 3,
+                            ),
+                            SizedBox(height: DawaSpacing.sm),
+                            DawaLoadingSkeleton(lines: 2),
+                          ],
                         ),
                       )
                     : SingleChildScrollView(
@@ -319,7 +340,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Choose a date, clinic, clinician and available time.',
+                              'Choose a date, clinic, health worker and time.',
                               style: theme.bodyMedium.copyWith(
                                 color: theme.secondaryText,
                               ),
@@ -365,7 +386,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                               isExpanded: true,
                               decoration: _inputDecoration(
                                 context,
-                                label: 'Clinician',
+                                label: 'Health worker',
                                 errorText: _clinicianError,
                                 suffix: _loadingClinicians
                                     ? const Padding(
@@ -382,7 +403,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                               hint: Text(
                                 _selectedClinic == null
                                     ? 'Select a clinic first'
-                                    : 'Select a clinician',
+                                    : 'Choose a health worker',
                               ),
                               items: _clinicians
                                   .map(
@@ -430,7 +451,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                               const LinearProgressIndicator(minHeight: 3)
                             else if (_selectedClinician == null)
                               Text(
-                                'Select a clinician to view appointment times.',
+                                'Choose a health worker to see appointment times.',
                                 style: theme.bodySmall.copyWith(
                                   color: theme.secondaryText,
                                 ),

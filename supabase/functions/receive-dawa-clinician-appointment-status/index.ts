@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
   if (error?.code === 'P0002') {
     return response({
       code: 'APPOINTMENT_NOT_FOUND',
-      error: 'The Dawa Mom appointment was not found.',
+      error: 'The DawaMom appointment was not found.',
       retryable: false,
     }, 404);
   }

@@ -1,7 +1,10 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:go_router/go_router.dart';
 
+import '/content/dawa_learning_asset_registry.dart';
+import '/content/dawa_visual_rotation_service.dart';
 import '/design_system/dawa_components.dart';
+import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
 import '../data/dawa_learning_repository.dart';
@@ -25,6 +28,7 @@ class DawaLearnPage extends StatefulWidget {
 class _DawaLearnPageState extends State<DawaLearnPage> {
   late final DawaLearningRepository _repository;
   late Future<DawaLearningState> _state;
+  late Future<DawaLearningAsset?> _featuredVisual;
   String _category = 'For you';
   String _query = '';
 
@@ -33,6 +37,13 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
     super.initState();
     _repository = widget.repository ?? DawaLearningRepository();
     _state = _repository.load();
+    _featuredVisual = DawaVisualRotationService().select(
+      const DawaVisualRotationRequest(
+        placement: DawaAssetPlacement.featuredBanner,
+        contextKey: 'learn-featured',
+        cadence: DawaRotationCadence.weekly,
+      ),
+    );
   }
 
   List<DawaLearningItem> get _filtered {
@@ -40,7 +51,7 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
     return DawaLearningCatalog.items.where((item) {
       final inCategory = _category == 'For you' ||
           _category == item.category ||
-          (_category == 'Pregnancy' && item.category == 'Nutrition');
+          (_category == 'Audio' && item.type == DawaLearningType.audio);
       final inQuery = query.isEmpty ||
           item.title.toLowerCase().contains(query) ||
           item.subtitle.toLowerCase().contains(query);
@@ -65,14 +76,25 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
             onNotifications: () => context.push('/notifications'),
             onProfile: () => context.go('/settings'),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: DawaSpacing.xs),
+          Text(
+            'Small lessons. Clear answers.',
+            style: context.dawaTitle.copyWith(fontSize: 18),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Read or listen in the language you chose.',
+            style: context.dawaCaption,
+          ),
+          const SizedBox(height: DawaSpacing.sm),
           TextField(
             key: const ValueKey('learning-search'),
             onChanged: (value) => setState(() => _query = value),
             textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
-              hintText: 'Search articles, topics or guides...',
+            decoration: InputDecoration(
+              hintText: 'Search health lessons',
               prefixIcon: Icon(Icons.search_rounded),
+              suffixIcon: Icon(Icons.tune_rounded, size: 20),
             ),
           ),
           const SizedBox(height: 10),
@@ -80,6 +102,7 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
             label: 'Learning categories',
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(right: DawaSpacing.md),
               child: Row(
                 children: [
                   for (final category in DawaLearningCatalog.categories)
@@ -100,19 +123,31 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
             future: _state,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(48),
-                    child: CircularProgressIndicator(),
-                  ),
+                return const Column(
+                  children: [
+                    DawaLoadingSkeleton(
+                      layout: DawaSkeletonLayout.thumbnail,
+                      label: 'Loading lesson thumbnail',
+                    ),
+                    SizedBox(height: DawaSpacing.sm),
+                    DawaLoadingSkeleton(
+                      layout: DawaSkeletonLayout.questRow,
+                      label: 'Loading your lesson progress',
+                    ),
+                  ],
                 );
               }
               final state = snapshot.data ?? const DawaLearningState();
-              return _LearningContent(
-                state: state,
-                items: _filtered,
-                featuredMode: _category == 'For you' && _query.trim().isEmpty,
-                onToggleSaved: (id) => _toggleSaved(state, id),
+              return FutureBuilder<DawaLearningAsset?>(
+                future: _featuredVisual,
+                builder: (context, visualSnapshot) => _LearningContent(
+                  state: state,
+                  items: _filtered,
+                  featuredMode: _category == 'For you' && _query.trim().isEmpty,
+                  featuredAssetId:
+                      visualSnapshot.data?.id ?? 'cervical_awareness_02',
+                  onToggleSaved: (id) => _toggleSaved(state, id),
+                ),
               );
             },
           ),
@@ -127,33 +162,30 @@ class _LearningContent extends StatelessWidget {
     required this.state,
     required this.items,
     required this.featuredMode,
+    required this.featuredAssetId,
     required this.onToggleSaved,
   });
 
   final DawaLearningState state;
   final List<DawaLearningItem> items;
   final bool featuredMode;
+  final String featuredAssetId;
   final ValueChanged<String> onToggleSaved;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const DawaCard(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 28),
-          child: Center(
-            child: Text(
-              'No lessons match this search yet.',
-              style: TextStyle(color: DawaColors.muted),
-            ),
-          ),
-        ),
+      return const DawaEmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'No lesson found',
+        message: 'Try a shorter word or choose another topic.',
       );
     }
 
     if (featuredMode) {
       return _FeaturedLearningContent(
         state: state,
+        featuredAssetId: featuredAssetId,
         onToggleSaved: onToggleSaved,
       );
     }
@@ -165,15 +197,16 @@ class _LearningContent extends StatelessWidget {
       children: [
         if (items.contains(quest)) ...[
           DawaCard(
-            color: DawaColors.softGreen,
-            borderColor: DawaColors.green.withValues(alpha: 0.25),
             onTap: () => context.push('/learn/quests'),
             semanticLabel: 'Continue the Screening Without Fear quest',
             child: Row(
               children: [
-                DawaIconBadge(
-                  icon: Icons.route_rounded,
-                  color: DawaColors.green,
+                SizedBox(
+                  width: 82,
+                  child: DawaContextualImage(
+                    assetId: quest.visualAssetId,
+                    variant: DawaImageVariant.cardSideImage,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -181,7 +214,7 @@ class _LearningContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'THE MOTHER’S PATH',
+                        'The Mother’s Path',
                         style: TextStyle(
                           color: DawaColors.green,
                           fontSize: 9,
@@ -230,8 +263,8 @@ class _LearningContent extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         const DawaSectionHeader(
-          title: 'Recommended for you',
-          subtitle: 'Clinically careful guidance you can save for later',
+          title: 'Picked for you',
+          subtitle: 'Clear health tips you can save for later.',
         ),
         const SizedBox(height: 10),
         DawaResponsiveGrid(
@@ -251,8 +284,6 @@ class _LearningContent extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         DawaCard(
-          color: DawaColors.softGreen,
-          borderColor: DawaColors.green.withValues(alpha: 0.25),
           child: Row(
             children: [
               const DawaIconBadge(
@@ -288,10 +319,12 @@ class _LearningContent extends StatelessWidget {
 class _FeaturedLearningContent extends StatelessWidget {
   const _FeaturedLearningContent({
     required this.state,
+    required this.featuredAssetId,
     required this.onToggleSaved,
   });
 
   final DawaLearningState state;
+  final String featuredAssetId;
   final ValueChanged<String> onToggleSaved;
 
   @override
@@ -305,7 +338,83 @@ class _FeaturedLearningContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FeaturedLearningCard(item: cervical),
+        _FeaturedLearningCard(
+          item: cervical,
+          visualAssetId: featuredAssetId,
+        ),
+        const SizedBox(height: 12),
+        DawaCard(
+          onTap: () => context.push('/learn/quests'),
+          semanticLabel: 'Continue the Screening Without Fear quest',
+          child: Row(
+            children: [
+              SizedBox(
+                width: 82,
+                child: DawaContextualImage(
+                  assetId: quest.visualAssetId,
+                  variant: DawaImageVariant.cardSideImage,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'The Mother’s Path',
+                      style: TextStyle(
+                        color: DawaColors.green,
+                        fontFamily: 'Poppins',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(quest.title, style: context.dawaSectionTitle),
+                    const SizedBox(height: 7),
+                    DawaProgressBar(
+                      value: dawaQuestProgress(state),
+                      semanticLabel: 'Quest progress',
+                      color: DawaColors.green,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(dawaQuestProgress(state) * 100).round()}% complete • Keep going',
+                      style: context.dawaCaption,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: DawaColors.primary,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricCard(
+                icon: Icons.local_fire_department_rounded,
+                color: const Color(0xFFF0843E),
+                value: '${state.streak} day streak',
+                label: 'Today’s check-in',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MetricCard(
+                icon: Icons.monetization_on_rounded,
+                color: DawaColors.gold,
+                value: '${state.coins} coins',
+                label: 'My rewards',
+                onTap: () => context.push('/learn/rewards'),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         _MythFactBanner(
           item: myth,
@@ -341,67 +450,22 @@ class _FeaturedLearningContent extends StatelessWidget {
         const SizedBox(height: 9),
         _AudioLessonCard(
           item: audio,
+          completed: state.completedIds.contains(audio.id),
+          saved: state.savedIds.contains(audio.id),
+          onSave: () => onToggleSaved(audio.id),
           onPlay: () => context.push(audio.route),
-        ),
-        const SizedBox(height: 16),
-        DawaCard(
-          color: DawaColors.softGreen,
-          borderColor: DawaColors.green.withValues(alpha: 0.25),
-          onTap: () => context.push('/learn/quests'),
-          semanticLabel: 'Continue the Screening Without Fear quest',
-          child: Row(
-            children: [
-              const DawaIconBadge(
-                icon: Icons.route_rounded,
-                color: DawaColors.green,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'THE MOTHER’S PATH',
-                      style: TextStyle(
-                        color: DawaColors.green,
-                        fontFamily: 'Poppins',
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(quest.title, style: context.dawaSectionTitle),
-                    const SizedBox(height: 7),
-                    DawaProgressBar(
-                      value: dawaQuestProgress(state),
-                      semanticLabel: 'Quest progress',
-                      color: DawaColors.green,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                color: DawaColors.primary,
-              ),
-            ],
-          ),
         ),
         const SizedBox(height: 12),
         DawaCard(
-          color: DawaColors.softPurple,
-          borderColor: DawaColors.purple.withValues(alpha: .25),
           onTap: () => context.push('/learn/games'),
           semanticLabel: 'Open health games and earn reward points',
           child: Row(
             children: [
-              SizedBox(
-                width: 72,
-                height: 78,
-                child: Image.asset(
-                  DawaArtwork.banaCelebrate,
-                  fit: BoxFit.contain,
-                  excludeFromSemantics: true,
+              const SizedBox(
+                width: 58,
+                child: DawaContextualImage(
+                  assetId: 'myths_vs_fact_04',
+                  variant: DawaImageVariant.compactThumbnail,
                 ),
               ),
               const SizedBox(width: 10),
@@ -426,27 +490,35 @@ class _FeaturedLearningContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _MetricCard(
-                icon: Icons.local_fire_department_rounded,
-                color: const Color(0xFFF0843E),
-                value: '${state.streak} day streak',
-                label: 'Today’s check-in',
+        DawaCard(
+          onTap: () => context.push('/learn/topics'),
+          semanticLabel: 'Browse all nine visual learning topics',
+          child: Row(
+            children: [
+              const DawaIconBadge(
+                icon: Icons.grid_view_rounded,
+                color: DawaColors.green,
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _MetricCard(
-                icon: Icons.monetization_on_rounded,
-                color: DawaColors.gold,
-                value: '${state.coins} coins',
-                label: 'My rewards',
-                onTap: () => context.push('/learn/rewards'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Explore all 9 visual topics',
+                        style: context.dawaSectionTitle),
+                    Text(
+                      'Pregnancy, periods, screening, nutrition, clinic visits and recovery.',
+                      style: context.dawaCaption,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: DawaColors.primary,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -454,90 +526,29 @@ class _FeaturedLearningContent extends StatelessWidget {
 }
 
 class _FeaturedLearningCard extends StatelessWidget {
-  const _FeaturedLearningCard({required this.item});
+  const _FeaturedLearningCard({
+    required this.item,
+    required this.visualAssetId,
+  });
 
   final DawaLearningItem item;
+  final String visualAssetId;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: double.infinity,
-        child: DawaCard(
-          padding: EdgeInsets.zero,
-          color: DawaColors.softBlue,
-          borderColor: DawaColors.primary.withValues(alpha: .12),
-          child: SizedBox(
-            height: DawaBreakpoints.isMobile(context) ? 248 : 264,
-            child: LayoutBuilder(
-              builder: (context, constraints) => Stack(
-                children: [
-                  Positioned(
-                    right: -4,
-                    bottom: 0,
-                    width: constraints.maxWidth * .52,
-                    height: constraints.maxHeight * .94,
-                    child: Image.asset(
-                      item.asset,
-                      fit: BoxFit.contain,
-                      alignment: Alignment.bottomCenter,
-                      excludeFromSemantics: true,
-                    ),
-                  ),
-                  Positioned(
-                    left: 17,
-                    top: 18,
-                    bottom: 16,
-                    width: constraints.maxWidth * .57,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'FEATURED',
-                          style: TextStyle(
-                            color: DawaColors.primary,
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: .3,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          item.title,
-                          maxLines: 3,
-                          style: context.dawaTitle.copyWith(
-                            color: DawaColors.primary,
-                            fontSize: 23,
-                            height: 1.12,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          item.subtitle,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.dawaBody,
-                        ),
-                        const Spacer(),
-                        FilledButton.icon(
-                          onPressed: () => context.push(item.route),
-                          icon: const Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 17,
-                          ),
-                          label: const Text('Read now'),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(118, 43),
-                            padding: const EdgeInsets.symmetric(horizontal: 15),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+  Widget build(BuildContext context) => DawaContentThumbnailCard(
+        thumbnail: DawaContextualImage(
+          assetId: visualAssetId,
+          variant: DawaImageVariant.featuredBanner,
+          borderRadius: BorderRadius.zero,
+          heroTag: 'learning-$visualAssetId',
         ),
+        category: 'Today’s pick · ${item.category}',
+        title: item.title,
+        description: item.subtitle,
+        durationMinutes: item.durationMinutes,
+        onOpen: () => context.push(item.route),
+        actionLabel: 'Read now',
+        featured: true,
       );
 }
 
@@ -554,8 +565,6 @@ class _MythFactBanner extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
         width: double.infinity,
         child: DawaCard(
-          color: DawaColors.softGreen,
-          borderColor: DawaColors.green.withValues(alpha: .22),
           padding: const EdgeInsets.fromLTRB(12, 12, 9, 12),
           onTap: onOpen,
           semanticLabel: 'Open ${item.title}',
@@ -571,7 +580,7 @@ class _MythFactBanner extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'MYTH VS FACT',
+                      'Myth vs Fact',
                       style: TextStyle(
                         color: DawaColors.green,
                         fontFamily: 'Poppins',
@@ -629,141 +638,144 @@ class _CompactLearningTile extends StatelessWidget {
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => DawaCard(
-        padding: EdgeInsets.zero,
-        onTap: onOpen,
-        semanticLabel: 'Open ${item.title}',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              height: 112,
-              decoration: const BoxDecoration(
-                color: DawaColors.softBlue,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(DawaRadii.medium),
-                ),
-              ),
-              child: Image.asset(
-                item.asset,
-                fit: BoxFit.contain,
-                alignment: Alignment.bottomCenter,
-                excludeFromSemantics: true,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(11, 10, 8, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.category.toUpperCase(),
-                    style: const TextStyle(
-                      color: DawaColors.green,
-                      fontFamily: 'Poppins',
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    item.title,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.dawaSectionTitle.copyWith(fontSize: 13),
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.schedule_rounded,
-                        size: 14,
-                        color: DawaColors.muted,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          '${item.durationMinutes} min read',
-                          style: context.dawaCaption.copyWith(fontSize: 9),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip:
-                            saved ? 'Remove from library' : 'Save to library',
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 44,
-                          minHeight: 44,
-                        ),
-                        padding: EdgeInsets.zero,
-                        onPressed: onSave,
-                        icon: Icon(
-                          saved
-                              ? Icons.bookmark_rounded
-                              : Icons.bookmark_border_rounded,
-                          color: DawaColors.primary,
-                          size: 19,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+  Widget build(BuildContext context) => DawaContentThumbnailCard(
+        thumbnail: DawaContextualImage(
+          assetId: item.visualAssetId,
+          variant: DawaImageVariant.moduleThumbnail,
+          borderRadius: BorderRadius.zero,
         ),
+        category: item.category,
+        title: item.title,
+        description: item.subtitle,
+        durationMinutes: item.durationMinutes,
+        onOpen: onOpen,
+        onSave: onSave,
+        saved: saved,
       );
 }
 
 class _AudioLessonCard extends StatelessWidget {
   const _AudioLessonCard({
     required this.item,
+    required this.completed,
+    required this.saved,
+    required this.onSave,
     required this.onPlay,
   });
 
   final DawaLearningItem item;
+  final bool completed;
+  final bool saved;
+  final VoidCallback onSave;
   final VoidCallback onPlay;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: double.infinity,
-        child: DawaCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          onTap: onPlay,
-          semanticLabel: 'Play ${item.title}',
-          child: Row(
-            children: [
-              const DawaIconBadge(
-                icon: Icons.headphones_rounded,
-                color: DawaColors.green,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.title, style: context.dawaSectionTitle),
-                    Text(
-                      '${item.durationMinutes} min • audio lesson',
-                      style: context.dawaCaption,
+  Widget build(BuildContext context) {
+    final displayCategory =
+        item.id == 'pregnancy-basics' ? 'Pregnancy' : item.category;
+    return SizedBox(
+      width: double.infinity,
+      child: DawaCard(
+        padding: const EdgeInsets.all(DawaSpacing.md),
+        onTap: onPlay,
+        semanticLabel:
+            '$displayCategory. ${item.title}. ${item.durationMinutes} minute audio lesson.',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final thumbnailWidth = constraints.maxWidth < 330 ? 84.0 : 104.0;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: thumbnailWidth,
+                  child: AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: DawaContextualImage(
+                      assetId: item.visualAssetId,
+                      variant: DawaImageVariant.moduleThumbnail,
+                      borderRadius: BorderRadius.circular(DawaRadii.small),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              IconButton.filled(
-                tooltip: 'Play',
-                onPressed: onPlay,
-                style: IconButton.styleFrom(
-                  backgroundColor: DawaColors.primary,
-                  foregroundColor: Colors.white,
+                const SizedBox(width: DawaSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: DawaSpacing.xs,
+                        runSpacing: DawaSpacing.xxs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            displayCategory,
+                            style: context.dawaCaption.copyWith(
+                              color: DawaColors.greenDark,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (completed)
+                            const DawaStatusPill(
+                              label: 'Completed',
+                              icon: Icons.check_circle_outline_rounded,
+                              color: DawaColors.green,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: DawaSpacing.xxs),
+                      Text(
+                        item.title,
+                        style: context.dawaSectionTitle,
+                      ),
+                      const SizedBox(height: DawaSpacing.xxs),
+                      Text(
+                        item.subtitle,
+                        maxLines: 3,
+                        softWrap: true,
+                        style: context.dawaCaption,
+                      ),
+                      const SizedBox(height: DawaSpacing.xs),
+                      Wrap(
+                        spacing: DawaSpacing.xxs,
+                        runSpacing: DawaSpacing.xxs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.headphones_rounded,
+                            size: 17,
+                            color: DawaColors.muted,
+                          ),
+                          Text(
+                            '${item.durationMinutes} min audio',
+                            style: context.dawaCaption,
+                          ),
+                          DawaIconButton(
+                            icon: saved
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                            tooltip: saved
+                                ? 'Remove from library'
+                                : 'Save to library',
+                            onPressed: onSave,
+                          ),
+                          DawaCompactButton(
+                            label: completed ? 'Listen again' : 'Listen',
+                            icon: Icons.play_arrow_rounded,
+                            filled: true,
+                            onPressed: onPlay,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                icon: const Icon(Icons.play_arrow_rounded),
-              ),
-            ],
-          ),
+              ],
+            );
+          },
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _MetricCard extends StatelessWidget {
@@ -788,7 +800,7 @@ class _MetricCard extends StatelessWidget {
         semanticLabel: '$label, $value',
         child: Row(
           children: [
-            Icon(icon, color: color, size: 26),
+            DawaIconBadge(icon: icon, color: color, size: 40),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -825,125 +837,25 @@ class _LearningItemCard extends StatelessWidget {
   final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => DawaCard(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 126,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: DawaColors.softBlue,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(DawaRadii.medium),
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: 12,
-                    bottom: 0,
-                    top: 5,
-                    width: 116,
-                    child: Image.asset(
-                      item.asset,
-                      fit: BoxFit.contain,
-                      alignment: Alignment.bottomCenter,
-                      excludeFromSemantics: true,
-                    ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    top: 14,
-                    child: DawaStatusPill(
-                      label: item.category,
-                      icon: item.icon,
-                      color: item.category == 'Nutrition'
-                          ? DawaColors.green
-                          : DawaColors.purple,
-                    ),
-                  ),
-                  if (completed)
-                    const Positioned(
-                      left: 14,
-                      bottom: 12,
-                      child: DawaStatusPill(
-                        label: 'Completed',
-                        icon: Icons.check_circle_outline,
-                        color: DawaColors.green,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 13, 8, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.dawaSectionTitle,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.subtitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.dawaCaption,
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: saved ? 'Remove from library' : 'Save to library',
-                    onPressed: onSave,
-                    icon: Icon(
-                      saved ? Icons.bookmark_rounded : Icons.bookmark_border,
-                      color: DawaColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 13),
-              child: Row(
-                children: [
-                  Icon(
-                    item.type == DawaLearningType.audio
-                        ? Icons.headphones_rounded
-                        : Icons.schedule_rounded,
-                    size: 15,
-                    color: DawaColors.muted,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    '${item.durationMinutes} min ${item.type == DawaLearningType.audio ? 'listen' : 'read'}',
-                    style: context.dawaCaption,
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: onOpen,
-                    child: Text(
-                      item.type == DawaLearningType.audio
-                          ? 'Listen'
-                          : item.type == DawaLearningType.quest
-                              ? 'Continue'
-                              : 'Read now',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+  Widget build(BuildContext context) => DawaContentThumbnailCard(
+        thumbnail: DawaContextualImage(
+          assetId: item.visualAssetId,
+          variant: DawaImageVariant.moduleThumbnail,
+          borderRadius: BorderRadius.zero,
         ),
+        category: item.category,
+        title: item.title,
+        description: item.subtitle,
+        durationMinutes: item.durationMinutes,
+        onOpen: onOpen,
+        actionLabel: item.type == DawaLearningType.audio
+            ? 'Listen'
+            : item.type == DawaLearningType.quest
+                ? 'Continue'
+                : 'Read now',
+        onSave: onSave,
+        saved: saved,
+        audioAvailable: item.type == DawaLearningType.audio,
+        completed: completed,
       );
 }

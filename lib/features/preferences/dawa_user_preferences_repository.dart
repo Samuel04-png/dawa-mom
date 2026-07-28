@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '/localization/dawa_localizations.dart';
+
 class DawaUserPreferences {
   const DawaUserPreferences({
     this.language = 'English',
@@ -13,6 +15,11 @@ class DawaUserPreferences {
     this.learningNotifications = true,
     this.cycleNotifications = true,
     this.rewardNotifications = true,
+    this.weeklySummary = false,
+    this.quietHoursEnabled = true,
+    this.quietHoursStart = '21:00',
+    this.quietHoursEnd = '07:00',
+    this.privateLockScreen = true,
   });
 
   final String language;
@@ -22,6 +29,11 @@ class DawaUserPreferences {
   final bool learningNotifications;
   final bool cycleNotifications;
   final bool rewardNotifications;
+  final bool weeklySummary;
+  final bool quietHoursEnabled;
+  final String quietHoursStart;
+  final String quietHoursEnd;
+  final bool privateLockScreen;
 
   DawaUserPreferences copyWith({
     String? language,
@@ -31,6 +43,11 @@ class DawaUserPreferences {
     bool? learningNotifications,
     bool? cycleNotifications,
     bool? rewardNotifications,
+    bool? weeklySummary,
+    bool? quietHoursEnabled,
+    String? quietHoursStart,
+    String? quietHoursEnd,
+    bool? privateLockScreen,
   }) =>
       DawaUserPreferences(
         language: language ?? this.language,
@@ -43,6 +60,11 @@ class DawaUserPreferences {
             learningNotifications ?? this.learningNotifications,
         cycleNotifications: cycleNotifications ?? this.cycleNotifications,
         rewardNotifications: rewardNotifications ?? this.rewardNotifications,
+        weeklySummary: weeklySummary ?? this.weeklySummary,
+        quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
+        quietHoursStart: quietHoursStart ?? this.quietHoursStart,
+        quietHoursEnd: quietHoursEnd ?? this.quietHoursEnd,
+        privateLockScreen: privateLockScreen ?? this.privateLockScreen,
       );
 }
 
@@ -65,6 +87,11 @@ class DawaUserPreferencesRepository {
   static const _learningKey = 'dawa_notify_learning';
   static const _cycleKey = 'dawa_notify_cycle';
   static const _rewardKey = 'dawa_notify_rewards';
+  static const _weeklySummaryKey = 'dawa_notify_weekly_summary';
+  static const _quietHoursEnabledKey = 'dawa_notify_quiet_hours_enabled';
+  static const _quietHoursStartKey = 'dawa_notify_quiet_hours_start';
+  static const _quietHoursEndKey = 'dawa_notify_quiet_hours_end';
+  static const _privateLockScreenKey = 'dawa_notify_private_lock_screen';
 
   Future<SharedPreferences> get _prefs async =>
       _preferences ??= await SharedPreferences.getInstance();
@@ -81,13 +108,24 @@ class DawaUserPreferencesRepository {
   Future<DawaUserPreferences> load() async {
     final prefs = await _prefs;
     final local = DawaUserPreferences(
-      language: prefs.getString(_languageKey) ?? 'English',
+      language: _normalizeLanguage(
+        prefs.getString(_languageKey) ?? DawaLanguages.english,
+      ),
       lessonLanguageEnabled: prefs.getBool(_lessonKey) ?? true,
       rudoLanguageEnabled: prefs.getBool(_rudoKey) ?? true,
       appointmentNotifications: prefs.getBool(_appointmentKey) ?? true,
       learningNotifications: prefs.getBool(_learningKey) ?? true,
       cycleNotifications: prefs.getBool(_cycleKey) ?? true,
       rewardNotifications: prefs.getBool(_rewardKey) ?? true,
+      weeklySummary: prefs.getBool(_weeklySummaryKey) ?? false,
+      quietHoursEnabled: prefs.getBool(_quietHoursEnabledKey) ?? true,
+      quietHoursStart: prefs.getString(_quietHoursStartKey) ?? '21:00',
+      quietHoursEnd: prefs.getString(_quietHoursEndKey) ?? '07:00',
+      privateLockScreen: prefs.getBool(_privateLockScreenKey) ?? true,
+    );
+    await DawaLocaleController.instance.setLanguage(
+      local.language,
+      persist: false,
     );
     final client = _supabase;
     final userId = client?.auth.currentUser?.id;
@@ -100,7 +138,9 @@ class DawaUserPreferencesRepository {
           .maybeSingle();
       if (row == null) return local;
       final remote = DawaUserPreferences(
-        language: row['language']?.toString() ?? local.language,
+        language: _normalizeLanguage(
+          row['language']?.toString() ?? local.language,
+        ),
         lessonLanguageEnabled: row['lesson_language_enabled'] as bool? ??
             local.lessonLanguageEnabled,
         rudoLanguageEnabled:
@@ -113,8 +153,22 @@ class DawaUserPreferencesRepository {
             row['cycle_notifications'] as bool? ?? local.cycleNotifications,
         rewardNotifications:
             row['reward_notifications'] as bool? ?? local.rewardNotifications,
+        weeklySummary: row['weekly_summary'] as bool? ?? local.weeklySummary,
+        quietHoursEnabled:
+            row['quiet_hours_enabled'] as bool? ?? local.quietHoursEnabled,
+        quietHoursStart: _normalizePreferenceTime(
+          row['quiet_hours_start'],
+          local.quietHoursStart,
+        ),
+        quietHoursEnd: _normalizePreferenceTime(
+          row['quiet_hours_end'],
+          local.quietHoursEnd,
+        ),
+        privateLockScreen:
+            row['private_lock_screen'] as bool? ?? local.privateLockScreen,
       );
       await _saveLocal(remote);
+      await DawaLocaleController.instance.setLanguage(remote.language);
       return remote;
     } on PostgrestException catch (error) {
       debugPrint('Preferences sync unavailable: ${error.code}');
@@ -123,10 +177,14 @@ class DawaUserPreferencesRepository {
   }
 
   Future<DawaUserPreferences> save(DawaUserPreferences value) async {
-    await _saveLocal(value);
-    unawaited(_sync(value));
+    final normalized = value.copyWith(
+      language: _normalizeLanguage(value.language),
+    );
+    await _saveLocal(normalized);
+    await DawaLocaleController.instance.setLanguage(normalized.language);
+    unawaited(_sync(normalized));
     changes.value += 1;
-    return value;
+    return normalized;
   }
 
   Future<void> _saveLocal(DawaUserPreferences value) async {
@@ -139,6 +197,11 @@ class DawaUserPreferencesRepository {
       prefs.setBool(_learningKey, value.learningNotifications),
       prefs.setBool(_cycleKey, value.cycleNotifications),
       prefs.setBool(_rewardKey, value.rewardNotifications),
+      prefs.setBool(_weeklySummaryKey, value.weeklySummary),
+      prefs.setBool(_quietHoursEnabledKey, value.quietHoursEnabled),
+      prefs.setString(_quietHoursStartKey, value.quietHoursStart),
+      prefs.setString(_quietHoursEndKey, value.quietHoursEnd),
+      prefs.setBool(_privateLockScreenKey, value.privateLockScreen),
     ]);
   }
 
@@ -156,6 +219,11 @@ class DawaUserPreferencesRepository {
         'learning_notifications': value.learningNotifications,
         'cycle_notifications': value.cycleNotifications,
         'reward_notifications': value.rewardNotifications,
+        'weekly_summary': value.weeklySummary,
+        'quiet_hours_enabled': value.quietHoursEnabled,
+        'quiet_hours_start': value.quietHoursStart,
+        'quiet_hours_end': value.quietHoursEnd,
+        'private_lock_screen': value.privateLockScreen,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'profile_id');
     } on PostgrestException catch (error) {
@@ -163,3 +231,15 @@ class DawaUserPreferencesRepository {
     }
   }
 }
+
+String _normalizePreferenceTime(dynamic value, String fallback) {
+  final text = value?.toString();
+  if (text == null || !RegExp(r'^\d{2}:\d{2}').hasMatch(text)) {
+    return fallback;
+  }
+  return text.substring(0, 5);
+}
+
+String _normalizeLanguage(String value) => DawaLanguages.nameForLocale(
+      DawaLanguages.localeForName(value),
+    );

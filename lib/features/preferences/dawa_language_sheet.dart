@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import '/localization/dawa_localized_material.dart';
 
 import '/design_system/dawa_components.dart';
 import '/design_system/dawa_design_tokens.dart';
@@ -31,30 +33,37 @@ class DawaLanguageSheet extends StatefulWidget {
 }
 
 class _DawaLanguageSheetState extends State<DawaLanguageSheet> {
-  static const _coreLanguages = ['English', 'Nyanja', 'Bemba', 'Tonga'];
-  static const _moreLanguages = ['Lozi', 'Shona', 'Ndebele'];
-
   late String _language;
   late bool _lessonLanguage;
   late bool _rudoLanguage;
-  bool _expanded = false;
 
   @override
   void initState() {
     super.initState();
-    _language = widget.initialValue.language;
+    _language = DawaLanguages.names.contains(widget.initialValue.language)
+        ? widget.initialValue.language
+        : DawaLanguages.english;
     _lessonLanguage = widget.initialValue.lessonLanguageEnabled;
     _rudoLanguage = widget.initialValue.rudoLanguageEnabled;
-    _expanded = _moreLanguages.contains(_language);
   }
 
   @override
-  Widget build(BuildContext context) => DawaBottomSheetFrame(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
-          ),
-          child: SingleChildScrollView(
+  Widget build(BuildContext context) => PopScope<DawaUserPreferences>(
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop && result == null) {
+            unawaited(
+              DawaLocaleController.instance.setLanguage(
+                widget.initialValue.language,
+                persist: false,
+              ),
+            );
+          }
+        },
+        child: DawaBottomSheetFrame(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -86,65 +95,81 @@ class _DawaLanguageSheetState extends State<DawaLanguageSheet> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                DawaCard(
-                  padding: EdgeInsets.zero,
-                  child: RadioGroup<String>(
-                    groupValue: _language,
-                    onChanged: (value) {
-                      if (value != null) setState(() => _language = value);
-                    },
+                Flexible(
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        for (final language in [
-                          ..._coreLanguages,
-                          if (_expanded) ..._moreLanguages,
-                        ])
-                          _LanguageRow(language: language),
+                        DawaCard(
+                          padding: EdgeInsets.zero,
+                          child: RadioGroup<String>(
+                            groupValue: _language,
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() => _language = value);
+                                unawaited(
+                                  DawaLocaleController.instance.setLanguage(
+                                    value,
+                                    persist: false,
+                                  ),
+                                );
+                              }
+                            },
+                            child: Column(
+                              children: [
+                                for (final language in DawaLanguages.names)
+                                  _LanguageRow(
+                                    language: language,
+                                    selected: _language == language,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        DawaCard(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 5,
+                          ),
+                          child: Column(
+                            children: [
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                secondary: const Icon(Icons.menu_book_outlined),
+                                title:
+                                    const Text('Use this language for lessons'),
+                                subtitle: const Text(
+                                  'Articles and lessons use this preference.',
+                                ),
+                                value: _lessonLanguage,
+                                activeThumbColor: DawaColors.green,
+                                onChanged: (value) =>
+                                    setState(() => _lessonLanguage = value),
+                              ),
+                              const Divider(height: 1),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                secondary: const Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                ),
+                                title:
+                                    const Text('Use this language with Rudo'),
+                                subtitle: const Text(
+                                  'Rudo will use this language when supported.',
+                                ),
+                                value: _rudoLanguage,
+                                activeThumbColor: DawaColors.green,
+                                onChanged: (value) =>
+                                    setState(() => _rudoLanguage = value),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                TextButton.icon(
-                  onPressed: () => setState(() => _expanded = !_expanded),
-                  icon: const Icon(Icons.language_rounded),
-                  label: Text(_expanded ? 'Fewer languages' : 'More languages'),
-                ),
-                const SizedBox(height: 6),
-                DawaCard(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
-                  child: Column(
-                    children: [
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        secondary: const Icon(Icons.menu_book_outlined),
-                        title: const Text('Use this language for lessons'),
-                        subtitle: const Text(
-                          'Articles and lessons use this preference.',
-                        ),
-                        value: _lessonLanguage,
-                        activeThumbColor: DawaColors.green,
-                        onChanged: (value) =>
-                            setState(() => _lessonLanguage = value),
-                      ),
-                      const Divider(height: 1),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        secondary:
-                            const Icon(Icons.chat_bubble_outline_rounded),
-                        title: const Text('Use this language with Rudo'),
-                        subtitle: const Text(
-                          'Rudo will use this language when supported.',
-                        ),
-                        value: _rudoLanguage,
-                        activeThumbColor: DawaColors.green,
-                        onChanged: (value) =>
-                            setState(() => _rudoLanguage = value),
-                      ),
-                    ],
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -180,21 +205,36 @@ class _DawaLanguageSheetState extends State<DawaLanguageSheet> {
 }
 
 class _LanguageRow extends StatelessWidget {
-  const _LanguageRow({required this.language});
+  const _LanguageRow({
+    required this.language,
+    required this.selected,
+  });
 
   final String language;
+  final bool selected;
 
   @override
-  Widget build(BuildContext context) => RadioListTile<String>(
-        value: language,
-        title: Text(language),
-        secondary: const DawaIconBadge(
-          icon: Icons.language_rounded,
-          size: 34,
+  Widget build(BuildContext context) => Material(
+        color: selected ? DawaColors.softBlue : Colors.transparent,
+        child: RadioListTile<String>(
+          value: language,
+          selected: selected,
+          title: Text(
+            language,
+            style: TextStyle(
+              color: selected ? DawaColors.primary : DawaColors.ink,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+          secondary: DawaIconBadge(
+            icon: Icons.language_rounded,
+            size: 34,
+            color: selected ? DawaColors.primary : DawaColors.muted,
+          ),
+          dense: true,
+          activeColor: DawaColors.primary,
+          controlAffinity: ListTileControlAffinity.trailing,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
         ),
-        dense: true,
-        activeColor: DawaColors.primary,
-        controlAffinity: ListTileControlAffinity.trailing,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
       );
 }

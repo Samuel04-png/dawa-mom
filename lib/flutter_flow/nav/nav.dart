@@ -18,7 +18,9 @@ import '/features/games/presentation/dawa_games_pages.dart';
 import '/features/learning/presentation/dawa_learning_detail_pages.dart';
 import '/features/learning/presentation/dawa_library_page.dart';
 import '/features/learning/presentation/dawa_quest_pages.dart';
+import '/features/learning/presentation/dawa_visual_topic_pages.dart';
 import '/features/notifications/dawa_notifications_page.dart';
+import '/features/notifications/dawa_notification_preferences_page.dart';
 import '/features/onboarding/dawa_onboarding_page.dart';
 import '/features/rewards/presentation/dawa_rewards_page.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -157,6 +159,20 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => const DawaArticlePage(),
         ),
         FFRoute(
+          name: DawaVisualTopicHubPage.routeName,
+          path: DawaVisualTopicHubPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaVisualTopicHubPage(),
+        ),
+        FFRoute(
+          name: DawaVisualTopicGuidePage.routeName,
+          path: DawaVisualTopicGuidePage.routePath,
+          requireAuth: true,
+          builder: (context, params) => DawaVisualTopicGuidePage(
+            topicId: params.getParam('topicId', ParamType.String) ?? '',
+          ),
+        ),
+        FFRoute(
           name: DawaMythFactPage.routeName,
           path: DawaMythFactPage.routePath,
           requireAuth: true,
@@ -245,6 +261,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           path: DawaNotificationsPage.routePath,
           requireAuth: true,
           builder: (context, params) => const DawaNotificationsPage(),
+        ),
+        FFRoute(
+          name: DawaNotificationPreferencesPage.routeName,
+          path: DawaNotificationPreferencesPage.routePath,
+          requireAuth: true,
+          builder: (context, params) => const DawaNotificationPreferencesPage(),
         ),
         FFRoute(
           name: DawaOnboardingPage.routeName,

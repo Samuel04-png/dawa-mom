@@ -6,7 +6,7 @@
 
 
     <application
-        android:label="Dawa Mom"
+        android:label="DawaMom"
         tools:replace="android:label"
         android:icon="@mipmap/app_launcher_icon"
         android:roundIcon="@mipmap/app_launcher_icon"

@@ -46,7 +46,7 @@ class AppointmentResultSummary {
       appointmentId: json['appointment_id']?.toString() ?? '',
       version: int.tryParse(json['version']?.toString() ?? '') ?? 1,
       clinicianDisplayName:
-          json['clinician_display_name']?.toString() ?? 'Your clinician',
+          json['clinician_display_name']?.toString() ?? 'Your health worker',
       clinicName: json['clinic_name']?.toString() ?? 'Your clinic',
       appointmentDate: DateTime.tryParse(
             json['appointment_date']?.toString() ?? '',

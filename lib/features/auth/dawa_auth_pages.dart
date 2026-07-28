@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:go_router/go_router.dart';
 
 import '/auth/supabase_auth/auth_util.dart';
@@ -118,16 +118,16 @@ class DawaWelcomePage extends StatelessWidget {
                           children: [
                             SizedBox(height: height * (compact ? 0.045 : 0.07)),
                             DawaMomLogo(
-                              variant: DawaMomLogoVariant.authentication,
-                              size: compact ? 118 : 140,
-                              width: compact ? 138 : 164,
-                              semanticLabel: 'Dawa Mom',
+                              variant: DawaMomLogoVariant.iconOnly,
+                              size: compact ? 72 : 86,
+                              width: compact ? 72 : 86,
+                              semanticLabel: 'DawaMom',
                             ),
                             SizedBox(height: compact ? 12 : 18),
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                'Dawa Mom',
+                                'DawaMom',
                                 style: context.dawaDisplay.copyWith(
                                   fontSize: compact ? 37 : 43,
                                   letterSpacing: -1.4,
@@ -381,12 +381,12 @@ class _DawaLoginPageState extends State<DawaLoginPage> {
                 ],
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Email or phone number',
                   prefixIcon: Icon(Icons.person_outline_rounded),
                 ),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Enter your email or phone number.'
+                    ? context.tr('Enter your email or phone number.')
                     : null,
               ),
               const SizedBox(height: 14),
@@ -410,8 +410,9 @@ class _DawaLoginPageState extends State<DawaLoginPage> {
                     ),
                   ),
                 ),
-                validator: (value) =>
-                    (value?.length ?? 0) < 6 ? 'Enter your password.' : null,
+                validator: (value) => (value?.length ?? 0) < 6
+                    ? context.tr('Enter your password.')
+                    : null,
               ),
               Align(
                 alignment: Alignment.centerRight,
@@ -430,7 +431,7 @@ class _DawaLoginPageState extends State<DawaLoginPage> {
               TextButton(
                 onPressed: () => context.go('/register'),
                 style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text('New to Dawa Mom?  Create account'),
+                child: const Text('New to DawaMom?  Create account'),
               ),
               const SizedBox(height: 7),
               const Text(
@@ -543,7 +544,7 @@ class _DawaRegistrationPageState extends State<DawaRegistrationPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Join Dawa Mom and get care that supports\nyou and your baby. ♥',
+                'Join DawaMom and get care that supports\nyou and your baby.',
                 textAlign: TextAlign.center,
                 style: context.dawaCaption,
               ),
@@ -588,12 +589,12 @@ class _DawaRegistrationPageState extends State<DawaRegistrationPage> {
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.name],
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Full name',
                   prefixIcon: Icon(Icons.person_outline_rounded),
                 ),
                 validator: (value) => (value?.trim().length ?? 0) < 2
-                    ? 'Enter your full name.'
+                    ? context.tr('Enter your full name.')
                     : null,
               ),
               const SizedBox(height: 11),
@@ -618,11 +619,11 @@ class _DawaRegistrationPageState extends State<DawaRegistrationPage> {
                   final text = value?.trim() ?? '';
                   if (_phoneMode) {
                     return text.replaceAll(RegExp(r'\D'), '').length < 9
-                        ? 'Enter a valid phone number.'
+                        ? context.tr('Enter a valid phone number.')
                         : null;
                   }
                   return !text.contains('@')
-                      ? 'Enter a valid email address.'
+                      ? context.tr('Enter a valid email address.')
                       : null;
                 },
               ),
@@ -646,7 +647,7 @@ class _DawaRegistrationPageState extends State<DawaRegistrationPage> {
                   ),
                 ),
                 validator: (value) => (value?.length ?? 0) < 8
-                    ? 'Use at least 8 characters.'
+                    ? context.tr('Use at least 8 characters.')
                     : null,
               ),
               const SizedBox(height: 11),
@@ -656,12 +657,13 @@ class _DawaRegistrationPageState extends State<DawaRegistrationPage> {
                 autofillHints: const [AutofillHints.newPassword],
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (_) => _register(),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Confirm password',
                   prefixIcon: Icon(Icons.lock_outline_rounded),
                 ),
-                validator: (value) =>
-                    value != _password.text ? 'Passwords do not match.' : null,
+                validator: (value) => value != _password.text
+                    ? context.tr('Passwords do not match.')
+                    : null,
               ),
               const SizedBox(height: 11),
               DawaCard(
@@ -887,7 +889,9 @@ class _DawaPasswordRecoveryPageState extends State<DawaPasswordRecoveryPage> {
                   ),
                 ),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Enter your ${_phoneMode ? 'phone number' : 'email'}.'
+                    ? context.tr(
+                        'Enter your ${_phoneMode ? 'phone number' : 'email'}.',
+                      )
                     : null,
               ),
               if (_codeSent) ...[
@@ -898,7 +902,7 @@ class _DawaPasswordRecoveryPageState extends State<DawaPasswordRecoveryPage> {
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _verify(),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '6-digit verification code',
                     prefixIcon: Icon(Icons.verified_user_outlined),
                   ),

@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '/backend/period_tracker_service.dart';
 import '/components/period_setup/period_setup_flow.dart';
 import '/components/responsive/responsive_layout.dart';
+import '/design_system/dawa_components.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 export 'period_tracker_model.dart';
@@ -299,7 +300,16 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Padding(
+              padding: EdgeInsets.all(18),
+              child: Column(
+                children: [
+                  DawaLoadingSkeleton(lines: 3),
+                  SizedBox(height: 12),
+                  DawaLoadingSkeleton(lines: 2),
+                ],
+              ),
+            )
           : _loadError != null
               ? _LoadError(message: _loadError!, onRetry: _load)
               : _lastPeriodStart == null
@@ -385,7 +395,7 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: _isLate ? const Color(0xFFD54A62) : theme.primary,
+        color: _isLate ? const Color(0xFF9F2337) : theme.primary,
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [
           BoxShadow(
@@ -406,7 +416,7 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
               children: [
                 const Text(
                   'Current cycle',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -421,7 +431,7 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
                   _lastPeriodStart == null
                       ? 'Choose a date below to start tracking'
                       : 'Last period: ${DateFormat('d MMM y').format(_lastPeriodStart!)}',
-                  style: const TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: Colors.white),
                 ),
               ],
             ),
@@ -433,7 +443,7 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
               children: [
                 const Text(
                   'Next period estimate',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -459,7 +469,7 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
                 else if (daysUntil != null && daysUntil >= 0 && _isRegular)
                   Text(
                     '$daysUntil days away • estimate only',
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Colors.white),
                   ),
               ],
             ),
@@ -856,14 +866,14 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
                   TextFormField(
                     controller: cycle,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Average cycle length (days)',
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) {
                       final number = int.tryParse(value ?? '');
                       if (number == null || number < 15 || number > 60) {
-                        return 'Enter a number from 15 to 60.';
+                        return context.tr('Enter a number from 15 to 60.');
                       }
                       return null;
                     },
@@ -872,7 +882,7 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
                   TextFormField(
                     controller: period,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Period length (days)',
                       border: OutlineInputBorder(),
                     ),
@@ -880,10 +890,11 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
                       final number = int.tryParse(value ?? '');
                       final cycleNumber = int.tryParse(cycle.text);
                       if (number == null || number < 1 || number > 15) {
-                        return 'Enter a number from 1 to 15.';
+                        return context.tr('Enter a number from 1 to 15.');
                       }
                       if (cycleNumber != null && number >= cycleNumber) {
-                        return 'Must be shorter than the cycle length.';
+                        return context
+                            .tr('Must be shorter than the cycle length.');
                       }
                       return null;
                     },
@@ -1024,7 +1035,7 @@ class _PeriodTrackerWidgetState extends State<PeriodTrackerWidget> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('About cycle estimates'),
         content: const Text(
-          'Dawa Mom estimates future cycle dates from the information you enter. '
+          'DawaMom estimates future cycle dates from the information you enter. '
           'Cycles can change, and these estimates should not be used as contraception '
           'or to diagnose a health condition. Speak with a healthcare professional if '
           'you are concerned about a late, missed, or unusual period.',
@@ -1290,6 +1301,9 @@ class _PeriodRecordDialogState extends State<_PeriodRecordDialog> {
       initialDate: _startDate,
       firstDate: DateTime(now.year - 5),
       lastDate: now,
+      helpText: context.tr('Choose period start date'),
+      cancelText: context.tr('Cancel'),
+      confirmText: context.tr('Save'),
     );
     if (picked == null) return;
     setState(() {
@@ -1306,6 +1320,9 @@ class _PeriodRecordDialogState extends State<_PeriodRecordDialog> {
       initialDate: _endDate ?? _startDate,
       firstDate: _startDate,
       lastDate: now,
+      helpText: context.tr('Choose period end date'),
+      cancelText: context.tr('Cancel'),
+      confirmText: context.tr('Save'),
     );
     if (picked == null) return;
     setState(() {

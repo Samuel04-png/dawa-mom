@@ -10,8 +10,8 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 class VoiceService {
   VoiceService({AudioPlayer? audioPlayer, FlutterTts? fallbackTts})
-      : _audioPlayer = audioPlayer ?? AudioPlayer(),
-        _fallbackTts = fallbackTts ?? FlutterTts();
+      : _audioPlayer = audioPlayer,
+        _fallbackTts = fallbackTts;
 
   static const String ttsProvider = String.fromEnvironment('TTS_PROVIDER');
   static const String elevenLabsEdgeFunction = String.fromEnvironment(
@@ -33,8 +33,8 @@ class VoiceService {
       String.fromEnvironment('OMNIVOICE_API_KEY');
 
   final SpeechToText _speech = SpeechToText();
-  final AudioPlayer _audioPlayer;
-  final FlutterTts _fallbackTts;
+  AudioPlayer? _audioPlayer;
+  FlutterTts? _fallbackTts;
   String _lastWords = '';
   bool _speechReady = false;
   bool _finalResultDelivered = false;
@@ -127,15 +127,16 @@ class VoiceService {
     if (audioBytes.isEmpty) {
       return;
     }
-    await _audioPlayer.stop();
+    final audioPlayer = _audioPlayer ??= AudioPlayer();
+    await audioPlayer.stop();
     final playbackEnded = Future.any<void>([
-      _audioPlayer.onPlayerComplete.first,
-      _audioPlayer.onPlayerStateChanged
+      audioPlayer.onPlayerComplete.first,
+      audioPlayer.onPlayerStateChanged
           .firstWhere((state) =>
               state == PlayerState.completed || state == PlayerState.stopped)
           .then((_) {}),
     ]);
-    await _audioPlayer.play(
+    await audioPlayer.play(
       BytesSource(audioBytes, mimeType: 'audio/mpeg'),
     );
     await playbackEnded.timeout(const Duration(seconds: 120), onTimeout: () {});
@@ -147,25 +148,28 @@ class VoiceService {
       return;
     }
 
-    await _audioPlayer.stop();
-    await _fallbackTts.stop();
-    await _fallbackTts.awaitSpeakCompletion(true);
-    await _fallbackTts.setLanguage(_ttsLocaleForLanguage(language));
-    await _fallbackTts.setSpeechRate(0.46);
-    await _fallbackTts.setPitch(1.0);
-    await _fallbackTts.setVolume(1.0);
-    await _fallbackTts.speak(trimmedText);
+    final fallbackTts = _fallbackTts ??= FlutterTts();
+    await _audioPlayer?.stop();
+    await fallbackTts.stop();
+    await fallbackTts.awaitSpeakCompletion(true);
+    await fallbackTts.setLanguage(_ttsLocaleForLanguage(language));
+    await fallbackTts.setSpeechRate(0.46);
+    await fallbackTts.setPitch(1.0);
+    await fallbackTts.setVolume(1.0);
+    await fallbackTts.speak(trimmedText);
   }
 
   Future<void> stopPlayback() async {
-    await _audioPlayer.stop();
-    await _fallbackTts.stop();
+    await _audioPlayer?.stop();
+    await _fallbackTts?.stop();
   }
 
   Future<void> dispose() async {
     await _speech.cancel();
     await stopPlayback();
-    await _audioPlayer.dispose();
+    await _audioPlayer?.dispose();
+    _audioPlayer = null;
+    _fallbackTts = null;
   }
 
   void _emitFinalResultIfNeeded() {
@@ -242,7 +246,7 @@ class VoiceService {
       body: jsonEncode(
         isWaveSpeed
             ? _waveSpeedBody(trimmedText, language)
-            : _openAiCompatibleBody(trimmedText, language),
+            : _standardOmniVoiceBody(trimmedText, language),
       ),
     );
 
@@ -259,7 +263,7 @@ class VoiceService {
     return _audioFromJson(response.body);
   }
 
-  Map<String, dynamic> _openAiCompatibleBody(String text, String language) => {
+  Map<String, dynamic> _standardOmniVoiceBody(String text, String language) => {
         'model': 'omnivoice',
         'input': text,
         'voice': 'rudo_female_young_adult_warm',

@@ -11,6 +11,7 @@ import '/components/responsive/dawa_mom_responsive_shell.dart';
 import '/components/responsive/upcoming_appointment_section.dart';
 import '/components/shimmer/shimmer_widget.dart';
 import '/features/settings/dawa_mom_settings_page.dart';
+import '/features/preferences/dawa_user_preferences_repository.dart';
 import '/features/pregnancy/presentation/pregnancy_what_to_expect.dart';
 import '/features/period_tracker/presentation/period_cycle_status_card.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
@@ -19,7 +20,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/services/voice_service.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -28,7 +29,18 @@ export 'home_model.dart';
 import 'dart:math' as math;
 
 class HomeWidget extends StatefulWidget {
-  const HomeWidget({super.key});
+  const HomeWidget({
+    super.key,
+    this.onDashboardReady,
+    this.journeyTourKey,
+    this.rewardsTourKey,
+    this.notificationsTourKey,
+  });
+
+  final VoidCallback? onDashboardReady;
+  final GlobalKey? journeyTourKey;
+  final GlobalKey? rewardsTourKey;
+  final GlobalKey? notificationsTourKey;
 
   static String routeName = 'Home';
   static String routePath = '/home';
@@ -266,6 +278,10 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
         if (_usesDedicatedAppointments) {
           return DawaMomResponsiveDashboard(
             onOpenRudo: () => DawaMomResponsiveShell.openRudo(context),
+            onReady: widget.onDashboardReady,
+            journeyTourKey: widget.journeyTourKey,
+            rewardsTourKey: widget.rewardsTourKey,
+            notificationsTourKey: widget.notificationsTourKey,
           );
         }
 
@@ -956,6 +972,8 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   final List<ChatMessage> _messages = [];
   final Set<String> _messageHashes = {};
   final VoiceService _voiceService = VoiceService();
+  final DawaUserPreferencesRepository _preferencesRepository =
+      DawaUserPreferencesRepository();
   late final AnimationController _voiceController;
   bool _isHandlingVoiceTranscript = false;
 
@@ -968,6 +986,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   String _voiceTranscriptPreview = '';
   String? _voiceErrorMessage;
   String? _sessionId;
+  String _rudoLanguage = DawaLanguages.english;
 
   SupabaseDatabase get _database => SupabaseDatabase.instance;
 
@@ -990,11 +1009,17 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
         setState(() {});
       }
     });
+    DawaUserPreferencesRepository.changes.addListener(
+      _handlePreferencesChanged,
+    );
     _initializeChat();
   }
 
   @override
   void dispose() {
+    DawaUserPreferencesRepository.changes.removeListener(
+      _handlePreferencesChanged,
+    );
     unawaited(_voiceService.dispose());
     _voiceController.dispose();
     _messageController.dispose();
@@ -1003,6 +1028,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   }
 
   Future<void> _initializeChat() async {
+    await _loadRudoLanguage();
     final userId = currentUserUid;
     if (userId.isEmpty) {
       setState(() {
@@ -1025,6 +1051,19 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
         _isConnected = false;
         _isInitializing = false;
       });
+    }
+  }
+
+  void _handlePreferencesChanged() => unawaited(_loadRudoLanguage());
+
+  Future<void> _loadRudoLanguage() async {
+    try {
+      final preferences = await _preferencesRepository.load();
+      _rudoLanguage = preferences.rudoLanguageEnabled
+          ? preferences.language
+          : DawaLanguages.english;
+    } catch (_) {
+      _rudoLanguage = DawaLocaleController.instance.languageName;
     }
   }
 
@@ -1129,6 +1168,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
           'metadata': {
             'phone_number': widget.userPhoneNumber,
             'user_name': widget.userName,
+            'language': _rudoLanguage,
             'source': 'flutter',
           },
         },
@@ -1361,14 +1401,11 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   }
 
   String _currentVoiceLanguage() {
-    final code = Localizations.localeOf(context).languageCode.toLowerCase();
-    return switch (code) {
-      'sn' => 'shona',
-      'nd' => 'ndebele',
-      'toi' => 'tonga',
-      'bem' => 'bemba',
-      'loz' => 'lozi',
-      'ny' => 'chinyanja',
+    return switch (_rudoLanguage.toLowerCase()) {
+      'tonga' => 'tonga',
+      'bemba' => 'bemba',
+      'lozi' => 'lozi',
+      'nyanja' || 'chinyanja' => 'chinyanja',
       _ => 'english',
     };
   }
@@ -1726,7 +1763,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
                       unawaited(_sendMessage(value));
                     }
                   },
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Type your message...',
                     border: InputBorder.none,
                     hintStyle: TextStyle(fontFamily: 'Poppins'),

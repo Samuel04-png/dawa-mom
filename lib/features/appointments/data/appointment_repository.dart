@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '/backend/supabase/supabase_database.dart';
 import '../domain/appointment.dart';
@@ -20,10 +23,16 @@ class AppointmentRepository {
 
   final SupabaseClient _client;
   final ClinicianDirectoryRepository _clinicianDirectory;
+  bool _lastClinicLoadUsedCache = false;
+  DateTime? _lastClinicCacheAt;
 
   static final ValueNotifier<int> changes = ValueNotifier<int>(0);
   static RealtimeChannel? _appointmentsChannel;
   static String? _realtimeUserId;
+  static const _clinicCachePrefix = 'dawa_mom_booking_clinics_v1';
+
+  bool get lastClinicLoadUsedCache => _lastClinicLoadUsedCache;
+  DateTime? get lastClinicCacheAt => _lastClinicCacheAt;
 
   static void _ensureRealtime(SupabaseClient client) {
     final userId = client.auth.currentUser?.id;
@@ -50,19 +59,35 @@ class AppointmentRepository {
   }
 
   Future<List<ClinicOption>> getClinics() async {
-    _requireUserId();
-    final rows = await SupabaseDatabase.instance.runWithFreshSession(
-      () => _client
-          .from('clinics')
-          .select('id,name,address')
-          .not('dawa_clinician_clinic_id', 'is', null)
-          .order('name'),
-    );
-    return (rows as List)
-        .map((row) => ClinicOption.fromJson(
+    final userId = _requireUserId();
+    try {
+      final rows = await SupabaseDatabase.instance.runWithFreshSession(
+        () => _client
+            .from('clinics')
+            .select('id,name,address')
+            .not('dawa_clinician_clinic_id', 'is', null)
+            .order('name'),
+      );
+      final clinics = (rows as List)
+          .map(
+            (row) => ClinicOption.fromJson(
               Map<String, dynamic>.from(row as Map),
-            ))
-        .toList();
+            ),
+          )
+          .toList(growable: false);
+      _lastClinicLoadUsedCache = false;
+      _lastClinicCacheAt = DateTime.now();
+      await _saveClinicCache(userId, clinics, _lastClinicCacheAt!);
+      return clinics;
+    } catch (_) {
+      final cached = await _loadClinicCache(userId);
+      if (cached != null) {
+        _lastClinicLoadUsedCache = true;
+        _lastClinicCacheAt = cached.$1;
+        return cached.$2;
+      }
+      rethrow;
+    }
   }
 
   Future<List<Appointment>> getAppointments() async {
@@ -129,12 +154,13 @@ class AppointmentRepository {
     String appointmentType = 'maternal_health',
     String? reason,
     String? notes,
+    String? idempotencyKey,
   }) async {
-    final userId = _requireUserId();
-    final mother = await _getCurrentMother(userId);
+    _requireUserId();
     final normalizedDate = DateTime(date.year, date.month, date.day);
     final selectedStart =
         Appointment.dateAtTime(normalizedDate, slot.startTime);
+    final requestId = idempotencyKey ?? const Uuid().v4();
     if (!selectedStart.isAfter(DateTime.now())) {
       throw const AppointmentException(
         'Please choose an appointment time in the future.',
@@ -152,7 +178,7 @@ class AppointmentRepository {
     );
     if (!clinicianMatches) {
       throw const AppointmentException(
-        'The selected clinician is not available at this clinic.',
+        'The health worker is not available at this clinic.',
       );
     }
 
@@ -171,45 +197,32 @@ class AppointmentRepository {
       );
     }
 
-    final duplicate = await SupabaseDatabase.instance.runWithFreshSession(
-      () => _client
-          .from('appointments')
-          .select('id')
-          .eq('mother_id', mother['id'])
-          .eq('appointment_date', _dateId(normalizedDate))
-          .eq('start_time', '${slot.startTime}:00')
-          .not('status', 'in', '(cancelled,declined)')
-          .limit(1),
-    );
-    if ((duplicate as List).isNotEmpty) {
-      throw const AppointmentException(
-        'You already have an appointment at this time.',
-      );
-    }
-
     try {
-      final row = await SupabaseDatabase.instance.runWithFreshSession(
-        () => _client
-            .from('appointments')
-            .insert({
-              'mother_id': mother['id'],
-              'patient_id': userId,
-              'clinician_id': clinicianId,
-              'clinic_id': clinicId,
-              'appointment_date': _dateId(normalizedDate),
-              'start_time': '${slot.startTime}:00',
-              'end_time': '${slot.endTime}:00',
-              'appointment_type': appointmentType,
-              'reason': _nullIfBlank(reason),
-              'notes': _nullIfBlank(notes),
-              'status': 'pending',
-              'source': 'dawa_mom',
-              'created_by': userId,
-              'integration_status': 'pending',
-            })
-            .select()
-            .single(),
+      final result = await SupabaseDatabase.instance.runWithFreshSession(
+        () => _client.rpc(
+          'book_dawa_mom_appointment',
+          params: {
+            'p_clinic_id': clinicId,
+            'p_clinician_id': clinicianId,
+            'p_appointment_date': _dateId(normalizedDate),
+            'p_start_time': '${slot.startTime}:00',
+            'p_end_time': '${slot.endTime}:00',
+            'p_appointment_type': appointmentType,
+            'p_reason': _nullIfBlank(reason),
+            'p_notes': _nullIfBlank(notes),
+            'p_idempotency_key': requestId,
+          },
+        ),
       );
+      final row = switch (result) {
+        final Map value => Map<String, dynamic>.from(value),
+        final List value when value.isNotEmpty =>
+          Map<String, dynamic>.from(value.first as Map),
+        _ => throw const AppointmentException(
+            'The booking service returned an invalid response. Please refresh before trying again.',
+            retryable: true,
+          ),
+      };
       final appointment = Appointment.fromJson(Map<String, dynamic>.from(row));
       final decorated = await _decorateAppointments([appointment]);
       changes.value += 1;
@@ -228,7 +241,13 @@ class AppointmentRepository {
       }
       if (error.code == '23514') {
         throw const AppointmentException(
-          'The clinic, clinician, or appointment time is no longer valid.',
+          'The clinic, health worker or appointment time is no longer available.',
+          retryable: true,
+        );
+      }
+      if (error.code == 'PGRST202' || error.code == '42883') {
+        throw const AppointmentException(
+          'Secure booking is being updated. Please try again shortly.',
           retryable: true,
         );
       }
@@ -262,22 +281,6 @@ class AppointmentRepository {
     }
   }
 
-  Future<Map<String, dynamic>> _getCurrentMother(String userId) async {
-    final row = await SupabaseDatabase.instance.runWithFreshSession(
-      () => _client
-          .from('mothers')
-          .select('id,profile_id,name')
-          .eq('profile_id', userId)
-          .maybeSingle(),
-    );
-    if (row == null) {
-      throw const AppointmentException(
-        'Complete your health profile before booking an appointment.',
-      );
-    }
-    return Map<String, dynamic>.from(row);
-  }
-
   Future<List<Appointment>> _decorateAppointments(
     List<Appointment> appointments,
   ) async {
@@ -303,7 +306,7 @@ class AppointmentRepository {
       final clinician = clinicianById[appointment.clinicianId];
       final clinic = clinicById[appointment.clinicId];
       return appointment.copyWith(
-        clinicianName: clinician?.displayName ?? 'Clinician',
+        clinicianName: clinician?.displayName ?? 'Health worker',
         clinicianTitle: clinician?.professionalTitle,
         clinicianSpeciality: clinician?.speciality,
         clinicName: clinician?.clinicName ?? clinic?.name ?? 'Clinic',
@@ -331,5 +334,61 @@ class AppointmentRepository {
   static String? _nullIfBlank(String? value) {
     final trimmed = value?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  Future<void> _saveClinicCache(
+    String userId,
+    List<ClinicOption> clinics,
+    DateTime cachedAt,
+  ) async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(
+        '$_clinicCachePrefix-$userId',
+        jsonEncode({
+          'cached_at': cachedAt.toUtc().toIso8601String(),
+          'clinics': clinics
+              .map(
+                (clinic) => {
+                  'id': clinic.id,
+                  'name': clinic.name,
+                  'address': clinic.address,
+                },
+              )
+              .toList(growable: false),
+        }),
+      );
+    } catch (_) {
+      // Clinic caching is a non-blocking resilience feature. A successful
+      // authenticated directory response remains usable if local storage is
+      // unavailable.
+    }
+  }
+
+  Future<(DateTime, List<ClinicOption>)?> _loadClinicCache(
+    String userId,
+  ) async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final encoded = preferences.getString('$_clinicCachePrefix-$userId');
+      if (encoded == null || encoded.isEmpty) return null;
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map) return null;
+      final json = Map<String, dynamic>.from(decoded);
+      final cachedAt = DateTime.tryParse(json['cached_at']?.toString() ?? '');
+      final rows = json['clinics'];
+      if (cachedAt == null || rows is! List) return null;
+      final clinics = rows
+          .whereType<Map>()
+          .map(
+            (row) => ClinicOption.fromJson(
+              Map<String, dynamic>.from(row),
+            ),
+          )
+          .toList(growable: false);
+      return clinics.isEmpty ? null : (cachedAt, clinics);
+    } catch (_) {
+      return null;
+    }
   }
 }

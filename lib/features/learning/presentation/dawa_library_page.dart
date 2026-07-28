@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:go_router/go_router.dart';
 
 import '/components/responsive/dawa_mom_responsive_shell.dart';
+import '/content/dawa_learning_asset_registry.dart';
 import '/design_system/dawa_components.dart';
+import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
 import '../data/dawa_learning_repository.dart';
@@ -99,7 +101,7 @@ class _DawaLibraryPageState extends State<DawaLibraryPage> {
             const SizedBox(height: 10),
             TextField(
               onChanged: (value) => setState(() => _query = value),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Search your saved content...',
                 prefixIcon: Icon(Icons.search_rounded),
               ),
@@ -109,11 +111,12 @@ class _DawaLibraryPageState extends State<DawaLibraryPage> {
               future: _state,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(48),
-                      child: CircularProgressIndicator(),
-                    ),
+                  return const Column(
+                    children: [
+                      DawaLoadingSkeleton(lines: 2),
+                      SizedBox(height: DawaSpacing.sm),
+                      DawaLoadingSkeleton(lines: 3),
+                    ],
                   );
                 }
                 final state = snapshot.data ?? const DawaLearningState();
@@ -214,7 +217,7 @@ class _DawaLibraryPageState extends State<DawaLibraryPage> {
                                 Text('Need more learning help?',
                                     style: context.dawaSectionTitle),
                                 Text(
-                                  'Ask Rudo for general guidance and personalised navigation.',
+                                  'Ask Rudo for help finding the right health page.',
                                   style: context.dawaCaption,
                                 ),
                               ],
@@ -259,17 +262,14 @@ class _LibraryItemCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Container(
+            SizedBox(
               width: 88,
-              height: 94,
-              decoration: BoxDecoration(
-                color: DawaColors.softBlue,
-                borderRadius: BorderRadius.circular(DawaRadii.small),
-              ),
-              child: Image.asset(
-                item.asset,
-                fit: BoxFit.contain,
-                excludeFromSemantics: true,
+              child: DawaContextualImage(
+                assetId: item.visualAssetId,
+                variant: DawaImageVariant.cardSideImage,
+                borderRadius: BorderRadius.all(
+                  Radius.circular(DawaRadii.small),
+                ),
               ),
             ),
             const SizedBox(width: 12),

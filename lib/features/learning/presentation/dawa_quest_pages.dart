@@ -1,10 +1,15 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '/content/dawa_learning_asset_registry.dart';
 import '/design_system/dawa_components.dart';
+import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
+import '/services/voice_service.dart';
 import '../data/dawa_learning_repository.dart';
 
 class DawaQuestHubPage extends StatefulWidget {
@@ -42,67 +47,21 @@ class _DawaQuestHubPageState extends State<DawaQuestHubPage> {
               onProfile: () => context.go('/settings'),
             ),
             Text(
-              'Stories, lessons and quests for your health journey.',
+              'Stories, lessons and small steps for your health.',
               style: context.dawaCaption,
             ),
             const SizedBox(height: 12),
-            DawaCard(
-              padding: EdgeInsets.zero,
-              child: SizedBox(
-                height: 200,
-                child: Stack(
-                  children: [
-                    const Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: DawaColors.softBlue,
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: DawaBreakpoints.isMobile(context) ? 10 : 40,
-                      bottom: 0,
-                      height: 194,
-                      width: DawaBreakpoints.isMobile(context) ? 130 : 170,
-                      child: Image.asset(
-                        DawaArtwork.banaWelcome,
-                        fit: BoxFit.contain,
-                        excludeFromSemantics: true,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 440),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '♥  Your guide, your friend',
-                              style: TextStyle(
-                                color: DawaColors.green,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Bana Chenjela\nis here to guide you.',
-                              style: context.dawaDisplay.copyWith(fontSize: 25),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Learn in small steps and earn healthy-action rewards.',
-                              style: context.dawaCaption,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            const DawaIllustratedHeroCard(
+              category: 'Your guide and friend',
+              title: 'Bana Chenjela is here to guide you',
+              subtitle:
+                  'Learn in small steps, build confidence and earn Dawa points for completed healthy actions.',
+              illustrationPath: DawaArtwork.banaWelcome,
+              contextualAssetId: 'screening_without_fear_01',
+              illustrationAspectRatio: .9,
+              backgroundColor: DawaColors.softBlue,
+              semanticLabel:
+                  'Bana Chenjela welcomes you to Mother’s Path quests',
             ),
             const SizedBox(height: 14),
             DawaCard(
@@ -122,7 +81,7 @@ class _DawaQuestHubPageState extends State<DawaQuestHubPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'THE MOTHER’S PATH',
+                              'The Mother’s Path',
                               style: TextStyle(
                                 color: DawaColors.green,
                                 fontSize: 9,
@@ -134,7 +93,7 @@ class _DawaQuestHubPageState extends State<DawaQuestHubPage> {
                               style: context.dawaTitle.copyWith(fontSize: 18),
                             ),
                             Text(
-                              'Learn why screening is safe, simple and life-saving.',
+                              'Learn how screening can find cell changes early and what to expect at a clinic.',
                               style: context.dawaCaption,
                             ),
                           ],
@@ -245,14 +204,14 @@ class _DawaQuestHubPageState extends State<DawaQuestHubPage> {
                   icon: Icons.auto_stories_rounded,
                   title: 'Continue Mother’s Path',
                   description: 'Explore more stories and complete the quest.',
-                  action: 'Continue journey',
+                  action: 'Keep going',
                   onTap: () => context.push('/learn/quests/screening'),
                 ),
                 _QuestActionCard(
                   icon: Icons.groups_outlined,
                   title: 'Women’s cohort',
                   description:
-                      'Learn alongside other women on their health journey.',
+                      'Learn with other women who are caring for their health.',
                   action: 'Continue learning',
                   onTap: () => context.push('/learn/quests/screening'),
                 ),
@@ -288,7 +247,6 @@ class _QuestActionCard extends StatelessWidget {
             Text(title, style: context.dawaSectionTitle),
             const SizedBox(height: 4),
             Text(description, style: context.dawaCaption),
-            const Spacer(),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: onTap,
@@ -299,11 +257,58 @@ class _QuestActionCard extends StatelessWidget {
       );
 }
 
-class DawaQuestModulePage extends StatelessWidget {
+class DawaQuestModulePage extends StatefulWidget {
   const DawaQuestModulePage({super.key});
 
   static const routeName = 'QuestModule';
   static const routePath = '/learn/quests/screening';
+
+  @override
+  State<DawaQuestModulePage> createState() => _DawaQuestModulePageState();
+}
+
+class _DawaQuestModulePageState extends State<DawaQuestModulePage> {
+  late final VoiceService _voiceService;
+  bool _speaking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _voiceService = VoiceService();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_voiceService.dispose());
+    super.dispose();
+  }
+
+  Future<void> _toggleGuideAudio() async {
+    if (_speaking) {
+      await _voiceService.stopPlayback();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    setState(() => _speaking = true);
+    try {
+      await _voiceService.speakText(
+        'Let us walk through cervical screening together. '
+            'I will explain why screening matters, what a clinic visit may involve, '
+            'and how to ask questions about your care.',
+        'English',
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Audio is not available on this device right now.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _speaking = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => DawaPageScaffold(
@@ -314,63 +319,53 @@ class DawaQuestModulePage extends StatelessWidget {
             DawaAppHeader(title: 'Screening Without Fear', onBack: context.pop),
             const SizedBox(height: 10),
             DawaCard(
-              padding: EdgeInsets.zero,
-              child: SizedBox(
-                height: 230,
-                child: Stack(
-                  children: [
-                    const Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: DawaColors.softBlue,
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
+              color: DawaColors.softGreen,
+              borderColor: DawaColors.green.withValues(alpha: .22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Step 3 of 4',
+                          style: context.dawaSectionTitle,
                         ),
                       ),
-                    ),
-                    Positioned(
-                      right: 10,
-                      bottom: 0,
-                      width: 175,
-                      height: 220,
-                      child: Image.asset(
-                        DawaArtwork.banaWelcome,
-                        fit: BoxFit.contain,
-                        excludeFromSemantics: true,
+                      const DawaStatusPill(
+                        label: '+20 points',
+                        icon: Icons.toll_rounded,
+                        color: DawaColors.gold,
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 390),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Bana Chenjela',
-                              style: context.dawaSectionTitle
-                                  .copyWith(color: DawaColors.green),
-                            ),
-                            const SizedBox(height: 9),
-                            Text(
-                              'Let’s walk through screening together. I’ll show you what to expect, step by step.',
-                              style: context.dawaTitle.copyWith(fontSize: 18),
-                            ),
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: () {},
-                              icon: const Icon(Icons.volume_up_outlined),
-                              label: const Text('Play in Nyanja'),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const DawaProgressBar(
+                    value: .6,
+                    semanticLabel: 'Screening quest 60 percent complete',
+                    color: DawaColors.green,
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    '60% complete • Screening Champion badge in progress',
+                    style: context.dawaCaption,
+                  ),
+                ],
               ),
+            ),
+            const SizedBox(height: 10),
+            DawaIllustratedHeroCard(
+              category: 'Bana Chenjela, your guide',
+              title: 'Let’s walk through screening together',
+              subtitle:
+                  'I’ll show you what a clinic visit may involve, step by step.',
+              illustrationPath: DawaArtwork.banaWelcome,
+              contextualAssetId: 'screening_without_fear_02',
+              illustrationAspectRatio: .9,
+              primaryActionLabel: _speaking ? 'Stop audio' : 'Listen to guide',
+              onPrimaryAction: _toggleGuideAudio,
+              backgroundColor: DawaColors.softBlue,
+              semanticLabel: 'Bana Chenjela screening guide',
             ),
             const SizedBox(height: 12),
             const _QuestStep(
@@ -378,14 +373,14 @@ class DawaQuestModulePage extends StatelessWidget {
               icon: Icons.help_outline_rounded,
               title: 'What is screening?',
               subtitle: 'Learn why screening is important.',
-              state: 'Learn',
+              state: 'Completed',
             ),
             const _QuestStep(
               number: 2,
               icon: Icons.health_and_safety_outlined,
               title: 'Will it hurt?',
               subtitle: 'Find out what to expect.',
-              state: 'Learn',
+              state: 'Completed',
             ),
             _QuestStep(
               number: 3,
@@ -440,59 +435,13 @@ class _QuestStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
-        child: DawaCard(
-          padding: const EdgeInsets.all(12),
+        child: DawaModuleRow(
+          stepNumber: number,
+          icon: icon,
+          title: title,
+          description: subtitle,
+          status: state,
           onTap: onTap,
-          semanticLabel: 'Step $number. $title. $state.',
-          child: Row(
-            children: [
-              DawaIconBadge(
-                icon: icon,
-                color: DawaColors.primary,
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 25,
-                height: 25,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: DawaColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '$number',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: context.dawaSectionTitle),
-                    Text(subtitle, style: context.dawaCaption),
-                  ],
-                ),
-              ),
-              Text(
-                state,
-                style: context.dawaCaption.copyWith(
-                  color: DawaColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Icon(
-                onTap == null
-                    ? Icons.circle_outlined
-                    : Icons.chevron_right_rounded,
-                color: DawaColors.primary,
-              ),
-            ],
-          ),
         ),
       );
 }
@@ -538,26 +487,24 @@ class DawaClinicLessonPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'It checks for changes in the cervix so treatment can start early — when it works best.',
+                          'It checks for changes in the cervix. This means care can start early.',
                           style: context.dawaBody,
                         ),
                       ],
                     ),
                   );
-                  final image = Image.asset(
-                    DawaArtwork.clinicConversation,
-                    height: 310,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topCenter,
+                  const image = DawaContextualImage(
+                    assetId: 'screening_without_fear_03',
+                    variant: DawaImageVariant.moduleThumbnail,
+                    borderRadius: BorderRadius.zero,
                     semanticLabel:
-                        'A clinician explains cervical screening to a woman.',
+                        'A health worker and patient review screening preparation.',
                   );
                   if (constraints.maxWidth < 680) {
                     return Column(children: [copy, image]);
                   }
                   return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(child: copy),
                       Expanded(child: image),
@@ -585,14 +532,14 @@ class DawaClinicLessonPage extends StatelessWidget {
                   icon: Icons.medical_services_outlined,
                   title: 'Quick screening test',
                   description:
-                      'A trained clinician performs the test in a few minutes.',
+                      'A trained health worker does the test in a few minutes.',
                 ),
                 _ClinicStep(
                   number: 3,
                   icon: Icons.assignment_turned_in_outlined,
                   title: 'Get your next steps',
                   description:
-                      'The clinician explains results and follow-up timing.',
+                      'The health worker explains the results and what happens next.',
                 ),
               ],
             ),
@@ -606,7 +553,7 @@ class DawaClinicLessonPage extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Screening is usually quick. Ask the clinician to explain any step and tell them if you are uncomfortable.',
+                      'Screening is usually quick. Ask the health worker to explain each step. Tell them if you feel uncomfortable.',
                       style: context.dawaBody,
                     ),
                   ),
@@ -746,7 +693,7 @@ class _DawaQuestCheckpointPageState extends State<DawaQuestCheckpointPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'THE MOTHER’S PATH',
+                    'The Mother’s Path',
                     style: TextStyle(
                       color: DawaColors.green,
                       fontSize: 9,
@@ -808,13 +755,11 @@ class _DawaQuestCheckpointPageState extends State<DawaQuestCheckpointPage> {
                     color: DawaColors.softBlue,
                     child: Row(
                       children: [
-                        SizedBox(
+                        const SizedBox(
                           width: 85,
-                          height: 110,
-                          child: Image.asset(
-                            DawaArtwork.banaExplain,
-                            fit: BoxFit.contain,
-                            excludeFromSemantics: true,
+                          child: DawaContextualImage(
+                            assetId: 'screening_without_fear_04',
+                            variant: DawaImageVariant.cardSideImage,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -840,7 +785,7 @@ class _DawaQuestCheckpointPageState extends State<DawaQuestCheckpointPage> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Eligibility and screening intervals vary. Follow qualified local clinical guidance.',
+                            'Who needs screening and when can differ. Follow advice from a trained health worker at your clinic.',
                             style: context.dawaBody,
                           ),
                         ),
@@ -988,84 +933,62 @@ class _DawaQuestCompletePageState extends State<DawaQuestCompletePage> {
               style: context.dawaCaption,
             ),
             const SizedBox(height: 12),
-            DawaCard(
-              color: DawaColors.softGreen,
-              borderColor: DawaColors.green.withValues(alpha: 0.3),
-              child: Row(
-                children: [
-                  const DawaIconBadge(
-                    icon: Icons.check_rounded,
-                    color: DawaColors.green,
-                    size: 64,
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'THE MOTHER’S PATH',
-                          style: TextStyle(
-                            color: DawaColors.green,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          'You completed\nScreening Without Fear.',
-                          style: context.dawaTitle.copyWith(fontSize: 22),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'You’re one step closer to a healthy you and a healthy baby.',
-                          style: context.dawaCaption,
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: 120,
-                    height: 160,
-                    child: Image.asset(
-                      DawaArtwork.banaCelebrate,
-                      fit: BoxFit.contain,
-                      excludeFromSemantics: true,
-                    ),
-                  ),
-                ],
-              ),
+            const DawaIllustratedHeroCard(
+              category: 'The Mother’s Path, complete',
+              title: 'You completed Screening Without Fear',
+              subtitle:
+                  'You now know what screening is, what happens at the clinic, and why finding cell changes early matters.',
+              illustrationPath: DawaArtwork.banaCelebrate,
+              contextualAssetId: 'screening_without_fear_05',
+              illustrationAspectRatio: .9,
+              progress: 1,
+              progressLabel: 'Journey step complete',
+              backgroundColor: DawaColors.softGreen,
+              borderColor: Color(0x4D42BE53),
+              semanticLabel:
+                  'Screening Without Fear completed. Mother’s Path step complete.',
             ),
             const SizedBox(height: 12),
+            const DawaSectionHeader(
+              title: 'Your achievements',
+              subtitle: 'Your progress is saved in DawaMom',
+            ),
+            const SizedBox(height: 8),
             FutureBuilder<DawaLearningState>(
               future: _state,
               builder: (context, snapshot) => DawaResponsiveGrid(
-                mobileColumns: 1,
+                mobileColumns: 3,
                 tabletColumns: 3,
                 desktopColumns: 3,
+                spacing: 8,
                 children: [
                   _AchievementCard(
                     icon: Icons.monetization_on_rounded,
                     color: DawaColors.gold,
-                    title: _wasAlreadyComplete ? '20 coin reward' : '+20 coins',
-                    subtitle: 'Balance ${snapshot.data?.coins ?? '…'} coins',
+                    title: '+20 points',
+                    subtitle: _wasAlreadyComplete
+                        ? 'Already collected • ${snapshot.data?.coins ?? '…'} total'
+                        : '${snapshot.data?.coins ?? '…'} total',
                   ),
                   const _AchievementCard(
                     icon: Icons.workspace_premium_rounded,
                     color: DawaColors.green,
-                    title: 'Knowledge milestone',
-                    subtitle: 'Quest completion saved',
+                    title: 'Screening Champion',
+                    subtitle: 'Badge advanced',
                   ),
                   const _AchievementCard(
                     icon: Icons.auto_stories_rounded,
                     color: DawaColors.purple,
-                    title: 'Keep learning',
-                    subtitle: 'At the Clinic is ready to read',
+                    title: 'Story unlocked',
+                    subtitle: 'At the Clinic',
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
             DawaCard(
+              color: DawaColors.softBlue,
+              borderColor: DawaColors.primary.withValues(alpha: .16),
               child: Row(
                 children: [
                   const DawaIconBadge(
@@ -1074,9 +997,17 @@ class _DawaQuestCompletePageState extends State<DawaQuestCompletePage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      'You learned what screening is, what happens at the clinic, and why finding cell changes early matters.',
-                      style: context.dawaBody,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('What you learned',
+                            style: context.dawaSectionTitle),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Screening can find cell changes before you feel ill. A health worker should explain each step and your results.',
+                          style: context.dawaBody,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1099,10 +1030,65 @@ class _DawaQuestCompletePageState extends State<DawaQuestCompletePage> {
                   icon: Icons.route_rounded,
                   title: 'Continue Mother’s Path',
                   description: 'Explore more stories and healthy actions.',
-                  action: 'Continue journey',
+                  action: 'Keep going',
                   onTap: () => context.go('/learn'),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            DawaCard(
+              color: DawaColors.softPurple,
+              borderColor: DawaColors.purple.withValues(alpha: .2),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 72,
+                    child: DawaContextualImage(
+                      assetId: 'screening_without_fear_05',
+                      variant: DawaImageVariant.cardSideImage,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Community momentum',
+                            style: context.dawaSectionTitle),
+                        const SizedBox(height: 3),
+                        Text(
+                          'You’re part of a growing community choosing informed, preventive care.',
+                          style: context.dawaCaption,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            DawaCard(
+              color: DawaColors.softGreen,
+              borderColor: DawaColors.green.withValues(alpha: .2),
+              child: Row(
+                children: [
+                  const DawaIconBadge(
+                    icon: Icons.toll_rounded,
+                    color: DawaColors.gold,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Keep earning Dawa points through learning, tracking and health games.',
+                      style: context.dawaBody,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => context.go('/learn/rewards'),
+                    child: const Text('How it works'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -1124,15 +1110,27 @@ class _AchievementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DawaCard(
+        color: color.withValues(alpha: .08),
+        borderColor: color.withValues(alpha: .2),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 12),
         child: Column(
           children: [
-            Icon(icon, color: color, size: 38),
-            const SizedBox(height: 8),
-            Text(title,
-                textAlign: TextAlign.center, style: context.dawaSectionTitle),
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: context.dawaCaption.copyWith(
+                color: DawaColors.ink,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 3),
-            Text(subtitle,
-                textAlign: TextAlign.center, style: context.dawaCaption),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: context.dawaCaption.copyWith(fontSize: 9.5),
+            ),
           ],
         ),
       );
@@ -1200,217 +1198,279 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
           borderRadius: BorderRadius.circular(DawaRadii.large),
         ),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    tooltip: 'Close reward dialog',
-                    onPressed: _busy
-                        ? null
-                        : () => Navigator.pop(
-                              context,
-                              _redemption?.state,
-                            ),
-                    icon: const Icon(Icons.close_rounded),
+          constraints: BoxConstraints(
+            maxWidth: 480,
+            maxHeight: MediaQuery.sizeOf(context).height * .9,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      tooltip: 'Close reward dialog',
+                      onPressed: _busy
+                          ? null
+                          : () => Navigator.pop(
+                                context,
+                                _redemption?.state,
+                              ),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
                   ),
-                ),
-                Text(
-                  _redemption == null
-                      ? 'Redeem reward'
-                      : _redemption!.alreadyRedeemed
-                          ? 'Your voucher'
-                          : 'Reward redeemed!',
-                  style: context.dawaTitle,
-                ),
-                Text(
-                  _redemption == null
-                      ? 'You’re just a few healthy actions away from great care.'
-                      : 'Show this code at a participating Dawa clinic.',
-                  textAlign: TextAlign.center,
-                  style: context.dawaCaption,
-                ),
-                const SizedBox(height: 12),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: .84, end: 1),
-                  duration: const Duration(milliseconds: 420),
-                  curve: Curves.easeOutBack,
-                  builder: (context, value, child) =>
-                      Transform.scale(scale: value, child: child),
-                  child: Icon(
+                  Text(
                     _redemption == null
-                        ? Icons.redeem_rounded
-                        : Icons.verified_rounded,
-                    color: _redemption == null
-                        ? DawaColors.primary
-                        : DawaColors.green,
-                    size: 78,
+                        ? 'Redeem reward'
+                        : _redemption!.alreadyRedeemed
+                            ? 'Your voucher'
+                            : 'Reward redeemed!',
+                    style: context.dawaTitle,
                   ),
-                ),
-                const SizedBox(height: 12),
-                DawaCard(
-                  color: _redemption == null
-                      ? DawaColors.softBlue
-                      : DawaColors.softGreen,
-                  borderColor: _redemption == null
-                      ? DawaColors.line
-                      : DawaColors.green.withValues(alpha: .35),
-                  child: _redemption == null
-                      ? Row(
-                          children: [
-                            const DawaIconBadge(
-                              icon: Icons.card_giftcard_rounded,
-                              color: DawaColors.green,
+                  Text(
+                    _redemption == null
+                        ? 'You’re just a few healthy actions away from great care.'
+                        : 'Show this code at a participating Dawa clinic.',
+                    textAlign: TextAlign.center,
+                    style: context.dawaCaption,
+                  ),
+                  const SizedBox(height: 12),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: .84, end: 1),
+                    duration: const Duration(milliseconds: 420),
+                    curve: Curves.easeOutBack,
+                    builder: (context, value, child) =>
+                        Transform.scale(scale: value, child: child),
+                    child: _redemption == null
+                        ? SizedBox(
+                            width: 118,
+                            height: 102,
+                            child: Image.asset(
+                              DawaArtwork.motherReward,
+                              fit: BoxFit.contain,
+                              excludeFromSemantics: true,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Free scan voucher',
-                                      style: context.dawaSectionTitle),
-                                  const Text(
-                                    '1000 points',
-                                    style: TextStyle(
-                                      color: DawaColors.green,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Use at a participating Dawa clinic.',
-                                    style: context.dawaCaption,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        )
-                      : Semantics(
-                          label:
-                              'Free scan voucher code ${_redemption!.voucherCode}',
-                          child: Column(
+                          )
+                        : const Icon(
+                            Icons.verified_rounded,
+                            color: DawaColors.green,
+                            size: 78,
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  DawaCard(
+                    color: _redemption == null
+                        ? DawaColors.softBlue
+                        : DawaColors.softGreen,
+                    borderColor: _redemption == null
+                        ? DawaColors.line
+                        : DawaColors.green.withValues(alpha: .35),
+                    child: _redemption == null
+                        ? Row(
                             children: [
-                              Text(
-                                'FREE SCAN VOUCHER',
-                                style: context.dawaCaption.copyWith(
-                                  color: DawaColors.green,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              const DawaIconBadge(
+                                icon: Icons.card_giftcard_rounded,
+                                color: DawaColors.green,
                               ),
-                              const SizedBox(height: 6),
-                              SelectionArea(
-                                child: Text(
-                                  _redemption!.voucherCode,
-                                  textAlign: TextAlign.center,
-                                  style: context.dawaTitle.copyWith(
-                                    color: DawaColors.green,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 7),
-                              TextButton.icon(
-                                onPressed: () async {
-                                  await Clipboard.setData(
-                                    ClipboardData(
-                                      text: _redemption!.voucherCode,
-                                    ),
-                                  );
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Voucher code copied'),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Free scan voucher',
+                                        style: context.dawaSectionTitle),
+                                    const Text(
+                                      '1000 points',
+                                      style: TextStyle(
+                                        color: DawaColors.green,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                    );
-                                  }
-                                },
-                                icon: const Icon(Icons.copy_rounded, size: 18),
-                                label: const Text('Copy code'),
+                                    ),
+                                    Text(
+                                      'Use at a participating Dawa clinic.',
+                                      style: context.dawaCaption,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
+                          )
+                        : Semantics(
+                            label:
+                                'Free scan voucher code ${_redemption!.voucherCode}',
+                            child: Column(
+                              children: [
+                                Text(
+                                  'FREE SCAN VOUCHER',
+                                  style: context.dawaCaption.copyWith(
+                                    color: DawaColors.green,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                SelectionArea(
+                                  child: Text(
+                                    _redemption!.voucherCode,
+                                    textAlign: TextAlign.center,
+                                    style: context.dawaTitle.copyWith(
+                                      color: DawaColors.green,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 7),
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    await Clipboard.setData(
+                                      ClipboardData(
+                                        text: _redemption!.voucherCode,
+                                      ),
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Voucher code copied'),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  icon:
+                                      const Icon(Icons.copy_rounded, size: 18),
+                                  label: const Text('Copy code'),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                ),
-                if (_redemption == null) ...[
+                  ),
+                  if (_redemption == null) ...[
+                    const SizedBox(height: 10),
+                    DawaCard(
+                      child: Column(
+                        children: [
+                          _BalanceRow(
+                            label: 'Current balance',
+                            value: '${widget.initialState.coins} points',
+                          ),
+                          const Divider(),
+                          _BalanceRow(
+                            label: 'Balance after redemption',
+                            value:
+                                '${(widget.initialState.coins - 1000).clamp(0, 999999)} points',
+                            color: DawaColors.green,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _redemption!.alreadyRedeemed
+                          ? 'This is the same secure code issued for your earlier redemption.'
+                          : 'Your new balance is ${_redemption!.state.coins} points. Keep this code for your clinic visit.',
+                      textAlign: TextAlign.center,
+                      style: context.dawaCaption,
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   DawaCard(
-                    child: Column(
+                    color: DawaColors.softGreen,
+                    borderColor: DawaColors.green.withValues(alpha: .22),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _BalanceRow(
-                          label: 'Current balance',
-                          value: '${widget.initialState.coins} points',
-                        ),
-                        const Divider(),
-                        _BalanceRow(
-                          label: 'Balance after redemption',
-                          value:
-                              '${(widget.initialState.coins - 1000).clamp(0, 999999)} points',
+                        const Icon(
+                          Icons.bolt_rounded,
                           color: DawaColors.green,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _redemption == null
+                                ? 'A secure voucher code is generated after confirmation and can be used at participating Dawa clinics.'
+                                : 'Keep your voucher code private and show it to the participating clinic when arranging eligible care.',
+                            style: context.dawaCaption.copyWith(
+                              color: DawaColors.ink,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ] else ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    _redemption!.alreadyRedeemed
-                        ? 'This is the same secure code issued for your earlier redemption.'
-                        : 'Your new balance is ${_redemption!.state.coins} points. Keep this code for your clinic visit.',
-                    textAlign: TextAlign.center,
-                    style: context.dawaCaption,
-                  ),
-                ],
-                if (_error != null) ...[
-                  const SizedBox(height: 10),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: context.dawaCaption
-                          .copyWith(color: DawaColors.danger),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                if (_redemption != null)
-                  DawaPrimaryButton(
-                    label: 'Done',
-                    icon: Icons.check_rounded,
-                    onPressed: () => Navigator.pop(context, _redemption!.state),
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed:
-                              _busy ? null : () => Navigator.pop(context),
-                          child: const Text('Maybe later'),
-                        ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 10),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: context.dawaCaption
+                            .copyWith(color: DawaColors.danger),
                       ),
-                      const SizedBox(width: 10),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.verified_user_outlined,
+                        color: DawaColors.green,
+                        size: 19,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: FilledButton(
-                          onPressed: _busy ? null : _redeem,
-                          child: _busy
-                              ? const SizedBox.square(
-                                  dimension: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text('Redeem now'),
+                        child: Text(
+                          'Redemption is subject to participating-clinic and clinical eligibility terms.',
+                          style: context.dawaCaption,
                         ),
                       ),
                     ],
                   ),
-              ],
+                  const SizedBox(height: 12),
+                  if (_redemption != null)
+                    DawaPrimaryButton(
+                      label: 'Done',
+                      icon: Icons.check_rounded,
+                      onPressed: () =>
+                          Navigator.pop(context, _redemption!.state),
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed:
+                                _busy ? null : () => Navigator.pop(context),
+                            child: const Text('Maybe later'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _busy ? null : _redeem,
+                            child: _busy
+                                ? const SizedBox.square(
+                                    dimension: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Redeem now'),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             ),
           ),
         ),

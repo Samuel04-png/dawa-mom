@@ -1,6 +1,6 @@
-# Dawa Mom
+# DawaMom
 
-Dawa Mom is a Flutter maternal health companion app. It supports patient onboarding, appointment views, pregnancy-week guidance, period tracking, and Rudo chat through Supabase-backed data and Edge Functions.
+DawaMom is a Flutter maternal health companion app. It supports patient onboarding, appointment views, pregnancy-week guidance, period tracking, and Rudo chat through Supabase-backed data and Edge Functions.
 
 The active app runtime is Supabase-backed. Firebase project files, Firebase Gradle plugins, Firebase iOS pods, and Firebase platform config files are not used by the Flutter app.
 
@@ -9,6 +9,15 @@ The active app runtime is Supabase-backed. Firebase project files, Firebase Grad
 - Flutter stable / Dart
 - Supabase Auth, Postgres, Row Level Security, and Edge Functions
 - Python Rudo backend code under `lib/backend`
+
+## Languages
+
+The app supports English, Nyanja, Bemba, Tonga, and Lozi. The selected
+language is previewed immediately, stored locally, synced to the signed-in
+profile when available, and applied to navigation, screen copy, forms,
+validation, accessibility labels, date/time controls, and Rudo. The bundled
+catalog works offline. Nuanced clinical and long-form educational translations
+still require qualified native-language review before public-health release.
 
 ## Local Checks
 
@@ -70,13 +79,13 @@ Migration docs and SQL live in `supabase/`. Some migration files still use legac
 - `rudo-chat` Edge Function invocation and chat history persistence
 - RLS policies for patient, doctor, and admin roles
 
-Patient appointment requests are stored in `public.appointments`; `public.encounters` is retained for legacy and clinician-owned clinical observations. New Dawa Mom bookings use `status = pending`, `source = dawa_mom`, and owner-scoped RLS. Apply all migrations before testing booking:
+Patient appointment requests are stored in `public.appointments`; `public.encounters` is retained for legacy and clinician-owned clinical observations. New DawaMom bookings use `status = pending`, `source = dawa_mom`, and owner-scoped RLS. Apply all migrations before testing booking:
 
 ```powershell
 supabase db push --linked
 ```
 
-The clinician selector uses the booking-safe `get_bookable_clinicians` RPC over Dawa Mom's imported cache rows. The optional authenticated `clinician-directory` Edge Function is the adapter for the future authoritative Dawa Clinician endpoint; see `docs/dawa-clinician-integration-contract.md`.
+The clinician selector uses the booking-safe `get_bookable_clinicians` RPC over DawaMom's imported cache rows. The optional authenticated `clinician-directory` Edge Function is the adapter for the future authoritative Dawa Clinician endpoint; see `docs/dawa-clinician-integration-contract.md`.
 
 After applying migrations, run `supabase/POST_MIGRATION_VERIFY.sql` and the transactional owner/non-owner/anonymous checks in `supabase/APPOINTMENTS_RLS_VERIFY.sql`.
 

@@ -22,6 +22,9 @@ class PeriodTrackerService {
       averageCycleLength: averageCycleLength,
       periodLength: periodLength,
     );
+    if (lastPeriodStart != null) {
+      validatePeriodRecord(startDate: lastPeriodStart);
+    }
     final profileId = userId;
     if (profileId == null) {
       throw const PeriodTrackerException(
@@ -83,6 +86,7 @@ class PeriodTrackerService {
   Future<void> savePeriodRecord({
     required DateTime startDate,
     DateTime? endDate,
+    DateTime? replacingStartDate,
   }) async {
     final profileId = userId;
     if (profileId == null) {
@@ -92,16 +96,12 @@ class PeriodTrackerService {
     }
     final start = _dateOnly(startDate);
     final end = endDate == null ? null : _dateOnly(endDate);
-    if (start.isAfter(_dateOnly(DateTime.now()))) {
-      throw const PeriodTrackerException(
-        'Last period start cannot be in the future.',
-      );
-    }
-    if (end != null && end.isBefore(start)) {
-      throw const PeriodTrackerException(
-        'Period end cannot be before the start date.',
-      );
-    }
+    validatePeriodRecord(startDate: start, endDate: end);
+    await _validatePeriodOverlap(
+      startDate: start,
+      endDate: end,
+      replacingStartDate: replacingStartDate,
+    );
     await SupabaseDatabase.instance.runWithFreshSession(
       () => _client.from('period_tracker_entries').upsert({
         'profile_id': profileId,
@@ -111,6 +111,7 @@ class PeriodTrackerService {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'profile_id,entry_date'),
     );
+    await _syncLatestPeriodStart();
     notifyChanged();
   }
 
@@ -149,6 +150,13 @@ class PeriodTrackerService {
     }
     final original = _dateOnly(originalStartDate);
     final next = _dateOnly(startDate);
+    final end = endDate == null ? null : _dateOnly(endDate);
+    validatePeriodRecord(startDate: next, endDate: end);
+    await _validatePeriodOverlap(
+      startDate: next,
+      endDate: end,
+      replacingStartDate: original,
+    );
     if (original != next) {
       await SupabaseDatabase.instance.runWithFreshSession(
         () => _client
@@ -161,9 +169,11 @@ class PeriodTrackerService {
             .eq('entry_date', formatDateId(original)),
       );
     }
-    await savePeriodRecord(startDate: next, endDate: endDate);
-    await _syncLatestPeriodStart();
-    notifyChanged();
+    await savePeriodRecord(
+      startDate: next,
+      endDate: end,
+      replacingStartDate: original,
+    );
   }
 
   Future<void> deletePeriodRecord(DateTime startDate) async {
@@ -206,6 +216,36 @@ class PeriodTrackerService {
           .from('period_tracker_settings')
           .update({'last_period_start': latest}).eq('profile_id', profileId),
     );
+  }
+
+  Future<void> _validatePeriodOverlap({
+    required DateTime startDate,
+    required DateTime? endDate,
+    DateTime? replacingStartDate,
+  }) async {
+    final history = await loadPeriodHistory();
+    final settings = await loadUserSettings();
+    final configuredLength = settings?['periodLength'] as int? ?? 5;
+    final candidateEnd = endDate ?? startDate;
+    for (final record in history) {
+      if (replacingStartDate != null &&
+          _dateOnly(record.startDate) == _dateOnly(replacingStartDate)) {
+        continue;
+      }
+      if (_dateOnly(record.startDate) == startDate) continue;
+      final existingStart = _dateOnly(record.startDate);
+      final existingEnd = _dateOnly(
+        record.endDate ??
+            existingStart.add(Duration(days: configuredLength - 1)),
+      );
+      final overlaps = !candidateEnd.isBefore(existingStart) &&
+          !startDate.isAfter(existingEnd);
+      if (overlaps) {
+        throw const PeriodTrackerException(
+          'These dates overlap another period. Edit the existing period instead.',
+        );
+      }
+    }
   }
 
   Future<Map<String, dynamic>?> loadUserSettings() async {
@@ -270,6 +310,7 @@ class PeriodTrackerService {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'profile_id,entry_date'),
     );
+    notifyChanged();
   }
 
   Future<Map<String, dynamic>?> loadDailyData(DateTime date) async {
@@ -372,6 +413,36 @@ class PeriodTrackerService {
     if (periodLength >= averageCycleLength) {
       throw const PeriodTrackerException(
         'Period length must be shorter than the average cycle length.',
+      );
+    }
+  }
+
+  static void validatePeriodRecord({
+    required DateTime startDate,
+    DateTime? endDate,
+    DateTime? today,
+  }) {
+    final start = _dateOnly(startDate);
+    final normalizedToday = _dateOnly(today ?? DateTime.now());
+    final normalizedEnd = endDate == null ? null : _dateOnly(endDate);
+    if (start.isAfter(normalizedToday)) {
+      throw const PeriodTrackerException(
+        'Period start cannot be in the future.',
+      );
+    }
+    if (normalizedEnd != null && normalizedEnd.isBefore(start)) {
+      throw const PeriodTrackerException(
+        'Period end cannot be before the start date.',
+      );
+    }
+    if (normalizedEnd != null && normalizedEnd.isAfter(normalizedToday)) {
+      throw const PeriodTrackerException(
+        'Period end cannot be in the future.',
+      );
+    }
+    if (normalizedEnd != null && normalizedEnd.difference(start).inDays >= 15) {
+      throw const PeriodTrackerException(
+        'A period cannot be longer than 15 days. Check the dates and try again.',
       );
     }
   }
