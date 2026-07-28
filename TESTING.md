@@ -28,8 +28,12 @@ administrator or production staff account with a tester.
 
 The checked-in Flutter configuration contains the public Supabase project URL
 and anonymous client key. Authentication, database access, chat, voice,
-appointment messaging, clinician synchronization, and notification processing
+appointment booking, clinician synchronization, and notification processing
 use the deployed Supabase project and its server-side functions.
+
+Appointment requests can be created without provider credentials on the
+tester’s computer. Outbound appointment email delivery additionally requires
+an email provider key and verified sender configured on the deployed backend.
 
 Private service credentials must stay on those services. They should never be
 placed in a Flutter build, copied into this repository, or sent with a test
