@@ -1,0 +1,9 @@
+
+
+
+analyzer:
+  exclude:
+    - lib/custom_code/**
+    - lib/flutter_flow/custom_functions.dart
+    - "lib/navbar/home/home_widget - connects to agent.dart"
+    - "lib/navbar/period_tracker/period_tracker_widget - Copy.dart"

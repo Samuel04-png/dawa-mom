@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dawa Mom Chrome (profile)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "flutterMode": "profile",
+      "toolArgs": [
+        "--no-web-resources-cdn",
+        "--dart-define=SKIP_SPLASH=true"
+      ]
+    },
+    {
+      "name": "Dawa Mom Chrome (debug)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "flutterMode": "debug",
+      "toolArgs": [
+        "--no-web-resources-cdn",
+        "--no-track-widget-creation",
+        "--dart-define=SKIP_SPLASH=true"
+      ]
+    }
+  ]
+}
