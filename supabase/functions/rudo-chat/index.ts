@@ -1,6 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import {
+  looksLikeBookingMessage,
+  parseStructuredAction,
+  runBookingTurn,
+  type BookingAction,
+  type BookingState,
+  type ServiceRow,
+} from "./booking.ts";
 
 type ChatRequest = {
   message?: string;
@@ -69,6 +77,16 @@ Deno.serve(async (req) => {
   const metadata = body.metadata ?? {};
   const phoneNumber = stringOrNull(metadata.phone_number);
   const userName = stringOrNull(metadata.user_name);
+  const { data: serviceCatalogRows } = await supabase
+    .from("service_catalog")
+    .select("id,external_service_id,name,description,category,is_paid,price,currency")
+    .eq("is_active", true)
+    .order("name");
+  const serviceCatalog: ServiceRow[] = (serviceCatalogRows ?? []) as ServiceRow[];
+  const rudoMetadata = {
+    ...metadata,
+    service_catalog: serviceCatalog,
+  };
 
   const sessionResult = await getOrCreateSession(
     supabase,
@@ -97,7 +115,7 @@ Deno.serve(async (req) => {
         message,
         session_id: sessionId,
         client_message_id: clientMessageId,
-        metadata: body.metadata ?? {},
+        metadata: rudoMetadata,
       },
       metadata: {
         ...(body.metadata ?? {}),
@@ -118,19 +136,52 @@ Deno.serve(async (req) => {
   }
 
   let backendReply: BackendReply;
-  try {
-    backendReply = await callRudoBackend({
-      userId: user.id,
-      sessionId,
+  let bookingAction: BookingAction | null = null;
+
+  const { data: sessionRow } = await supabase
+    .from("chat_sessions")
+    .select("session_state")
+    .eq("id", sessionId)
+    .maybeSingle();
+  const priorBookingState: BookingState =
+    (sessionRow?.session_state as { booking?: BookingState } | null)?.booking ?? {};
+  const hasActiveBooking = Object.keys(priorBookingState).length > 0;
+  const isBookingTurn = parseStructuredAction(message) !== null ||
+    looksLikeBookingMessage(message, hasActiveBooking);
+
+  let nextBookingState: BookingState = priorBookingState;
+
+  if (isBookingTurn) {
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY") ?? null;
+    const geminiModel = Deno.env.get("RUDO_GEMINI_MODEL") ?? "gemini-2.5-flash";
+    const turn = await runBookingTurn({
+      supabase,
+      supabaseUrl,
+      authorization,
       message,
-      clientMessageId,
-      metadata: body.metadata ?? {},
+      priorState: priorBookingState,
+      serviceCatalog,
+      geminiApiKey,
+      geminiModel,
     });
-  } catch (error) {
-    return jsonResponse({
-      error: error instanceof Error ? error.message : "Rudo backend request failed",
-      session_id: sessionId,
-    }, 502);
+    backendReply = { reply: turn.reply, raw: { reply: turn.reply, action: turn.action }, source: "rudo_booking" };
+    bookingAction = turn.action;
+    nextBookingState = turn.state;
+  } else {
+    try {
+      backendReply = await callRudoBackend({
+        userId: user.id,
+        sessionId,
+        message,
+        clientMessageId,
+        metadata: rudoMetadata,
+      });
+    } catch (error) {
+      return jsonResponse({
+        error: error instanceof Error ? error.message : "Rudo backend request failed",
+        session_id: sessionId,
+      }, 502);
+    }
   }
 
   const { error: assistantMessageError } = await supabase
@@ -158,6 +209,7 @@ Deno.serve(async (req) => {
       last_message_at: new Date().toISOString(),
       session_state: {
         last_backend_response: backendReply.raw,
+        booking: nextBookingState,
       },
     })
     .eq("id", sessionId);
@@ -165,11 +217,12 @@ Deno.serve(async (req) => {
   return jsonResponse({
     reply: backendReply.reply,
     session_id: sessionId,
+    action: bookingAction,
   });
 });
 
 async function getOrCreateSession(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any>,
   userId: string,
   sessionId?: string,
   profile?: {
@@ -337,6 +390,8 @@ function buildRudoPrompt(message: string, metadata: Record<string, unknown>): st
     `Respond entirely in ${language}, using simple, natural wording. Keep medicine names, emergency numbers, and clinic names unchanged when translating them.`,
     userName ? `Patient name: ${userName}.` : "",
     "",
+    "Use service_catalog as the authoritative source for availability and pricing. Never invent or infer a service price.",
+    `Service catalog: ${JSON.stringify(metadata.service_catalog ?? [])}`,
     `User message: ${message}`,
   ].filter(Boolean).join("\n");
 }

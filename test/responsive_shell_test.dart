@@ -94,7 +94,7 @@ void main() {
     );
   });
 
-  testWidgets('mobile shell is the single owner of the decorative footer',
+  testWidgets('mobile shell no longer paints a decorative footer wave',
       (tester) async {
     await tester.pumpWidget(
       _shellAt(
@@ -108,7 +108,7 @@ void main() {
     final waves = find.byWidgetPredicate(
       (widget) => widget is CustomPaint && widget.painter is DawaWavePainter,
     );
-    expect(waves, findsOneWidget);
+    expect(waves, findsNothing);
   });
 
   testWidgets('tablet uses a navigation rail', (tester) async {

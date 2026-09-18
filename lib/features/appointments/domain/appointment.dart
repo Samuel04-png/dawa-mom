@@ -16,6 +16,12 @@ class Appointment {
     required this.source,
     required this.createdAt,
     required this.integrationStatus,
+    this.serviceId = '',
+    this.externalServiceIdSnapshot,
+    this.serviceNameSnapshot,
+    this.isPaidSnapshot = false,
+    this.priceSnapshot = 0,
+    this.currencySnapshot = 'ZMW',
     this.reason,
     this.notes,
     this.externalAppointmentId,
@@ -43,6 +49,12 @@ class Appointment {
   final String source;
   final DateTime createdAt;
   final String integrationStatus;
+  final String serviceId;
+  final String? externalServiceIdSnapshot;
+  final String? serviceNameSnapshot;
+  final bool isPaidSnapshot;
+  final double priceSnapshot;
+  final String currencySnapshot;
   final String? externalAppointmentId;
   final String? integrationErrorCode;
   final String? patientSafeStatusMessage;
@@ -85,6 +97,12 @@ class Appointment {
         source: source,
         createdAt: createdAt,
         integrationStatus: integrationStatus,
+        serviceId: serviceId,
+        externalServiceIdSnapshot: externalServiceIdSnapshot,
+        serviceNameSnapshot: serviceNameSnapshot,
+        isPaidSnapshot: isPaidSnapshot,
+        priceSnapshot: priceSnapshot,
+        currencySnapshot: currencySnapshot,
         externalAppointmentId: externalAppointmentId,
         integrationErrorCode: integrationErrorCode,
         patientSafeStatusMessage: patientSafeStatusMessage,
@@ -113,6 +131,12 @@ class Appointment {
       source: json['source']?.toString() ?? 'dawa_mom',
       createdAt: DateTime.parse(json['created_at'].toString()),
       integrationStatus: json['integration_status']?.toString() ?? 'pending',
+      serviceId: json['service_id']?.toString() ?? '',
+      externalServiceIdSnapshot: json['external_service_id_snapshot']?.toString(),
+      serviceNameSnapshot: json['service_name_snapshot']?.toString(),
+      isPaidSnapshot: json['is_paid_snapshot'] as bool? ?? false,
+      priceSnapshot: double.tryParse(json['price_snapshot']?.toString() ?? '') ?? 0,
+      currencySnapshot: json['currency_snapshot']?.toString() ?? 'ZMW',
       externalAppointmentId:
           json['dawa_clinician_appointment_id']?.toString() ??
               json['external_appointment_id']?.toString(),

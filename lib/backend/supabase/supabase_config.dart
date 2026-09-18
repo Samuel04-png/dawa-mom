@@ -16,7 +16,7 @@ Future<void> initSupabase() async {
 
   await Supabase.initialize(
     url: supabaseUrl,
-    anonKey: supabaseAnonKey,
+    publishableKey: supabaseAnonKey,
   );
   await _refreshPersistedSession();
 }

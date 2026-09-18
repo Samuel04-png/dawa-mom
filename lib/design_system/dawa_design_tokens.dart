@@ -63,13 +63,13 @@ abstract final class DawaSpacing {
 
 abstract final class DawaLayout {
   /// Height reserved for the five-destination mobile navigation surface.
-  static const mobileNavigationHeight = 72.0;
+  static const mobileNavigationHeight = 64.0;
 
-  /// Decorative space above mobile navigation for the wave and Rudo launcher.
+  /// Space above mobile navigation reserved for the small Rudo launcher.
   ///
   /// The responsive shell owns this area. Individual pages must not reserve or
   /// repaint it, otherwise a second footer appears when content is scrolled.
-  static const mobileNavigationWaveClearance = 46.0;
+  static const mobileNavigationWaveClearance = 34.0;
 
   /// Breathing room between the final interactive element and navigation.
   static const bottomContentGap = 32.0;

@@ -700,7 +700,7 @@ class _DawaRegistrationPageState extends State<DawaRegistrationPage> {
               const SizedBox(height: 54),
               TextButton(
                 onPressed: () => context.go('/login'),
-                style: TextButton.styleFrom(foregroundColor: DawaColors.primary),
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
                 child: const Text('Already registered?  Log in'),
               ),
             ],

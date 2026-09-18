@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dawa_mom/navbar/appointments/appointment_details/appointment_details_widget.dart';
 
@@ -16,6 +15,7 @@ import '/features/settings/dawa_mom_settings_page.dart';
 import '/features/preferences/dawa_user_preferences_repository.dart';
 import '/features/pregnancy/presentation/pregnancy_what_to_expect.dart';
 import '/features/period_tracker/presentation/period_cycle_status_card.dart';
+import '/features/rudo/presentation/rudo_action_cards.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -1107,13 +1107,23 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     final loadedMessages = (rows as List)
         .map((row) {
           final data = Map<String, dynamic>.from(row as Map);
+          final rawContent = data['content']?.toString() ?? '';
+          final isUser = data['role'] == 'user';
+          Map<String, dynamic>? action;
+          if (!isUser) {
+            final payload = data['payload'];
+            if (payload is Map && payload['action'] is Map) {
+              action = Map<String, dynamic>.from(payload['action'] as Map);
+            }
+          }
           return ChatMessage(
             id: data['id']?.toString() ?? '',
-            text: data['content']?.toString() ?? '',
-            isUser: data['role'] == 'user',
+            text: isUser ? rudoDisplayTextFor(rawContent) : rawContent,
+            isUser: isUser,
             timestamp:
                 DateTime.tryParse(data['created_at']?.toString() ?? '') ??
                     DateTime.now(),
+            action: action,
           );
         })
         .where((message) => message.text.isNotEmpty)
@@ -1133,7 +1143,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     });
   }
 
-  Future<String?> _sendMessage(String message) async {
+  Future<String?> _sendMessage(String message, {String? displayText}) async {
     if (_isSending || _isInitializing) {
       return null;
     }
@@ -1153,7 +1163,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     final clientMessageId = '${DateTime.now().microsecondsSinceEpoch}-$userId';
     final localUserMessage = ChatMessage(
       id: clientMessageId,
-      text: trimmedMessage,
+      text: displayText ?? trimmedMessage,
       isUser: true,
       timestamp: DateTime.now(),
     );
@@ -1193,12 +1203,16 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
 
       final reply =
           data['reply']?.toString() ?? data['response']?.toString() ?? '';
-      if (reply.isNotEmpty) {
+      final action = data['action'] is Map
+          ? Map<String, dynamic>.from(data['action'] as Map)
+          : null;
+      if (reply.isNotEmpty || action != null) {
         _addMessage(ChatMessage(
           id: '${clientMessageId}-assistant',
           text: reply,
           isUser: false,
           timestamp: DateTime.now(),
+          action: action,
         ));
       }
 
@@ -1268,7 +1282,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     final voiceLang = _currentVoiceLanguage();
     if (!_voiceSupportedLanguages.contains(voiceLang)) {
       // Mirrors the backend's voice-language gate (see get_voice_unsupported_response
-      // in sahara_client.py) — don't touch the mic or transcript state at all,
+      // in sahara_client.py) - don't touch the mic or transcript state at all,
       // just show the unsupported screen with a way back to text.
       setState(() {
         _isVoiceMode = true;
@@ -1281,7 +1295,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
 
     setState(() {
       _isVoiceMode = true;
-      // "listening" now means "recording" — see _buildVoiceMode's status
+      // "listening" now means "recording" - see _buildVoiceMode's status
       // label. Unlike the old on-device speech_to_text flow, there's no
       // live transcript while recording; the user taps the orb to stop
       // and send, and the transcript only appears once Sahara replies.
@@ -1319,7 +1333,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     await _voiceService.cancelRecording();
   }
 
-  /// Tap-to-stop handler — called from the orb while _voiceState is
+  /// Tap-to-stop handler - called from the orb while _voiceState is
   /// `listening` (i.e. actively recording). Stops the recording, uploads
   /// it to Sahara via the rudo-chat edge function's audio_base64 path,
   /// shows the transcript + reply once they come back, speaks the reply,
@@ -1340,7 +1354,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     try {
       final audioBytes = await _voiceService.stopRecording();
       if (audioBytes == null || audioBytes.isEmpty) {
-        _showVoiceError('No audio captured — please try again.');
+        _showVoiceError('No audio captured - please try again.');
         if (mounted && _isVoiceMode) {
           setState(() => _voiceState = _VoiceModeState.listening);
           await _voiceService.startRecording();
@@ -1580,7 +1594,20 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
       itemCount: _messages.length + (_isLoading ? 1 : 0),
       itemBuilder: (context, index) {
         if (index < _messages.length) {
-          return _ChatBubble(message: _messages[index]);
+          final message = _messages[index];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ChatBubble(message: message),
+              if (message.action != null)
+                RudoActionCard(
+                  action: message.action!,
+                  onSendAction: (actionJson, displayText) => unawaited(
+                    _sendMessage(actionJson, displayText: displayText),
+                  ),
+                ),
+            ],
+          );
         }
         return _TypingIndicator();
       },
@@ -1774,35 +1801,41 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: _suggestions
-              .map((suggestion) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ActionChip(
-                      label: Text(
-                        suggestion,
-                        style: TextStyle(
-                          color: FlutterFlowTheme.of(context).primary,
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      backgroundColor:
-                          FlutterFlowTheme.of(context).secondaryBackground,
-                      disabledColor: FlutterFlowTheme.of(context).alternate,
-                      side: BorderSide(
-                        color: FlutterFlowTheme.of(context).primary,
-                      ),
-                      shape: const StadiumBorder(),
-                      onPressed: _isInitializing || _isSending
-                          ? null
-                          : () => _sendMessage(suggestion),
-                    ),
-                  ))
-              .toList(),
+      child: SizedBox(
+        height: 42,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _suggestions.length,
+          padding: EdgeInsets.zero,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final suggestion = _suggestions[index];
+            return ActionChip(
+              label: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: Text(
+                  suggestion,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: FlutterFlowTheme.of(context).primary,
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
+              disabledColor: FlutterFlowTheme.of(context).alternate,
+              side: BorderSide(
+                color: FlutterFlowTheme.of(context).primary,
+              ),
+              shape: const StadiumBorder(),
+              onPressed: _isInitializing || _isSending
+                  ? null
+                  : () => _sendMessage(suggestion),
+            );
+          },
         ),
       ),
     );
@@ -1929,7 +1962,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   return SafeArea(
     top: false,
     child: Container(
-      // OUTER container — wraps the whole input row, separates it from the
+      // OUTER container - wraps the whole input row, separates it from the
       // chat list above with a top border. Leave this as-is.
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
       decoration: BoxDecoration(
@@ -1942,7 +1975,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
         ),
       ),
       child: Container(
-        // INNER container — this is the actual rounded "Type your message"
+        // INNER container - this is the actual rounded "Type your message"
         // pill. This is the one with the visible border in your screenshot.
         constraints: const BoxConstraints(minHeight: 48),
         decoration: BoxDecoration(
@@ -2432,16 +2465,47 @@ class _TypingIndicator extends StatelessWidget {
 }
 
 // Chat message model
+const String kRudoActionPrefix = '__rudo_action__:';
+
 class ChatMessage {
   final String id;
   final String text;
   final bool isUser;
   final DateTime timestamp;
+  final Map<String, dynamic>? action;
 
   ChatMessage({
     required this.id,
     required this.text,
     required this.isUser,
     required this.timestamp,
+    this.action,
   });
+}
+
+/// Builds a human-readable label for a raw chat_messages.content value.
+/// User taps on structured chips send a reserved `__rudo_action__:{...}`
+/// payload to the backend; this renders a friendly label instead of the
+/// raw JSON when messages are reloaded from the database.
+String rudoDisplayTextFor(String rawContent) {
+  if (!rawContent.startsWith(kRudoActionPrefix)) {
+    return rawContent;
+  }
+  try {
+    final decoded = jsonDecode(
+      rawContent.substring(kRudoActionPrefix.length),
+    ) as Map<String, dynamic>;
+    switch (decoded['type']) {
+      case 'confirm':
+        return 'Confirm appointment';
+      case 'change':
+        return 'Change details';
+      case 'cancel':
+        return 'Cancel';
+      default:
+        return 'Selected';
+    }
+  } catch (_) {
+    return rawContent;
+  }
 }

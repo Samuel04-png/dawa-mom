@@ -84,7 +84,9 @@ class _DawaCarePageState extends State<DawaCarePage> {
 
   Future<void> _refreshAppointments() async {
     final appointments = _repo.getAppointments();
-    setState(() => _appointments = appointments);
+    setState(() {
+      _appointments = appointments;
+    });
     await appointments;
   }
 

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '/components/branding/dawa_mom_logo.dart';
 import '/design_system/dawa_design_tokens.dart';
-import '/design_system/dawa_page_scaffold.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 class DawaMomShellDestination {
@@ -434,30 +433,28 @@ class _MobileShell extends StatelessWidget {
       backgroundColor: DawaColors.canvas,
       extendBody: false,
       body: child,
-      bottomNavigationBar: CustomPaint(
-        painter: const DawaWavePainter(),
-        child: SafeArea(
-          minimum: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-          child: SizedBox(
-            height: DawaLayout.mobileNavigationHeight +
-                DawaLayout.mobileNavigationWaveClearance,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: DawaLayout.mobileNavigationHeight,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: DawaColors.surface,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: DawaColors.line),
-                      boxShadow: DawaShadows.card,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: BottomNavigationBar(
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: SizedBox(
+          height: DawaLayout.mobileNavigationHeight +
+              DawaLayout.mobileNavigationWaveClearance,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: DawaLayout.mobileNavigationHeight,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: DawaColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: DawaColors.line),
+                    boxShadow: DawaShadows.card,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: BottomNavigationBar(
                       currentIndex: currentIndex >= 0 &&
                               currentIndex < destinations.length
                           ? currentIndex
@@ -494,26 +491,25 @@ class _MobileShell extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (rudoState == RudoPanelState.closed)
-                  Positioned(
-                    right: 4,
-                    top: 0,
-                    child: _RudoFloatingLauncher(
-                      onPressed: onOpenRudo,
-                      dimension: 46,
-                    ),
+              if (rudoState == RudoPanelState.closed)
+                Positioned(
+                  right: 4,
+                  top: 0,
+                  child: _RudoFloatingLauncher(
+                    onPressed: onOpenRudo,
+                    dimension: 32,
                   ),
-                if (rudoState == RudoPanelState.minimized)
-                  Positioned(
-                    right: 4,
-                    top: 6,
-                    child: _RudoMinimizedLauncher(
-                      onOpen: onOpenRudo,
-                      onClose: onCloseRudo,
-                    ),
+                ),
+              if (rudoState == RudoPanelState.minimized)
+                Positioned(
+                  right: 4,
+                  top: 2,
+                  child: _RudoMinimizedLauncher(
+                    onOpen: onOpenRudo,
+                    onClose: onCloseRudo,
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),

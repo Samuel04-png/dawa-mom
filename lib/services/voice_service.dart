@@ -12,7 +12,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
-// NOTE: requires the `record` package — add `record: ^5.1.2` (or latest) to
+// NOTE: requires the `record` package - add `record: ^5.1.2` (or latest) to
 // pubspec.yaml. Not previously a dependency; speech_to_text never exposes
 // raw audio bytes, only recognized text, so it can't feed Sahara's STT.
 
@@ -49,7 +49,7 @@ class VoiceService {
 
   // ── Sahara-backed recording flow ──────────────────────────────────
   // Records a real audio clip to disk (unlike speech_to_text, which never
-  // exposes raw bytes — only recognized text via the OS recognizer). The
+  // exposes raw bytes - only recognized text via the OS recognizer). The
   // caller uploads the returned bytes to the rudo-chat edge function's
   // audio_base64 path, which forwards to Sahara STT server-side.
 
@@ -86,7 +86,7 @@ class VoiceService {
     return bytes.isEmpty ? null : bytes;
   }
 
-  /// Discards the active recording without returning bytes — used when
+  /// Discards the active recording without returning bytes - used when
   /// exiting voice mode mid-recording.
   Future<void> cancelRecording() async {
     if (await _recorder.isRecording()) {
@@ -123,10 +123,10 @@ class VoiceService {
     }
 
     await _speech.listen(
-      localeId: _localeForLanguage(language),
-      listenFor: const Duration(seconds: 45),
-      pauseFor: const Duration(seconds: 3),
       listenOptions: SpeechListenOptions(
+        localeId: _localeForLanguage(language),
+        listenFor: const Duration(seconds: 45),
+        pauseFor: const Duration(seconds: 3),
         partialResults: true,
         cancelOnError: true,
         listenMode: ListenMode.dictation,
@@ -250,7 +250,7 @@ class VoiceService {
 
   /// Synthesizes speech via Sahara's TTS Generate endpoint, proxied through
   /// the sahara-tts edge function so SAHARA_API_KEY never reaches the client.
-  /// Only English and Shona are supported — this must only be called for
+  /// Only English and Shona are supported - this must only be called for
   /// languages in the caller's voice-supported set (see
   /// _voiceSupportedLanguages in home_widget.dart). Sahara has no accent
   /// specifically for Shona-accented English or any of Rudo's other five
@@ -264,7 +264,7 @@ class VoiceService {
     final voiceAccent = _saharaTtsAccent(language);
     if (voiceLanguage == null || voiceAccent == null) {
       throw StateError(
-        'Sahara TTS has no voice for language "$language" — '
+        'Sahara TTS has no voice for language "$language" - '
         'only english and shona are supported.',
       );
     }
@@ -382,7 +382,7 @@ class VoiceService {
     throw StateError('OmniVoice response did not include audio bytes.');
   }
 
-  /// Sahara's voice_language code for TTS — confirmed only 'en' and 'sn'
+  /// Sahara's voice_language code for TTS - confirmed only 'en' and 'sn'
   /// are supported (see Supported Languages And Accents). Null for
   /// anything else so callers can fail loudly instead of mis-synthesizing.
   String? _saharaTtsLanguageCode(String language) {
@@ -396,7 +396,7 @@ class VoiceService {
   /// Sahara's voice_accent for TTS. Shona has its own dedicated accent;
   /// English has no Zimbabwe/Zambia-specific or generic American/British
   /// accent option, so 'zulu' (Southern African) is used as the closest
-  /// available fit — confirmed against Sahara's accent list.
+  /// available fit - confirmed against Sahara's accent list.
   String? _saharaTtsAccent(String language) {
     return switch (language.toLowerCase()) {
       'english' => 'zulu',

@@ -8,6 +8,7 @@ import '/features/appointments/domain/appointment.dart';
 import '/features/appointments/domain/appointment_result_summary.dart';
 import '/features/appointments/presentation/dawa_appointment_reminder_sheet.dart';
 import '/features/appointments/presentation/appointment_result_summary_view.dart';
+import '/features/payments/data/lipila_payment_repository.dart';
 import '/design_system/dawa_components.dart';
 import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
@@ -35,7 +36,9 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
   final _repository = AppointmentRepository();
   late Future<Appointment?> _appointment;
   late Future<AppointmentResultSummary?> _resultSummary;
+  late Future<LipilaPaymentRecord?> _payment;
   bool _cancelling = false;
+  bool _cancelledLocally = false;
   String? _error;
 
   @override
@@ -44,6 +47,7 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
     AppointmentRepository.changes.addListener(_onAppointmentChanged);
     _appointment = _load();
     _resultSummary = _loadResultSummary();
+    _payment = _loadPayment();
   }
 
   @override
@@ -53,7 +57,9 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
   }
 
   void _onAppointmentChanged() {
-    if (mounted) _refresh();
+    if (mounted && !_cancelledLocally) {
+      _refresh();
+    }
   }
 
   Future<Appointment?> _load() {
@@ -71,12 +77,21 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
   Future<void> _refresh() async {
     final future = _load();
     final resultFuture = _loadResultSummary();
+    final paymentFuture = _loadPayment();
     setState(() {
       _appointment = future;
       _resultSummary = resultFuture;
+      _payment = paymentFuture;
       _error = null;
     });
-    await Future.wait([future, resultFuture]);
+    await Future.wait([future, resultFuture, paymentFuture]);
+  }
+
+  Future<LipilaPaymentRecord?> _loadPayment() {
+    final id = widget.appointmentId ?? widget.encounterDets?.id;
+    return id == null
+        ? Future.value()
+        : LipilaPaymentRepository().getAppointmentPayment(id);
   }
 
   Future<void> _cancel(Appointment appointment) async {
@@ -103,6 +118,7 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
 
     setState(() {
       _cancelling = true;
+      _cancelledLocally = true;
       _error = null;
     });
     try {
@@ -119,12 +135,14 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
       if (!mounted) return;
       setState(() {
         _cancelling = false;
+        _cancelledLocally = false;
         _error = error.message;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _cancelling = false;
+        _cancelledLocally = false;
         _error = 'The appointment could not be cancelled. Please try again.';
       });
     }
@@ -176,17 +194,20 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
                   }
                   return FutureBuilder<AppointmentResultSummary?>(
                     future: _resultSummary,
-                    builder: (context, resultSnapshot) =>
-                        AppointmentDetailsContent(
-                      appointment: appointment,
-                      resultSummary: resultSnapshot.data,
-                      resultLoading: resultSnapshot.connectionState ==
-                          ConnectionState.waiting,
-                      resultError: resultSnapshot.hasError,
-                      error: _error,
-                      cancelling: _cancelling,
-                      onCancel: () => _cancel(appointment),
-                      onRefresh: _refresh,
+                    builder: (context, resultSnapshot) => FutureBuilder<LipilaPaymentRecord?>(
+                      future: _payment,
+                      builder: (context, paymentSnapshot) => AppointmentDetailsContent(
+                        appointment: appointment,
+                        payment: paymentSnapshot.data,
+                        resultSummary: resultSnapshot.data,
+                        resultLoading: resultSnapshot.connectionState ==
+                            ConnectionState.waiting,
+                        resultError: resultSnapshot.hasError,
+                        error: _error,
+                        cancelling: _cancelling,
+                        onCancel: () => _cancel(appointment),
+                        onRefresh: _refresh,
+                      ),
                     ),
                   );
                 },
@@ -211,6 +232,7 @@ class AppointmentDetailsContent extends StatelessWidget {
     required this.resultError,
     this.resultSummary,
     this.error,
+    this.payment,
   });
 
   final Appointment appointment;
@@ -221,6 +243,7 @@ class AppointmentDetailsContent extends StatelessWidget {
   final bool resultLoading;
   final bool resultError;
   final String? error;
+  final LipilaPaymentRecord? payment;
 
   @override
   Widget build(BuildContext context) {
@@ -295,6 +318,10 @@ class AppointmentDetailsContent extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _VisitInformation(appointment: appointment),
+              if (payment != null) ...[
+                const SizedBox(height: 16),
+                _PaymentHistoryCard(payment: payment!),
+              ],
               if (appointment.isUpcoming) ...[
                 const SizedBox(height: 16),
                 const _AppointmentPreparationCard(),
@@ -371,6 +398,36 @@ class AppointmentDetailsContent extends StatelessWidget {
   static String _statusLabel(String status) => status.isEmpty
       ? 'Pending'
       : '${status[0].toUpperCase()}${status.substring(1)}';
+}
+
+class _PaymentHistoryCard extends StatelessWidget {
+  const _PaymentHistoryCard({required this.payment});
+
+  final LipilaPaymentRecord payment;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = payment.status[0].toUpperCase() + payment.status.substring(1);
+    final date = DateFormat('d MMM yyyy, HH:mm').format(payment.createdAt.toLocal());
+    return DawaCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Payment history', style: context.dawaSectionTitle),
+          const SizedBox(height: 10),
+          Text('${payment.currency} ${payment.amount.toStringAsFixed(2)}', style: context.dawaSectionTitle),
+          const SizedBox(height: 4),
+          Text('$status · $date', style: context.dawaCaption),
+          const SizedBox(height: 4),
+          Text('${payment.paymentMethod.replaceAll('_', ' ')} via ${payment.provider}', style: context.dawaCaption),
+          if (payment.referenceId.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text('Reference: ${payment.referenceId}', style: context.dawaCaption),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _AppointmentPreparationCard extends StatelessWidget {

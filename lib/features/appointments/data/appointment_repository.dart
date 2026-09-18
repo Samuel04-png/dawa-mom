@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '/backend/supabase/supabase_database.dart';
 import '../domain/appointment.dart';
 import '../domain/appointment_result_summary.dart';
+import '../../services/domain/service_catalog_item.dart';
 import 'clinician_directory_repository.dart';
 
 class AppointmentRepository {
@@ -155,6 +156,7 @@ class AppointmentRepository {
     String? reason,
     String? notes,
     String? idempotencyKey,
+    ServiceCatalogItem? service,
   }) async {
     _requireUserId();
     final normalizedDate = DateTime(date.year, date.month, date.day);
@@ -211,6 +213,7 @@ class AppointmentRepository {
             'p_reason': _nullIfBlank(reason),
             'p_notes': _nullIfBlank(notes),
             'p_idempotency_key': requestId,
+            if (service != null) 'p_service_id': service.id,
           },
         ),
       );
@@ -261,18 +264,20 @@ class AppointmentRepository {
   Future<Appointment> cancelAppointment(String id) async {
     _requireUserId();
     try {
-      final row = await SupabaseDatabase.instance.runWithFreshSession(
+      await SupabaseDatabase.instance.runWithFreshSession(
         () => _client
             .from('appointments')
             .update({'status': 'cancelled'})
-            .eq('id', id)
-            .select()
-            .single(),
+            .eq('id', id),
       );
-      final appointment = Appointment.fromJson(Map<String, dynamic>.from(row));
-      final decorated = await _decorateAppointments([appointment]);
       changes.value += 1;
-      return decorated.first;
+      final appointment = await getAppointment(id);
+      if (appointment == null) {
+        throw const AppointmentException(
+          'The appointment was cancelled, but its updated details could not be loaded.',
+        );
+      }
+      return appointment;
     } on PostgrestException {
       throw const AppointmentException(
         'This appointment could not be cancelled. Refresh and try again.',

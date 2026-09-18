@@ -63,7 +63,7 @@ void main() {
         DawaSplashScreen.splashBackgroundColor,
       );
       expect((image.image as AssetImage).assetName, DawaSplashScreen.assetPath);
-      expect(image.fit, BoxFit.cover);
+      expect(image.fit, BoxFit.contain);
       expect(image.gaplessPlayback, isTrue);
 
       await tester.pumpWidget(const SizedBox());
@@ -78,7 +78,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump(DawaSplashScreen.splashDuration);
+    await tester.pump(DawaSplashScreen.maxWait);
     expect(completionCount, 1);
     await tester.pump(const Duration(seconds: 1));
     expect(completionCount, 1);
