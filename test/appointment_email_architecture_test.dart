@@ -33,7 +33,8 @@ void main() {
     expect(source, contains('DAWA_CLINICIAN_EMAIL_RESOLVER_URL'));
     expect(source, contains('Idempotency-Key'));
     expect(source, contains('job.id'));
-    expect(source, contains('pending until the clinic confirms'));
+    expect(source, contains('waiting for the clinic to confirm'));
+    expect(source, contains('Payment: Pay at clinic.'));
     expect(source, isNot(contains('flutter')));
   });
 

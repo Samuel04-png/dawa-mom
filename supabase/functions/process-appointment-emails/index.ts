@@ -117,7 +117,7 @@ async function loadAppointmentContext(
   const { data: appointment, error: appointmentError } = await supabase
     .from("appointments")
     .select(
-      "id,patient_id,mother_id,clinician_id,clinic_id,appointment_date,start_time,end_time,appointment_type,reason,status",
+      "id,patient_id,mother_id,clinician_id,clinic_id,appointment_date,start_time,end_time,appointment_type,reason,status,payment_method,is_paid_snapshot",
     )
     .eq("id", appointmentId)
     .single();
@@ -170,7 +170,7 @@ async function loadAppointmentContext(
 
   return {
     appointment,
-    patientName: textValue(mother?.name, textValue(patient?.display_name, "Dawa Mom member")),
+    patientName: textValue(mother?.name, textValue(patient?.display_name, "DawaMom member")),
     patientEmail,
     clinicianName: textValue(doctor?.name, "Clinician"),
     clinicianEmail,
@@ -185,36 +185,43 @@ function buildMessage(
   const appointment = context.appointment;
   const when = friendlyDate(appointment.appointment_date, appointment.start_time);
   const reason = textValue(appointment.reason);
+  const paymentText = appointment.payment_method === "cash"
+    ? "Payment: Pay at clinic."
+    : appointment.is_paid_snapshot
+      ? "Payment: Paid online."
+      : "Payment: No payment is due for this service.";
   if (job.recipient_kind === "patient") {
     if (!context.patientEmail) {
       throw new DeliveryError("Patient email is unavailable", false);
     }
-    const subject = "We received your Dawa Mom appointment request";
+    const subject = "We received your DawaMom appointment request";
     const text = [
       `Hello ${context.patientName},`,
-      "We received your appointment request. It is pending until the clinic confirms it.",
+      "We received your appointment request. It is waiting for the clinic to confirm it.",
+      paymentText,
       `When: ${when}`,
       `Clinician: ${context.clinicianName}`,
       `Clinic: ${context.clinicName}`,
-      "You can review the request in Dawa Mom.",
+      "You can review the request in DawaMom.",
     ].join("\n\n");
     return {
       to: context.patientEmail,
       subject,
       text,
       html: `<p>Hello ${escapeHtml(context.patientName)},</p>
-        <p>We received your appointment request. <strong>It is pending until the clinic confirms it.</strong></p>
+        <p>We received your appointment request. <strong>It is waiting for the clinic to confirm it.</strong></p>
+        <p>${escapeHtml(paymentText)}</p>
         <p><strong>When:</strong> ${escapeHtml(when)}<br>
         <strong>Clinician:</strong> ${escapeHtml(context.clinicianName)}<br>
         <strong>Clinic:</strong> ${escapeHtml(context.clinicName)}</p>
-        <p>You can review the request in Dawa Mom.</p>`,
+        <p>You can review the request in DawaMom.</p>`,
     };
   }
 
   if (!context.clinicianEmail) {
     throw new DeliveryError("Clinician email is unavailable", false);
   }
-  const subject = `New Dawa Mom appointment request · ${when}`;
+  const subject = `New DawaMom appointment request · ${when}`;
   const reasonText = reason ? `\n\nReason: ${reason}` : "";
   const reasonHtml = reason
     ? `<br><strong>Reason:</strong> ${escapeHtml(reason)}`
@@ -223,17 +230,18 @@ function buildMessage(
     to: context.clinicianEmail,
     subject,
     text: [
-      "A patient submitted a new appointment request through Dawa Mom.",
+      "A patient submitted a new appointment request through DawaMom.",
       `Patient: ${context.patientName}`,
       `When: ${when}`,
       `Clinic: ${context.clinicName}${reasonText}`,
-      "This request is pending. Review it in the authorised clinician workflow.",
+      paymentText,
+      "This request is awaiting confirmation. Review it in the authorised clinician workflow.",
     ].join("\n\n"),
-    html: `<p>A patient submitted a new appointment request through Dawa Mom.</p>
+    html: `<p>A patient submitted a new appointment request through DawaMom.</p>
       <p><strong>Patient:</strong> ${escapeHtml(context.patientName)}<br>
       <strong>When:</strong> ${escapeHtml(when)}<br>
       <strong>Clinic:</strong> ${escapeHtml(context.clinicName)}${reasonHtml}</p>
-      <p><strong>This request is pending.</strong> Review it in the authorised clinician workflow.</p>`,
+      <p><strong>${escapeHtml(paymentText)}</strong><br>This request is awaiting confirmation. Review it in the authorised clinician workflow.</p>`,
   };
 }
 

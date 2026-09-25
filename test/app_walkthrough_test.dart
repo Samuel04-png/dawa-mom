@@ -13,7 +13,7 @@ void main() {
     var completions = 0;
     await tester.pumpWidget(_host(() async => completions++));
 
-    expect(find.text('Welcome to Dawa Mom'), findsOneWidget);
+    expect(find.text('Welcome to DawaMom'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('skip-app-tour')));
     await tester.pump();
 
@@ -25,7 +25,7 @@ void main() {
     var completions = 0;
     await tester.pumpWidget(_host(() async => completions++));
 
-    for (var index = 0; index < 4; index++) {
+    for (var index = 0; index < 5; index++) {
       await tester.tap(find.byKey(const ValueKey('next-app-tour')));
       await tester.pumpAndSettle();
     }

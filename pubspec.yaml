@@ -15,7 +15,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -91,6 +91,7 @@ dependencies:
   audioplayers: ^6.6.0
   http: ^1.4.0
   flutter_tts: ^4.2.5
+  record: ^6.2.1
 
 dependency_overrides:
   http: 1.4.0
@@ -106,14 +107,14 @@ dev_dependencies:
 
 
 flutter_launcher_icons:
-  android: true
+  android: 'app_launcher_icon'
   ios: true
   remove_alpha_ios: true
   web:
     generate: true
-  image_path: 'assets/images/dawa_mom_app_icon.png'
-  adaptive_icon_background: '#FFFFFF'
-  adaptive_icon_foreground: 'assets/images/dawa_mom_cross.png'
+  image_path: 'assets/images/app_launcher_icon.png'
+  adaptive_icon_background: '#102490'
+  adaptive_icon_foreground: 'assets/images/app_launcher_icon.png'
 
 
 # For information on the generic Dart part of this file, see the
@@ -130,6 +131,15 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/dawa_intro.gif
+    - assets/dawa_learning_assets/antenatal_visits_and_pregnancy_stages/
+    - assets/dawa_learning_assets/cervical_cancer_awareness/
+    - assets/dawa_learning_assets/myths_vs_fact/
+    - assets/dawa_learning_assets/period_tracking/
+    - assets/dawa_learning_assets/postpartum_recovery/
+    - assets/dawa_learning_assets/pregnancy_basics/
+    - assets/dawa_learning_assets/preparing_for_clinic_visit/
+    - assets/dawa_learning_assets/screening_without_fear/
+    - assets/dawa_learning_assets/second_trimester_foods/
     - assets/fonts/
     - assets/images/
     - "assets/images/transparent assets/"
@@ -139,6 +149,14 @@ flutter:
     - assets/pdfs/
     - assets/jsons/
     - assets/Video_Not_a_GIF.mp4
+    - assets/dawa_intro.gif
+    - dawa_mom_screens/assets/illustrations/
+    - dawa_mom_screens/assets/characters/bana_chenjela/
+    - dawa_mom_screens/assets/characters/cervical_health/
+    - dawa_mom_screens/assets/characters/clinicians/
+    - dawa_mom_screens/assets/characters/cycle/
+    - dawa_mom_screens/assets/characters/main_mother/
+    - dawa_mom_screens/assets/characters/pregnancy/
 
   fonts:
     - family: Poppins

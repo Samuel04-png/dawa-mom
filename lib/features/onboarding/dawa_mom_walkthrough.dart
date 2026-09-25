@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 
 import '/components/branding/dawa_mom_logo.dart';
+import '/design_system/dawa_components.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import 'app_walkthrough_service.dart';
 
@@ -48,34 +49,36 @@ class DawaMomWalkthrough extends StatefulWidget {
 class _DawaMomWalkthroughState extends State<DawaMomWalkthrough> {
   static const _steps = [
     _WalkthroughStep(
-      title: 'Welcome to Dawa Mom',
+      title: 'Welcome to DawaMom',
       description:
-          'Maternal-health support, appointments and cycle tracking in one place.',
-      image: 'assets/images/register-page-img.png',
+          'Health support, clinic visits and cycle tracking in one place.',
+      image: DawaArtwork.motherGreeting,
     ),
     _WalkthroughStep(
       title: 'Book appointments',
-      description:
-          'Choose a clinic, clinician, date and available appointment time.',
-      image: 'assets/images/female-doctor.png',
+      description: 'Choose a clinic, health worker, date and time.',
+      image: DawaArtwork.clinicianDoctor,
     ),
     _WalkthroughStep(
       title: 'Track your cycle',
+      description: 'Add periods and see simple cycle dates.',
+      image: DawaArtwork.cycleCalendar,
+    ),
+    _WalkthroughStep(
+      title: 'Play, learn and earn',
       description:
-          'Record periods and view estimated cycle information when it is useful to you.',
-      image: 'assets/images/transparent assets/Menstrual_calendar-pana.png',
+          'Play short health games, earn Dawa points and see your rewards.',
+      image: DawaArtwork.banaCelebrate,
     ),
     _WalkthroughStep(
       title: 'Complete your health profile',
-      description:
-          'Add relevant health information for more personalised guidance.',
-      image: 'assets/images/transparent assets/Status_update-pana.png',
+      description: 'Add a few health details to see tips that fit you.',
+      image: DawaArtwork.motherLearning,
     ),
     _WalkthroughStep(
       title: 'Ask Rudo',
-      description:
-          'Open the Rudo assistant whenever you need health support and guidance.',
-      image: 'assets/images/female-doctor2.png',
+      description: 'Ask Rudo when you need help finding health information.',
+      image: DawaArtwork.banaExplain,
     ),
   ];
 

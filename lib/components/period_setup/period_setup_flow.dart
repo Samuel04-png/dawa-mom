@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:intl/intl.dart';
 
 import '/backend/period_tracker_service.dart';
@@ -155,6 +155,9 @@ class _PeriodSetupFormState extends State<PeriodSetupForm> {
       initialDate: _startDate ?? now,
       firstDate: DateTime(now.year - 5),
       lastDate: now,
+      helpText: context.tr('Choose period start date'),
+      cancelText: context.tr('Cancel'),
+      confirmText: context.tr('Save'),
     );
     if (picked == null) return;
     setState(() {
@@ -176,6 +179,9 @@ class _PeriodSetupFormState extends State<PeriodSetupForm> {
       initialDate: _endDate ?? start,
       firstDate: start,
       lastDate: now.isBefore(start) ? start : now,
+      helpText: context.tr('Choose period end date'),
+      cancelText: context.tr('Cancel'),
+      confirmText: context.tr('Save'),
     );
     if (picked == null) return;
     setState(() {
@@ -299,7 +305,7 @@ class _PeriodSetupFormState extends State<PeriodSetupForm> {
                             controller: _cycleController,
                             enabled: !_saving,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Average cycle length',
                               helperText: 'Optional if known; 28 is common',
                               suffixText: 'days',
@@ -310,7 +316,7 @@ class _PeriodSetupFormState extends State<PeriodSetupForm> {
                               if (number == null ||
                                   number < 15 ||
                                   number > 60) {
-                                return 'Use 15 to 60 days.';
+                                return context.tr('Use 15 to 60 days.');
                               }
                               return null;
                             },
@@ -320,7 +326,7 @@ class _PeriodSetupFormState extends State<PeriodSetupForm> {
                             controller: _periodController,
                             enabled: !_saving,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Average period duration',
                               helperText: 'Optional if known; 5 is common',
                               suffixText: 'days',
@@ -330,10 +336,11 @@ class _PeriodSetupFormState extends State<PeriodSetupForm> {
                               final number = int.tryParse(value ?? '');
                               final cycle = int.tryParse(_cycleController.text);
                               if (number == null || number < 1 || number > 15) {
-                                return 'Use 1 to 15 days.';
+                                return context.tr('Use 1 to 15 days.');
                               }
                               if (cycle != null && number >= cycle) {
-                                return 'Must be shorter than the cycle.';
+                                return context
+                                    .tr('Must be shorter than the cycle.');
                               }
                               return null;
                             },

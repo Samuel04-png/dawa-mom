@@ -968,7 +968,7 @@ def handle_main_menu(sender, prompt, phone_id):
             else:
                 send("Thinking...", sender, phone_id)
     
-            # Call Gemini here — e.g., a function like:
+            # Call Gemini here - e.g., a function like:
             gemini_response = ask_gemini_cancer(prompt)  
             send(gemini_response, sender, phone_id)
             

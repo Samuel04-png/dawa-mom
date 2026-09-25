@@ -18,3 +18,5 @@ export '/auth/forgot_password/forgot_password_widget.dart'
     show ForgotPasswordWidget;
 export '/navbar/period_tracker/period_tracker_widget.dart'
     show PeriodTrackerWidget;
+export '/features/learning/presentation/dawa_learn_page.dart'
+    show DawaLearnPage;

@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 class ResponsivePageContainer extends StatelessWidget {
@@ -141,7 +142,15 @@ class DawaMomEmptyState extends StatelessWidget {
             height: compact ? 46 : 58,
             decoration: BoxDecoration(
               color: theme.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+              border: Border.all(
+                color: theme.primary.withValues(alpha: 0.16),
+              ),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(compact ? 18 : 22),
+                topRight: Radius.circular(compact ? 10 : 12),
+                bottomRight: Radius.circular(compact ? 18 : 22),
+                bottomLeft: Radius.circular(compact ? 10 : 12),
+              ),
             ),
             child: Icon(icon, color: theme.primary, size: compact ? 24 : 29),
           ),
@@ -187,15 +196,14 @@ class DawaMomCard extends StatelessWidget {
       padding: padding ?? const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: theme.secondaryBackground,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(DawaRadii.large),
+          topRight: Radius.circular(DawaRadii.medium),
+          bottomRight: Radius.circular(DawaRadii.large),
+          bottomLeft: Radius.circular(DawaRadii.medium),
+        ),
         border: Border.all(color: theme.alternate),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 14,
-            offset: Offset(0, 4),
-          ),
-        ],
+        boxShadow: DawaShadows.card,
       ),
       child: child,
     );

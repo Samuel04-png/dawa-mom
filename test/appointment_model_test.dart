@@ -36,6 +36,30 @@ void main() {
       );
     });
 
+    test('maps the persisted appointment payment method separately', () {
+      final appointment = Appointment.fromJson({
+        'id': 'appointment-id',
+        'mother_id': 'mother-id',
+        'patient_id': 'patient-id',
+        'clinician_id': 'clinician-id',
+        'clinic_id': 'clinic-id',
+        'appointment_date': '2099-07-20',
+        'start_time': '09:00:00',
+        'end_time': '09:30:00',
+        'appointment_type': 'maternal_health',
+        'status': 'pending',
+        'source': 'dawa_mom',
+        'created_at': '2026-07-15T06:00:00Z',
+        'integration_status': 'synced',
+        'is_paid_snapshot': true,
+        'payment_method': 'cash',
+      });
+
+      expect(appointment.status, 'pending');
+      expect(appointment.paymentMethod, 'cash');
+      expect(appointment.isPaidSnapshot, isTrue);
+    });
+
     test('normalizes a date and time into a local DateTime', () {
       expect(
         Appointment.dateAtTime(DateTime(2026, 7, 20), '14:30'),

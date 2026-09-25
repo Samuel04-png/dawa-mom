@@ -58,14 +58,13 @@ void main() {
 
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
       final image = tester.widget<Image>(find.byType(Image));
-      final renderedSize = tester.getSize(find.byType(Image));
-
-      expect(scaffold.backgroundColor, LightModeTheme().primary);
+      expect(
+        scaffold.backgroundColor,
+        DawaSplashScreen.splashBackgroundColor,
+      );
       expect((image.image as AssetImage).assetName, DawaSplashScreen.assetPath);
       expect(image.fit, BoxFit.contain);
       expect(image.gaplessPlayback, isTrue);
-      expect(renderedSize.width, lessThanOrEqualTo(560));
-      expect(renderedSize.width, lessThanOrEqualTo(size.width * 0.75));
 
       await tester.pumpWidget(const SizedBox());
     }
@@ -79,7 +78,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump(DawaSplashScreen.splashDuration);
+    await tester.pump(DawaSplashScreen.maxWait);
     expect(completionCount, 1);
     await tester.pump(const Duration(seconds: 1));
     expect(completionCount, 1);

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:provider/provider.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -12,31 +12,83 @@ import 'auth/supabase_auth/auth_util.dart';
 
 import 'backend/supabase/supabase_config.dart';
 import '/components/responsive/dawa_mom_responsive_shell.dart';
-import '/features/onboarding/app_walkthrough_service.dart';
-import '/features/onboarding/dawa_mom_walkthrough.dart';
+import '/features/onboarding/dawa_main_app_tour.dart';
 import '/features/settings/dawa_mom_settings_page.dart';
+import '/features/period_tracker/presentation/dawa_cycle_tracker_page.dart';
+import '/features/appointments/presentation/dawa_care_page.dart';
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/navbar/home/home_widget.dart' show AIChatModal;
 import 'flutter_flow/flutter_flow_util.dart';
 import 'index.dart';
 import 'dawa_splash_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   GoRouter.optionURLReflectsImperativeAPIs = true;
   usePathUrlStrategy();
 
-  await initSupabase();
+  // Paint the splash screen as fast as physically possible. All heavy
+  // async setup now happens AFTER first frame, inside _Bootstrap, instead
+  // of blocking runApp(). On slow devices this is the difference between
+  // a blank screen for several seconds followed by a frozen splash,
+  // versus an instantly-visible, smoothly animating splash.
+  runApp(const _Bootstrap());
+}
 
-  await FlutterFlowTheme.initialize();
+/// Thin root widget: shows the splash immediately, kicks off startup
+/// work in the background, then swaps in the real app once ready.
+class _Bootstrap extends StatefulWidget {
+  const _Bootstrap();
 
-  final appState = FFAppState(); // Initialize FFAppState
-  await appState.initializePersistedState();
+  @override
+  State<_Bootstrap> createState() => _BootstrapState();
+}
 
-  runApp(ChangeNotifierProvider(
-    create: (context) => appState,
-    child: MyApp(),
-  ));
+class _BootstrapState extends State<_Bootstrap> {
+  late final Future<FFAppState> _initFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = _initializeApp();
+  }
+
+  Future<FFAppState> _initializeApp() async {
+    await initSupabase();
+    await FlutterFlowTheme.initialize();
+    await DawaLocaleController.instance.initialize();
+
+    final appState = FFAppState();
+    await appState.initializePersistedState();
+    return appState;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<FFAppState>(
+      future: _initFuture,
+      builder: (context, snapshot) {
+        // While initializing, show ONLY the splash screen -- nothing
+        // else is built, so there's no competing work on the main
+        // thread and the GIF actually gets to paint its frames.
+        if (!snapshot.hasData) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: DawaSplashScreen(
+              // No-op: the real app decides when to dismiss the splash
+              // once it has both finished init AND played the intro.
+              onAnimationComplete: () {},
+            ),
+          );
+        }
+        return ChangeNotifierProvider(
+          create: (context) => snapshot.data!,
+          child: MyApp(),
+        );
+      },
+    );
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -81,11 +133,14 @@ class _MyAppState extends State<MyApp> {
   StreamSubscription<dynamic>? _jwtTokenStreamSub;
   Timer? _authFallbackTimer;
   final authUserSub = authenticatedUserStream.listen((_) {});
+  late final DawaLocaleController _localeController;
 
   @override
   void initState() {
     super.initState();
 
+    _localeController = DawaLocaleController.instance
+      ..addListener(_handleLocaleChanged);
     _appStateNotifier = AppStateNotifier.instance;
     _router = createRouter(_appStateNotifier);
     if (_skipSplash) {
@@ -128,6 +183,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    _localeController.removeListener(_handleLocaleChanged);
     _authFallbackTimer?.cancel();
     _userStreamSub?.cancel();
     _jwtTokenStreamSub?.cancel();
@@ -135,21 +191,26 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
+  void _handleLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'DawaMom',
+      locale: _localeController.locale,
       scrollBehavior: MyAppScrollBehavior(),
       localizationsDelegates: [
+        const DawaMaterialLocalizationsDelegate(),
+        const DawaCupertinoLocalizationsDelegate(),
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('en', '')],
-      theme: ThemeData(
-        brightness: Brightness.light,
-        useMaterial3: false,
+      supportedLocales: DawaLanguages.locales,
+      theme: DawaTheme.light().copyWith(
         appBarTheme: const AppBarTheme(
           systemOverlayStyle: SystemUiOverlayStyle.dark,
         ),
@@ -200,56 +261,133 @@ class _NavBarPageState extends State<NavBarPage> {
       selectedIcon: Icons.home_rounded,
     ),
     DawaMomShellDestination(
-      label: 'Appointments',
-      icon: Icons.calendar_today_outlined,
-      selectedIcon: Icons.calendar_month_rounded,
+      label: 'Track',
+      icon: Icons.sync_rounded,
+      selectedIcon: Icons.sync_rounded,
     ),
     DawaMomShellDestination(
-      label: 'Period Tracker',
-      icon: Icons.water_drop_outlined,
-      selectedIcon: Icons.water_drop_rounded,
+      label: 'Care',
+      icon: Icons.health_and_safety_outlined,
+      selectedIcon: Icons.health_and_safety_rounded,
     ),
     DawaMomShellDestination(
-      label: 'Settings',
-      icon: Icons.settings_outlined,
-      selectedIcon: Icons.settings_rounded,
+      label: 'Learn',
+      icon: Icons.menu_book_outlined,
+      selectedIcon: Icons.menu_book_rounded,
+    ),
+    DawaMomShellDestination(
+      label: 'Profile',
+      icon: Icons.person_outline_rounded,
+      selectedIcon: Icons.person_rounded,
     ),
   ];
 
   int _currentIndex = 0;
   Widget? _overridePage;
-  bool _walkthroughChecked = false;
+  bool _tourEligibilityChecked = false;
+  bool _replayPending = false;
+  late final MainAppTourService _tourService;
+  late final DawaMainAppTourController _tourController;
+  final GlobalKey _homeJourneyTourKey =
+      GlobalKey(debugLabel: 'home journey tour target');
+  final GlobalKey _rewardsTourKey =
+      GlobalKey(debugLabel: 'rewards tour target');
+  final GlobalKey _notificationsTourKey =
+      GlobalKey(debugLabel: 'notifications tour target');
+  late final List<GlobalKey> _navigationTourKeys = List.generate(
+    _destinations.length,
+    (index) =>
+        GlobalKey(debugLabel: '${_destinations[index].label} tour target'),
+  );
 
   @override
   void initState() {
     super.initState();
     _currentIndex = _indexForPage(widget.initialPage);
     _overridePage = widget.page;
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _maybeShowWalkthrough());
+    _tourService = MainAppTourService();
+    _tourController = DawaMainAppTourController(
+      service: _tourService,
+      onStepChanged: _showTourStep,
+    )..addListener(_tourStateChanged);
   }
 
-  Future<void> _maybeShowWalkthrough() async {
-    if (_walkthroughChecked) return;
-    _walkthroughChecked = true;
-    final shouldShow = await AppWalkthroughService().shouldShow();
-    if (shouldShow && mounted) await showDawaMomWalkthrough(context);
+  @override
+  void dispose() {
+    _tourController
+      ..removeListener(_tourStateChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _tourStateChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _handleHomeReady() {
+    if (_replayPending) {
+      _replayPending = false;
+      _tourController.start(replay: true);
+      return;
+    }
+    if (_tourController.active) {
+      _tourController.refreshTarget();
+      return;
+    }
+    _maybeStartMainTour();
+  }
+
+  Future<void> _maybeStartMainTour() async {
+    if (_tourEligibilityChecked ||
+        _overridePage != null ||
+        _currentIndex != 0) {
+      return;
+    }
+    _tourEligibilityChecked = true;
+    final shouldShow = await _tourService.shouldShow();
+    if (shouldShow && mounted && _overridePage == null && _currentIndex == 0) {
+      _tourController.start();
+    }
+  }
+
+  void _replayTour() {
+    _replayPending = true;
+    safeSetState(() {
+      _overridePage = null;
+      _currentIndex = 0;
+    });
+  }
+
+  void _showTourStep(DawaMainAppTourStep step) {
+    final index = dawaMainAppTourTabFor(step.target);
+    if (!mounted) return;
+    safeSetState(() {
+      _overridePage = null;
+      _currentIndex = index;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
     final pages = <Widget>[
-      HomeWidget(),
-      EncountersWidget(),
-      PeriodTrackerWidget(),
+      HomeWidget(
+        onDashboardReady: _handleHomeReady,
+        journeyTourKey: _homeJourneyTourKey,
+        rewardsTourKey: _rewardsTourKey,
+        notificationsTourKey: _notificationsTourKey,
+      ),
+      const DawaCycleTrackerPage(),
+      const DawaCarePage(),
+      const DawaLearnPage(),
       const DawaMomSettingsPage(),
     ];
     final child = _overridePage ?? pages[_currentIndex];
 
-    return DawaMomResponsiveShell(
+    final shell = DawaMomResponsiveShell(
       currentIndex: _currentIndex,
       destinations: _destinations,
+      navigationTargetKeys: _navigationTourKeys,
       onDestinationSelected: (index) => safeSetState(() {
         _overridePage = null;
         _currentIndex = index;
@@ -258,12 +396,35 @@ class _NavBarPageState extends State<NavBarPage> {
       rudoChatBuilder: (rudoContext, rudoController) => AIChatModal(
         userPhoneNumber: currentPhoneNumber,
         userName: currentUserDisplayName.trim().isEmpty
-            ? 'Dawa Mom member'
+            ? 'DawaMom member'
             : currentUserDisplayName.trim(),
         onClose: rudoController.close,
         onMinimize: rudoController.minimize,
       ),
       child: child,
+    );
+    return DawaMainAppTourScope(
+      onReplay: _replayTour,
+      child: Stack(
+        children: [
+          Positioned.fill(child: shell),
+          if (_tourController.active)
+            Positioned.fill(
+              child: DawaMainAppTourOverlay(
+                controller: _tourController,
+                targetKeys: {
+                  DawaMainAppTourTarget.homeJourney: _homeJourneyTourKey,
+                  DawaMainAppTourTarget.track: _navigationTourKeys[1],
+                  DawaMainAppTourTarget.care: _navigationTourKeys[2],
+                  DawaMainAppTourTarget.learn: _navigationTourKeys[3],
+                  DawaMainAppTourTarget.rewards: _rewardsTourKey,
+                  DawaMainAppTourTarget.notifications: _notificationsTourKey,
+                  DawaMainAppTourTarget.profile: _navigationTourKeys[4],
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -271,13 +432,17 @@ class _NavBarPageState extends State<NavBarPage> {
     switch (page) {
       case 'Appointments':
       case 'Encounters':
-        return 1;
+      case 'Care':
+        return 2;
       case 'PeriodTracker':
       case 'Period Tracker':
-        return 2;
+      case 'Track':
+        return 1;
+      case 'Learn':
+        return 3;
       case 'Profile':
       case 'Settings':
-        return 3;
+        return 4;
       default:
         return 0;
     }

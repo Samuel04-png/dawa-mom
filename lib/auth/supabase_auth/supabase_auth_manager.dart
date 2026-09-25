@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
@@ -200,6 +200,38 @@ class SupabaseAuthManager extends AuthManager
           email: email,
           password: password,
           data: {'requested_role': 'patient'},
+        ),
+      );
+
+  Future<BaseAuthUser?> createAccountWithPhone(
+    BuildContext context,
+    String phone,
+    String password, {
+    String? displayName,
+  }) =>
+      _signInOrCreateAccount(
+        context,
+        () => _client.auth.signUp(
+          phone: phone,
+          password: password,
+          data: {
+            'requested_role': 'patient',
+            if (displayName != null && displayName.trim().isNotEmpty)
+              'display_name': displayName.trim(),
+          },
+        ),
+      );
+
+  Future<BaseAuthUser?> signInWithPhonePassword(
+    BuildContext context,
+    String phone,
+    String password,
+  ) =>
+      _signInOrCreateAccount(
+        context,
+        () => _client.auth.signInWithPassword(
+          phone: phone,
+          password: password,
         ),
       );
 

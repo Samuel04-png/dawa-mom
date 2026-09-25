@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 
 class SymptomTrackerBottomSheetWidget extends StatelessWidget {
   const SymptomTrackerBottomSheetWidget({super.key});

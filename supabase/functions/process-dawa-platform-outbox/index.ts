@@ -5,8 +5,12 @@ import {
 } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
+/** Deliberately retryable forever so unconfigured risk-alert delivery never permanently drops an alert. */
+const RISK_ALERT_ENDPOINT_NOT_CONFIGURED = 'RISK_ALERT_ENDPOINT_NOT_CONFIGURED';
+
 type JsonRecord = Record<string, unknown>;
 type SupabaseAdmin = SupabaseClient<any, 'public', any>;
+type RiskAlertEventType = 'risk_alert.upsert' | 'risk_alert.archived';
 type OutboxJob = {
   id: string;
   event_id: string;
@@ -14,8 +18,9 @@ type OutboxJob = {
     | 'patient.upsert'
     | 'patient.archived'
     | 'appointment.created'
-    | 'appointment.cancelled';
-  aggregate_type: 'mother' | 'appointment';
+    | 'appointment.cancelled'
+    | RiskAlertEventType;
+  aggregate_type: 'mother' | 'appointment' | 'risk_alert';
   aggregate_id: string;
   payload: JsonRecord;
   attempt_count: number;
@@ -41,6 +46,10 @@ Deno.serve(async (req) => {
   const syncSecret = Deno.env.get('DAWA_CLINICIAN_SYNC_SECRET');
   const patientUrl = Deno.env.get('DAWA_CLINICIAN_PATIENT_SYNC_URL');
   const appointmentUrl = Deno.env.get('DAWA_CLINICIAN_APPOINTMENT_URL');
+  // Optional on purpose: patient and appointment delivery must keep working even
+  // if the risk-alert endpoint has not been configured yet. A missing value only
+  // holds back risk-alert jobs (see deliverRiskAlertJob).
+  const riskAlertUrl = Deno.env.get('DAWA_CLINICIAN_RISK_ALERT_URL');
   if (!supabaseUrl || !serviceRoleKey || !syncSecret || !patientUrl || !appointmentUrl) {
     return response({ error: 'Integration worker is not configured.' }, 500);
   }
@@ -86,6 +95,7 @@ Deno.serve(async (req) => {
         syncSecret,
         patientUrl,
         appointmentUrl,
+        riskAlertUrl,
       );
     } catch {
       result = {
@@ -96,7 +106,11 @@ Deno.serve(async (req) => {
       };
     }
 
-    const permanent = !result.success &&
+    // A missing risk-alert endpoint is a configuration gap rather than a data
+    // problem, so the event stays queued instead of being permanently failed.
+    const configurationGap =
+      result.errorCode === RISK_ALERT_ENDPOINT_NOT_CONFIGURED;
+    const permanent = !result.success && !configurationGap &&
       (!result.retryable || job.attempt_count >= 8);
     const retryAt = result.success || permanent
       ? null
@@ -138,7 +152,12 @@ async function deliverJob(
   syncSecret: string,
   patientUrl: string,
   appointmentUrl: string,
+  riskAlertUrl: string | undefined,
 ): Promise<DeliveryResult> {
+  if (job.event_type === 'risk_alert.upsert' || job.event_type === 'risk_alert.archived') {
+    return deliverRiskAlertJob(job, syncSecret, riskAlertUrl);
+  }
+
   let endpoint = patientUrl;
   let body: JsonRecord;
 
@@ -222,6 +241,87 @@ async function deliverJob(
   };
 }
 
+/**
+ * Delivers risk-alert events with the same webhook-shaped contract the patient
+ * receiver already accepts, so the destination follows one ingest convention.
+ * The payload is read from the stored outbox row without extra database reads:
+ * risk alerts are not mutated by clinician-side state, unlike appointments.
+ */
+async function deliverRiskAlertJob(
+  job: OutboxJob,
+  syncSecret: string,
+  riskAlertUrl: string | undefined,
+): Promise<DeliveryResult> {
+  if (!riskAlertUrl) {
+    return {
+      success: false,
+      destinationId: null,
+      errorCode: RISK_ALERT_ENDPOINT_NOT_CONFIGURED,
+      retryable: true,
+    };
+  }
+
+  const upstream = await fetch(riskAlertUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-dawa-sync-secret': syncSecret,
+    },
+    body: JSON.stringify({
+      event_id: job.event_id,
+      event_type: job.event_type,
+      type: job.event_type === 'risk_alert.archived' ? 'DELETE' : 'UPDATE',
+      schema: 'public',
+      table: 'clinician_risk_alerts',
+      record: job.payload,
+    }),
+  });
+
+  let payload: JsonRecord = {};
+  try {
+    const parsed = await upstream.json();
+    if (isRecord(parsed)) payload = parsed;
+  } catch {
+    // Status and a safe generic code are sufficient for retry decisions.
+  }
+
+  if (upstream.ok) {
+    const destinationId = optionalText(payload.alert_id);
+    // A source DELETE is intentionally idempotent. The receiver returns a
+    // successful `missing` action when this alert never reached Dawa Clinician,
+    // so there is no destination id to write back. Treat that as delivered;
+    // otherwise that valid archive event would be retried forever.
+    if (job.event_type === 'risk_alert.archived') {
+      return {
+        success: true,
+        destinationId,
+        errorCode: null,
+        retryable: false,
+      };
+    }
+    if (!destinationId) {
+      return {
+        success: false,
+        destinationId: null,
+        errorCode: 'MAPPING_MISSING',
+        retryable: true,
+      };
+    }
+    return { success: true, destinationId, errorCode: null, retryable: false };
+  }
+
+  const upstreamCode = optionalText(payload.code) ?? `HTTP_${upstream.status}`;
+  const retryable = payload.retryable === true ||
+    upstream.status === 408 || upstream.status === 429 || upstream.status >= 500 ||
+    upstreamCode === 'PATIENT_NOT_SYNCED';
+  return {
+    success: false,
+    destinationId: null,
+    errorCode: upstreamCode.slice(0, 120),
+    retryable,
+  };
+}
+
 async function loadAppointmentPayload(
   supabase: SupabaseAdmin,
   job: OutboxJob,
@@ -232,7 +332,7 @@ async function loadAppointmentPayload(
   const { data: appointment, error } = await supabase
     .from('appointments')
     .select(
-      'id,mother_id,clinician_id,clinic_id,appointment_date,start_time,end_time,appointment_type,reason,notes,status,created_at,updated_at',
+      'id,mother_id,clinician_id,clinic_id,appointment_date,start_time,end_time,appointment_type,reason,notes,status,payment_method,is_paid_snapshot,created_at,updated_at',
     )
     .eq('id', job.aggregate_id)
     .maybeSingle();
@@ -293,6 +393,12 @@ async function loadAppointmentPayload(
       reason: appointment.reason,
       notes: appointment.notes,
       status: appointment.status,
+      payment_method: appointment.payment_method,
+      payment_status: appointment.payment_method === 'cash'
+        ? 'pay_at_clinic'
+        : appointment.is_paid_snapshot
+          ? 'paid'
+          : 'not_required',
       created_at: appointment.created_at,
       updated_at: appointment.updated_at,
     },

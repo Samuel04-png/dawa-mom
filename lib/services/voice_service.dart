@@ -1,30 +1,34 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
+// NOTE: requires the `record` package - add `record: ^5.1.2` (or latest) to
+// pubspec.yaml. Not previously a dependency; speech_to_text never exposes
+// raw audio bytes, only recognized text, so it can't feed Sahara's STT.
+
 class VoiceService {
-  VoiceService({AudioPlayer? audioPlayer, FlutterTts? fallbackTts})
-      : _audioPlayer = audioPlayer ?? AudioPlayer(),
-        _fallbackTts = fallbackTts ?? FlutterTts();
+  VoiceService({
+    AudioPlayer? audioPlayer,
+    FlutterTts? fallbackTts,
+    AudioRecorder? recorder,
+  })  : _audioPlayer = audioPlayer,
+        _fallbackTts = fallbackTts,
+        _recorder = recorder ?? AudioRecorder();
 
   static const String ttsProvider = String.fromEnvironment('TTS_PROVIDER');
-  static const String elevenLabsEdgeFunction = String.fromEnvironment(
-    'ELEVENLABS_EDGE_FUNCTION',
-    defaultValue: 'elevenlabs-tts',
-  );
-  static const String elevenLabsVoiceId = String.fromEnvironment(
-    'ELEVENLABS_VOICE_ID',
-    defaultValue: 'EXAVITQu4vr4xnSDxMaL',
-  );
-  static const String elevenLabsModelId = String.fromEnvironment(
-    'ELEVENLABS_MODEL_ID',
-    defaultValue: 'eleven_multilingual_v2',
+  static const String saharaTtsEdgeFunction = String.fromEnvironment(
+    'SAHARA_TTS_EDGE_FUNCTION',
+    defaultValue: 'sahara-tts',
   );
 
   static const String omnivoiceApiUrl =
@@ -33,13 +37,63 @@ class VoiceService {
       String.fromEnvironment('OMNIVOICE_API_KEY');
 
   final SpeechToText _speech = SpeechToText();
-  final AudioPlayer _audioPlayer;
-  final FlutterTts _fallbackTts;
+  final AudioRecorder _recorder;
+  AudioPlayer? _audioPlayer;
+  FlutterTts? _fallbackTts;
   String _lastWords = '';
   bool _speechReady = false;
   bool _finalResultDelivered = false;
   ValueChanged<String>? _onFinalResult;
   ValueChanged<String>? _onPartialResult;
+  String? _recordingPath;
+
+  // ── Sahara-backed recording flow ──────────────────────────────────
+  // Records a real audio clip to disk (unlike speech_to_text, which never
+  // exposes raw bytes - only recognized text via the OS recognizer). The
+  // caller uploads the returned bytes to the rudo-chat edge function's
+  // audio_base64 path, which forwards to Sahara STT server-side.
+
+  Future<void> startRecording() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
+      throw StateError('Microphone permission was not granted.');
+    }
+    final dir = await getTemporaryDirectory();
+    _recordingPath =
+        '${dir.path}/rudo_voice_note_${DateTime.now().microsecondsSinceEpoch}.m4a';
+    await _recorder.start(
+      const RecordConfig(encoder: AudioEncoder.aacLc),
+      path: _recordingPath!,
+    );
+  }
+
+  /// Stops the active recording and returns the captured audio bytes.
+  /// Returns null if nothing was captured (e.g. stop called too soon,
+  /// or start() was never called / already stopped).
+  Future<Uint8List?> stopRecording() async {
+    final path = await _recorder.stop();
+    final resolvedPath = path ?? _recordingPath;
+    _recordingPath = null;
+    if (resolvedPath == null) {
+      return null;
+    }
+    final file = File(resolvedPath);
+    if (!await file.exists()) {
+      return null;
+    }
+    final bytes = await file.readAsBytes();
+    unawaited(file.delete().catchError((_) => file));
+    return bytes.isEmpty ? null : bytes;
+  }
+
+  /// Discards the active recording without returning bytes - used when
+  /// exiting voice mode mid-recording.
+  Future<void> cancelRecording() async {
+    if (await _recorder.isRecording()) {
+      await _recorder.cancel();
+    }
+    _recordingPath = null;
+  }
 
   Future<void> startListening({
     String? language,
@@ -69,10 +123,10 @@ class VoiceService {
     }
 
     await _speech.listen(
-      localeId: _localeForLanguage(language),
-      listenFor: const Duration(seconds: 45),
-      pauseFor: const Duration(seconds: 3),
       listenOptions: SpeechListenOptions(
+        localeId: _localeForLanguage(language),
+        listenFor: const Duration(seconds: 45),
+        pauseFor: const Duration(seconds: 3),
         partialResults: true,
         cancelOnError: true,
         listenMode: ListenMode.dictation,
@@ -101,8 +155,8 @@ class VoiceService {
       return Uint8List(0);
     }
 
-    if (_shouldUseElevenLabs) {
-      return _synthesizeElevenLabs(trimmedText, language);
+    if (_shouldUseSahara) {
+      return _synthesizeSahara(trimmedText, language);
     }
 
     return _synthesizeOmniVoice(trimmedText, language);
@@ -127,15 +181,16 @@ class VoiceService {
     if (audioBytes.isEmpty) {
       return;
     }
-    await _audioPlayer.stop();
+    final audioPlayer = _audioPlayer ??= AudioPlayer();
+    await audioPlayer.stop();
     final playbackEnded = Future.any<void>([
-      _audioPlayer.onPlayerComplete.first,
-      _audioPlayer.onPlayerStateChanged
+      audioPlayer.onPlayerComplete.first,
+      audioPlayer.onPlayerStateChanged
           .firstWhere((state) =>
               state == PlayerState.completed || state == PlayerState.stopped)
           .then((_) {}),
     ]);
-    await _audioPlayer.play(
+    await audioPlayer.play(
       BytesSource(audioBytes, mimeType: 'audio/mpeg'),
     );
     await playbackEnded.timeout(const Duration(seconds: 120), onTimeout: () {});
@@ -147,25 +202,30 @@ class VoiceService {
       return;
     }
 
-    await _audioPlayer.stop();
-    await _fallbackTts.stop();
-    await _fallbackTts.awaitSpeakCompletion(true);
-    await _fallbackTts.setLanguage(_ttsLocaleForLanguage(language));
-    await _fallbackTts.setSpeechRate(0.46);
-    await _fallbackTts.setPitch(1.0);
-    await _fallbackTts.setVolume(1.0);
-    await _fallbackTts.speak(trimmedText);
+    final fallbackTts = _fallbackTts ??= FlutterTts();
+    await _audioPlayer?.stop();
+    await fallbackTts.stop();
+    await fallbackTts.awaitSpeakCompletion(true);
+    await fallbackTts.setLanguage(_ttsLocaleForLanguage(language));
+    await fallbackTts.setSpeechRate(0.46);
+    await fallbackTts.setPitch(1.0);
+    await fallbackTts.setVolume(1.0);
+    await fallbackTts.speak(trimmedText);
   }
 
   Future<void> stopPlayback() async {
-    await _audioPlayer.stop();
-    await _fallbackTts.stop();
+    await _audioPlayer?.stop();
+    await _fallbackTts?.stop();
   }
 
   Future<void> dispose() async {
     await _speech.cancel();
+    await cancelRecording();
+    await _recorder.dispose();
     await stopPlayback();
-    await _audioPlayer.dispose();
+    await _audioPlayer?.dispose();
+    _audioPlayer = null;
+    _fallbackTts = null;
   }
 
   void _emitFinalResultIfNeeded() {
@@ -177,33 +237,46 @@ class VoiceService {
     _onFinalResult?.call(words);
   }
 
-  bool get _shouldUseElevenLabs {
+  bool get _shouldUseSahara {
     final provider = ttsProvider.trim().toLowerCase();
-    if (provider == 'elevenlabs' || provider == 'eleven_labs') {
+    if (provider == 'sahara') {
       return true;
     }
     if (provider == 'omnivoice' || provider == 'omni_voice') {
       return false;
     }
-    return omnivoiceApiUrl.isEmpty && elevenLabsEdgeFunction.isNotEmpty;
+    return omnivoiceApiUrl.isEmpty && saharaTtsEdgeFunction.isNotEmpty;
   }
 
-  Future<Uint8List> _synthesizeElevenLabs(
+  /// Synthesizes speech via Sahara's TTS Generate endpoint, proxied through
+  /// the sahara-tts edge function so SAHARA_API_KEY never reaches the client.
+  /// Only English and Shona are supported - this must only be called for
+  /// languages in the caller's voice-supported set (see
+  /// _voiceSupportedLanguages in home_widget.dart). Sahara has no accent
+  /// specifically for Shona-accented English or any of Rudo's other five
+  /// Bantu languages, so English replies use the "zulu" accent as the
+  /// closest available Southern African option.
+  Future<Uint8List> _synthesizeSahara(
     String trimmedText,
     String language,
   ) async {
-    if (elevenLabsEdgeFunction.isEmpty) {
-      throw StateError('ELEVENLABS_EDGE_FUNCTION is not configured.');
+    final voiceLanguage = _saharaTtsLanguageCode(language);
+    final voiceAccent = _saharaTtsAccent(language);
+    if (voiceLanguage == null || voiceAccent == null) {
+      throw StateError(
+        'Sahara TTS has no voice for language "$language" - '
+        'only english and shona are supported.',
+      );
     }
 
-    final languageCode = _elevenLabsLanguageCode(language);
     final response = await supabase.Supabase.instance.client.functions.invoke(
-      elevenLabsEdgeFunction,
+      saharaTtsEdgeFunction,
       body: {
         'text': trimmedText,
-        'voice_id': elevenLabsVoiceId,
-        'model_id': elevenLabsModelId,
-        if (languageCode != null) 'language_code': languageCode,
+        'voice_language': voiceLanguage,
+        'voice_accent': voiceAccent,
+        'voice_gender': 'female',
+        'output_audio_format': 'wav',
       },
     ).timeout(const Duration(seconds: 45));
 
@@ -219,7 +292,7 @@ class VoiceService {
       }
     }
 
-    throw StateError('ElevenLabs Edge Function did not return audio bytes.');
+    throw StateError('sahara-tts Edge Function did not return audio bytes.');
   }
 
   Future<Uint8List> _synthesizeOmniVoice(
@@ -242,7 +315,7 @@ class VoiceService {
       body: jsonEncode(
         isWaveSpeed
             ? _waveSpeedBody(trimmedText, language)
-            : _openAiCompatibleBody(trimmedText, language),
+            : _standardOmniVoiceBody(trimmedText, language),
       ),
     );
 
@@ -259,7 +332,7 @@ class VoiceService {
     return _audioFromJson(response.body);
   }
 
-  Map<String, dynamic> _openAiCompatibleBody(String text, String language) => {
+  Map<String, dynamic> _standardOmniVoiceBody(String text, String language) => {
         'model': 'omnivoice',
         'input': text,
         'voice': 'rudo_female_young_adult_warm',
@@ -309,12 +382,25 @@ class VoiceService {
     throw StateError('OmniVoice response did not include audio bytes.');
   }
 
-  String? _elevenLabsLanguageCode(String language) {
+  /// Sahara's voice_language code for TTS - confirmed only 'en' and 'sn'
+  /// are supported (see Supported Languages And Accents). Null for
+  /// anything else so callers can fail loudly instead of mis-synthesizing.
+  String? _saharaTtsLanguageCode(String language) {
     return switch (language.toLowerCase()) {
       'english' => 'en',
       'shona' => 'sn',
-      'ndebele' => 'nd',
-      'chinyanja' || 'nyanja' => 'ny',
+      _ => null,
+    };
+  }
+
+  /// Sahara's voice_accent for TTS. Shona has its own dedicated accent;
+  /// English has no Zimbabwe/Zambia-specific or generic American/British
+  /// accent option, so 'zulu' (Southern African) is used as the closest
+  /// available fit - confirmed against Sahara's accent list.
+  String? _saharaTtsAccent(String language) {
+    return switch (language.toLowerCase()) {
+      'english' => 'zulu',
+      'shona' => 'shona',
       _ => null,
     };
   }

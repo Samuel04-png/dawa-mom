@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import '/components/booking_bottom_sheet/booking_bottom_sheet_widget.dart';
+import '/design_system/dawa_components.dart';
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/domain/appointment.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -76,9 +77,9 @@ class UpcomingAppointmentSection extends StatelessWidget {
           future: _repository.getNextAppointment(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return SizedBox(
-                height: compact ? 150 : 190,
-                child: const Center(child: CircularProgressIndicator()),
+              return DawaLoadingSkeleton(
+                label: 'Loading appointments',
+                lines: compact ? 2 : 3,
               );
             }
             if (snapshot.hasError || snapshot.data == null) {
@@ -168,7 +169,7 @@ class UpcomingAppointmentCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      appointment.clinicianName ?? 'Clinician',
+                      appointment.clinicianName ?? 'Health worker',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.titleSmall.copyWith(

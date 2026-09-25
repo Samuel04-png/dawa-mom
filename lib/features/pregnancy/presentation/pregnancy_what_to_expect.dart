@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 
 import '/components/responsive/responsive_layout.dart';
+import '/design_system/dawa_components.dart';
 import '/features/profile/data/health_profile_repository.dart';
 import '/features/profile/profile_completion_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -44,11 +45,9 @@ class _PregnancyWhatToExpectLoaderState
       future: _profile,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const DawaMomCard(
-            child: SizedBox(
-              height: 116,
-              child: Center(child: CircularProgressIndicator()),
-            ),
+          return const DawaLoadingSkeleton(
+            label: 'Loading pregnancy care',
+            lines: 2,
           );
         }
         if (!snapshot.hasData) {
@@ -95,14 +94,14 @@ class PregnancyWhatToExpectCard extends StatelessWidget {
           icon: Icons.pregnant_woman_rounded,
           title: 'Pregnancy details need completion',
           description:
-              'Your profile says you are pregnant. Add your last menstrual period or expected delivery date for relevant guidance.',
+              'Your profile says you are pregnant. Add the first day of your last period or your due date to see the right tips.',
           actionLabel: 'Complete pregnancy details',
           onAction: onOpenProfile,
         );
       case PregnancyProfileStatus.notCurrentlyPregnant:
         return _PregnancyStateMessage(
           icon: Icons.health_and_safety_outlined,
-          title: 'Pregnancy guidance is not active',
+          title: 'Pregnancy tips are off',
           description:
               'Your profile says you are not currently pregnant. Cycle tracking and appointment support remain available.',
           actionLabel: 'Review health profile',
@@ -119,7 +118,7 @@ class PregnancyWhatToExpectCard extends StatelessWidget {
               : 'Pregnancy status not provided',
           description: keptPrivate
               ? 'This choice is respected. You can update it at any time in your health profile.'
-              : 'Add or update your pregnancy status to receive relevant guidance.',
+              : 'Add or change your pregnancy choice to see the right tips.',
           actionLabel: 'Review health profile',
           onAction: onOpenProfile,
         );
@@ -171,13 +170,13 @@ class _PregnantWithData extends StatelessWidget {
           children: [
             Text(
               dueDate == null
-                  ? 'Your estimated delivery date has not been added.'
+                  ? 'Your due date has not been added.'
                   : 'Estimated due date · ${DateFormat('d MMMM y').format(dueDate)}',
               style: theme.bodyMedium.copyWith(fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 8),
             Text(
-              'Pregnancy dates are estimates. Follow advice from your clinician for your individual care.',
+              'Pregnancy dates are estimates. Follow the advice from your health worker.',
               style: theme.bodySmall.copyWith(color: theme.secondaryText),
             ),
             const SizedBox(height: 8),

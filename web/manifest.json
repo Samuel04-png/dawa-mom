@@ -1,6 +1,6 @@
 {
-    "name": "Dawa Mom",
-    "short_name": "Dawa Mom",
+    "name": "DawaMom",
+    "short_name": "DawaMom",
     "description": "Maternal health companion app with appointments, pregnancy guidance, period tracking, and Rudo chat.",
     "start_url": ".",
     "display": "standalone",

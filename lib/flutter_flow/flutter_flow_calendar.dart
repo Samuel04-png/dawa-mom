@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'flutter_flow_util.dart';

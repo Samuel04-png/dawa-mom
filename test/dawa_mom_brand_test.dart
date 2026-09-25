@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('brand variants use the supplied normalized logo assets',
+  testWidgets('brand variants use the DawaMom wordmark and cross',
       (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -26,8 +26,9 @@ void main() {
         .toSet();
 
     expect(assetNames, contains(DawaMomLogo.crossAsset));
-    expect(assetNames, contains(DawaMomLogo.wordmarkAsset));
-    expect(assetNames, contains(DawaMomLogo.fullAsset));
+    expect(assetNames, isNot(contains(DawaMomLogo.wordmarkAsset)));
+    expect(assetNames, isNot(contains(DawaMomLogo.fullAsset)));
     expect(assetNames, isNot(contains('assets/images/app_logo_2.png')));
+    expect(find.text('DawaMom'), findsWidgets);
   });
 }

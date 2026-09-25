@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 
 import '/components/branding/dawa_mom_logo.dart';
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 class DawaMomShellDestination {
@@ -52,6 +53,7 @@ class DawaMomResponsiveShell extends StatefulWidget {
     required this.onLogout,
     required this.child,
     this.rudoChatBuilder,
+    this.navigationTargetKeys,
   });
 
   final int currentIndex;
@@ -60,6 +62,7 @@ class DawaMomResponsiveShell extends StatefulWidget {
   final Future<void> Function() onLogout;
   final Widget child;
   final RudoChatBuilder? rudoChatBuilder;
+  final List<GlobalKey>? navigationTargetKeys;
 
   static RudoAssistantController? controllerOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<_RudoAssistantScope>()?.controller;
@@ -122,6 +125,10 @@ class _DawaMomResponsiveShellState extends State<DawaMomResponsiveShell> {
         currentIndex: widget.currentIndex,
         destinations: widget.destinations,
         onDestinationSelected: widget.onDestinationSelected,
+        rudoState: _rudoController.state,
+        onOpenRudo: _rudoController.open,
+        onCloseRudo: _rudoController.close,
+        navigationTargetKeys: widget.navigationTargetKeys,
         child: widget.child,
       );
     } else if (width < 1100) {
@@ -130,6 +137,9 @@ class _DawaMomResponsiveShellState extends State<DawaMomResponsiveShell> {
         destinations: widget.destinations,
         onDestinationSelected: widget.onDestinationSelected,
         onLogout: widget.onLogout,
+        onOpenRudo: _rudoController.open,
+        showRudoLauncher: _rudoController.isClosed,
+        navigationTargetKeys: widget.navigationTargetKeys,
         child: widget.child,
       );
     } else {
@@ -142,6 +152,7 @@ class _DawaMomResponsiveShellState extends State<DawaMomResponsiveShell> {
         ),
         onDestinationSelected: widget.onDestinationSelected,
         onLogout: widget.onLogout,
+        navigationTargetKeys: widget.navigationTargetKeys,
         child: widget.child,
       );
     }
@@ -152,24 +163,16 @@ class _DawaMomResponsiveShellState extends State<DawaMomResponsiveShell> {
         children: [
           Positioned.fill(child: shell),
           _buildRudoSurface(context),
-          if (_rudoController.isClosed)
+          if (_rudoController.isClosed && width >= 1100)
             Positioned(
-              right: width < 700
-                  ? 16
-                  : width < 1100
-                      ? 22
-                      : 28,
-              bottom: width < 700
-                  ? 88
-                  : width < 1100
-                      ? 22
-                      : 28,
+              right: 28,
+              bottom: 28,
               child: _RudoFloatingLauncher(onPressed: _rudoController.open),
             ),
-          if (_rudoController.isMinimized)
+          if (_rudoController.isMinimized && width >= 700)
             Positioned(
-              right: width < 700 ? 16 : 28,
-              bottom: width < 700 ? 88 : 28,
+              right: 28,
+              bottom: 28,
               child: _RudoMinimizedLauncher(
                 onOpen: _rudoController.open,
                 onClose: _rudoController.close,
@@ -334,9 +337,13 @@ class _RudoMinimizedLauncher extends StatelessWidget {
 }
 
 class _RudoFloatingLauncher extends StatelessWidget {
-  const _RudoFloatingLauncher({required this.onPressed});
+  const _RudoFloatingLauncher({
+    required this.onPressed,
+    this.dimension = 62,
+  });
 
   final VoidCallback onPressed;
+  final double dimension;
 
   @override
   Widget build(BuildContext context) {
@@ -354,11 +361,11 @@ class _RudoFloatingLauncher extends StatelessWidget {
           shape: const CircleBorder(),
           child: InkResponse(
             onTap: onPressed,
-            radius: 34,
+            radius: dimension / 2 + 3,
             hoverColor: primary.withValues(alpha: 0.08),
             focusColor: primary.withValues(alpha: 0.12),
             child: SizedBox.square(
-              dimension: 62,
+              dimension: dimension,
               child: Stack(
                 children: [
                   Positioned.fill(
@@ -404,39 +411,107 @@ class _MobileShell extends StatelessWidget {
     required this.currentIndex,
     required this.destinations,
     required this.onDestinationSelected,
+    required this.rudoState,
+    required this.onOpenRudo,
+    required this.onCloseRudo,
+    this.navigationTargetKeys,
     required this.child,
   });
 
   final int currentIndex;
   final List<DawaMomShellDestination> destinations;
   final ValueChanged<int> onDestinationSelected;
+  final RudoPanelState rudoState;
+  final VoidCallback onOpenRudo;
+  final VoidCallback onCloseRudo;
+  final List<GlobalKey>? navigationTargetKeys;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final theme = FlutterFlowTheme.of(context);
     return Scaffold(
+      backgroundColor: DawaColors.canvas,
+      extendBody: false,
       body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex >= 0 && currentIndex < destinations.length
-            ? currentIndex
-            : 0,
-        onTap: onDestinationSelected,
-        backgroundColor: theme.secondaryBackground,
-        selectedItemColor: theme.primary,
-        unselectedItemColor: theme.secondaryText,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        items: destinations
-            .map(
-              (destination) => BottomNavigationBarItem(
-                icon: Icon(destination.icon),
-                activeIcon: Icon(destination.selectedIcon),
-                label: destination.label,
-              ),
-            )
-            .toList(),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: SizedBox(
+          height: DawaLayout.mobileNavigationHeight +
+              DawaLayout.mobileNavigationWaveClearance,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: DawaLayout.mobileNavigationHeight,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: DawaColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: DawaColors.line),
+                    boxShadow: DawaShadows.card,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: BottomNavigationBar(
+                      currentIndex: currentIndex >= 0 &&
+                              currentIndex < destinations.length
+                          ? currentIndex
+                          : 0,
+                      onTap: onDestinationSelected,
+                      backgroundColor: DawaColors.surface,
+                      selectedItemColor: DawaColors.primary,
+                      unselectedItemColor: DawaColors.muted,
+                      selectedFontSize: 10,
+                      unselectedFontSize: 10,
+                      iconSize: 23,
+                      elevation: 0,
+                      showSelectedLabels: true,
+                      showUnselectedLabels: true,
+                      type: BottomNavigationBarType.fixed,
+                      items: destinations
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => BottomNavigationBarItem(
+                              icon: KeyedSubtree(
+                                key:
+                                    _targetKey(navigationTargetKeys, entry.key),
+                                child: Icon(
+                                  currentIndex == entry.key
+                                      ? entry.value.selectedIcon
+                                      : entry.value.icon,
+                                ),
+                              ),
+                              label: context.tr(entry.value.label),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+              if (rudoState == RudoPanelState.closed)
+                Positioned(
+                  right: 4,
+                  top: 0,
+                  child: _RudoFloatingLauncher(
+                    onPressed: onOpenRudo,
+                    dimension: 32,
+                  ),
+                ),
+              if (rudoState == RudoPanelState.minimized)
+                Positioned(
+                  right: 4,
+                  top: 2,
+                  child: _RudoMinimizedLauncher(
+                    onOpen: onOpenRudo,
+                    onClose: onCloseRudo,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -448,6 +523,9 @@ class _TabletShell extends StatelessWidget {
     required this.destinations,
     required this.onDestinationSelected,
     required this.onLogout,
+    required this.onOpenRudo,
+    required this.showRudoLauncher,
+    this.navigationTargetKeys,
     required this.child,
   });
 
@@ -455,6 +533,9 @@ class _TabletShell extends StatelessWidget {
   final List<DawaMomShellDestination> destinations;
   final ValueChanged<int> onDestinationSelected;
   final Future<void> Function() onLogout;
+  final VoidCallback onOpenRudo;
+  final bool showRudoLauncher;
+  final List<GlobalKey>? navigationTargetKeys;
   final Widget child;
 
   @override
@@ -497,20 +578,37 @@ class _TabletShell extends StatelessWidget {
                     alignment: Alignment.bottomCenter,
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: IconButton(
-                        tooltip: 'Logout',
-                        onPressed: onLogout,
-                        icon: const Icon(Icons.logout_rounded),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (showRudoLauncher) ...[
+                            _RudoFloatingLauncher(onPressed: onOpenRudo),
+                            const SizedBox(height: 10),
+                          ],
+                          IconButton(
+                            tooltip: 'Logout',
+                            onPressed: onLogout,
+                            icon: const Icon(Icons.logout_rounded),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
                 destinations: destinations
+                    .asMap()
+                    .entries
                     .map(
-                      (destination) => NavigationRailDestination(
-                        icon: Icon(destination.icon),
-                        selectedIcon: Icon(destination.selectedIcon),
-                        label: Text(destination.label),
+                      (entry) => NavigationRailDestination(
+                        icon: KeyedSubtree(
+                          key: _targetKey(navigationTargetKeys, entry.key),
+                          child: Icon(
+                            currentIndex == entry.key
+                                ? entry.value.selectedIcon
+                                : entry.value.icon,
+                          ),
+                        ),
+                        label: Text(entry.value.label),
                       ),
                     )
                     .toList(),
@@ -532,6 +630,7 @@ class _DesktopShell extends StatelessWidget {
     required this.onToggleCollapsed,
     required this.onDestinationSelected,
     required this.onLogout,
+    this.navigationTargetKeys,
     required this.child,
   });
 
@@ -541,6 +640,7 @@ class _DesktopShell extends StatelessWidget {
   final VoidCallback onToggleCollapsed;
   final ValueChanged<int> onDestinationSelected;
   final Future<void> Function() onLogout;
+  final List<GlobalKey>? navigationTargetKeys;
   final Widget child;
 
   @override
@@ -588,6 +688,7 @@ class _DesktopShell extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final item = destinations[index];
                         return _SidebarItem(
+                          key: _targetKey(navigationTargetKeys, index),
                           destination: item,
                           selected: currentIndex == index,
                           collapsed: collapsed,
@@ -640,6 +741,7 @@ class _ConstrainedShellBody extends StatelessWidget {
 
 class _SidebarItem extends StatelessWidget {
   const _SidebarItem({
+    super.key,
     required this.destination,
     required this.selected,
     required this.collapsed,
@@ -697,11 +799,15 @@ class _SidebarItem extends StatelessWidget {
     );
     return Padding(
       padding: const EdgeInsets.only(bottom: 5),
-      child:
-          collapsed ? Tooltip(message: destination.label, child: item) : item,
+      child: collapsed
+          ? Tooltip(message: context.tr(destination.label), child: item)
+          : item,
     );
   }
 }
+
+GlobalKey? _targetKey(List<GlobalKey>? keys, int index) =>
+    keys != null && index >= 0 && index < keys.length ? keys[index] : null;
 
 class _SidebarAction extends StatelessWidget {
   const _SidebarAction({

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '/auth/supabase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/responsive/responsive_layout.dart';
+import '/design_system/dawa_components.dart';
 import '/features/profile/data/health_profile_repository.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
@@ -107,6 +108,9 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
       initialDate: _dateOfBirth ?? DateTime(now.year - 25, now.month, now.day),
       firstDate: DateTime(1900),
       lastDate: now,
+      helpText: context.tr('Choose date of birth'),
+      cancelText: context.tr('Cancel'),
+      confirmText: context.tr('Save'),
     );
     if (picked != null) {
       setState(() {
@@ -200,7 +204,14 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
         future: _loading,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Padding(
+              padding: EdgeInsets.all(18),
+              child: DawaPageSkeleton(
+                label: 'Loading your profile form',
+                showHero: false,
+                cardCount: 4,
+              ),
+            );
           }
           if (snapshot.hasError) {
             return DawaMomEmptyState(
@@ -232,7 +243,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Keep your details accurate for appointments and personalised guidance.',
+                          'Keep your details correct for visits and health tips.',
                           style: theme.bodyMedium.copyWith(
                             color: theme.secondaryText,
                           ),
@@ -246,14 +257,14 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                               controller: _name,
                               enabled: !_saving,
                               textCapitalization: TextCapitalization.words,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Full name',
                                 prefixIcon: Icon(Icons.person_outline_rounded),
                                 border: OutlineInputBorder(),
                               ),
                               validator: (value) =>
                                   (value?.trim().length ?? 0) < 2
-                                      ? 'Enter your full name.'
+                                      ? context.tr('Enter your full name.')
                                       : null,
                             ),
                             const SizedBox(height: 14),
@@ -294,7 +305,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                               controller: _occupation,
                               enabled: !_saving,
                               textCapitalization: TextCapitalization.words,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Occupation (optional)',
                                 prefixIcon: Icon(Icons.work_outline_rounded),
                                 border: OutlineInputBorder(),
@@ -309,7 +320,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                             TextFormField(
                               controller: _email,
                               enabled: false,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Email address',
                                 helperText:
                                     'Your sign-in email is managed securely.',
@@ -329,7 +340,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                                 ),
                                 LengthLimitingTextInputFormatter(18),
                               ],
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Mobile number',
                                 prefixIcon: Icon(Icons.phone_outlined),
                                 border: OutlineInputBorder(),
@@ -338,7 +349,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                                 final digits =
                                     (value ?? '').replaceAll(RegExp(r'\D'), '');
                                 return digits.length < 8
-                                    ? 'Enter a valid mobile number.'
+                                    ? context.tr('Enter a valid mobile number.')
                                     : null;
                               },
                             ),
@@ -349,7 +360,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                               enabled: !_saving,
                               textCapitalization: TextCapitalization.sentences,
                               maxLines: 3,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Address',
                                 alignLabelWithHint: true,
                                 prefixIcon: Icon(Icons.location_on_outlined),
@@ -357,7 +368,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                               ),
                               validator: (value) =>
                                   (value?.trim().length ?? 0) < 3
-                                      ? 'Enter your address.'
+                                      ? context.tr('Enter your address.')
                                       : null,
                             ),
                           ],

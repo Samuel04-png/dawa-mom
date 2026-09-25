@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 
 import '/backend/period_tracker_service.dart';
 import '/components/period_setup/period_setup_flow.dart';
 import '/components/responsive/responsive_layout.dart';
+import '/design_system/dawa_components.dart';
 import '/features/period_tracker/domain/period_cycle_summary.dart';
 import '/features/profile/data/health_profile_repository.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -66,11 +67,9 @@ class _PeriodCycleStatusLoaderState extends State<PeriodCycleStatusLoader> {
       future: _data,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const DawaMomCard(
-            child: SizedBox(
-              height: 150,
-              child: Center(child: CircularProgressIndicator()),
-            ),
+          return const DawaLoadingSkeleton(
+            label: 'Loading your cycle dates',
+            lines: 3,
           );
         }
         if (!snapshot.hasData) {
@@ -221,7 +220,7 @@ class _CycleOverview extends StatelessWidget {
               style: theme.labelSmall.copyWith(color: theme.primary)),
           const SizedBox(height: 4),
           Text(
-            summary.cycleDay?.toString() ?? '—',
+            summary.cycleDay?.toString() ?? 'Not set',
             style: theme.headlineMedium.copyWith(
               color: theme.primary,
               fontWeight: FontWeight.w700,

@@ -1,6 +1,6 @@
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'no_data_generic_model.dart';
 export 'no_data_generic_model.dart';

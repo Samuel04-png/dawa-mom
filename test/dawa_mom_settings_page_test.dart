@@ -4,15 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('Settings renders every section at phone, tablet and desktop',
+  testWidgets('Profile and compact settings remain accessible at every size',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
     for (final size in const [
+      Size(360, 800),
       Size(390, 844),
-      Size(900, 900),
-      Size(1200, 900),
+      Size(412, 915),
+      Size(768, 1024),
     ]) {
       tester.view.physicalSize = size;
       await tester.pumpWidget(
@@ -25,11 +26,30 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull, reason: 'Failed at $size');
-      expect(find.text('Account and profile'), findsOneWidget);
-      expect(find.text('Health and tracking'), findsOneWidget);
-      expect(find.text('Privacy and security'), findsOneWidget);
-      expect(find.text('Help and About Dawa Mom'), findsOneWidget);
-      expect(find.text('Account actions'), findsOneWidget);
+      expect(find.text('My profile'), findsOneWidget);
+      expect(find.text('Health summary'), findsOneWidget);
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('About DawaMom'), findsOneWidget);
+      expect(find.text('Account'), findsOneWidget);
+      expect(find.text('Take the app tour again'), findsOneWidget);
+      expect(find.text('Health profile'), findsOneWidget);
+      expect(find.text('View care records'), findsOneWidget);
+      expect(find.text('Danger zone'), findsNothing);
+      expect(find.text('Delete account'), findsNothing);
+
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(0, -5000),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('profile-logout')), findsOneWidget);
+      final logoutBottom =
+          tester.getRect(find.byKey(const ValueKey('profile-logout'))).bottom;
+      expect(
+        size.height - logoutBottom,
+        lessThan(100),
+        reason: 'Profile left an excessive trailing gap at $size',
+      );
     }
   });
 }

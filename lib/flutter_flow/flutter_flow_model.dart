@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
+import '/localization/dawa_localizations.dart';
+
 Widget wrapWithModel<T extends FlutterFlowModel>({
   required T model,
   required Widget child,
@@ -170,6 +172,10 @@ T? _getDefaultValue<T>() {
 }
 
 extension TextValidationExtensions on String? Function(BuildContext, String?)? {
-  String? Function(String?)? asValidator(BuildContext context) =>
-      this != null ? (val) => this!(context, val) : null;
+  String? Function(String?)? asValidator(BuildContext context) => this == null
+      ? null
+      : (val) {
+          final message = this!(context, val);
+          return message == null ? null : context.tr(message);
+        };
 }

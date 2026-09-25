@@ -4,13 +4,23 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '/backend/supabase/supabase_database.dart';
 
 class AppWalkthroughService {
-  AppWalkthroughService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  AppWalkthroughService({SupabaseClient? client}) : _client = client;
 
-  final SupabaseClient _client;
+  final SupabaseClient? _client;
+
+  SupabaseClient? get _supabase {
+    if (_client != null) return _client;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<bool> shouldShow() async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _supabase;
+    if (client == null) return false;
+    final userId = client.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) return false;
     final preferences = await SharedPreferences.getInstance();
     final key = _key(userId);
@@ -18,7 +28,7 @@ class AppWalkthroughService {
 
     try {
       final row = await SupabaseDatabase.instance.runWithFreshSession(
-        () => _client
+        () => client
             .from('profiles')
             .select('has_completed_app_walkthrough')
             .eq('id', userId)
@@ -34,13 +44,15 @@ class AppWalkthroughService {
   }
 
   Future<void> complete() async {
-    final userId = _client.auth.currentUser?.id;
+    final client = _supabase;
+    if (client == null) return;
+    final userId = client.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) return;
     final preferences = await SharedPreferences.getInstance();
     await preferences.setBool(_key(userId), true);
     try {
       await SupabaseDatabase.instance.runWithFreshSession(
-        () => _client.from('profiles').update({
+        () => client.from('profiles').update({
           'has_completed_app_walkthrough': true,
           'app_walkthrough_completed_at':
               DateTime.now().toUtc().toIso8601String(),

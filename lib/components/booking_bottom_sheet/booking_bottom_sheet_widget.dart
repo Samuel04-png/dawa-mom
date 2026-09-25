@@ -1,17 +1,30 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/data/clinician_directory_repository.dart';
 import '/features/appointments/domain/appointment.dart';
+import '/features/services/data/service_catalog_repository.dart';
+import '/features/services/domain/service_catalog_item.dart';
+import '/features/payments/data/lipila_payment_repository.dart';
+import '/design_system/dawa_components.dart';
+import '/design_system/dawa_design_tokens.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 export 'booking_bottom_sheet_model.dart';
 
 enum _BookingState { ready, loading, success, error }
 
+enum _PaymentChoice { online, cash }
+
 class BookingBottomSheetWidget extends StatefulWidget {
-  const BookingBottomSheetWidget({super.key});
+  const BookingBottomSheetWidget({
+    super.key,
+    this.initialClinicId,
+  });
+
+  final String? initialClinicId;
 
   @override
   State<BookingBottomSheetWidget> createState() =>
@@ -21,7 +34,13 @@ class BookingBottomSheetWidget extends StatefulWidget {
 class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
   late final SupabaseClinicianDirectoryRepository _clinicianDirectory;
   late final AppointmentRepository _appointments;
+  late final ServiceCatalogRepository _services;
+  late final LipilaPaymentRepository _payments;
   final _reasonController = TextEditingController();
+  String _idempotencyKey = Uuid().v4();
+  List<ServiceCatalogItem> _serviceOptions = const [];
+  ServiceCatalogItem? _selectedService;
+  _PaymentChoice _paymentChoice = _PaymentChoice.online;
 
   List<ClinicOption> _clinics = const [];
   List<ClinicianProfile> _clinicians = const [];
@@ -40,6 +59,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
   String? _clinicianError;
   String? _dateError;
   String? _timeError;
+  String? _successMessage;
 
   @override
   void initState() {
@@ -48,7 +68,10 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
     _appointments = AppointmentRepository(
       clinicianDirectory: _clinicianDirectory,
     );
+    _services = ServiceCatalogRepository();
+    _payments = LipilaPaymentRepository();
     _loadClinics();
+    _loadServices();
   }
 
   @override
@@ -82,15 +105,31 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
           _formError = 'No clinics are available for booking right now.';
         } else if (_clinicianDirectory.isUsingCachedDirectory) {
           _formError =
-              'Showing the latest safely cached clinician directory. Live appointment times require a connection.';
+              'Showing the last saved health worker list. Connect to the internet to see live times.';
         }
       });
+      if (widget.initialClinicId != null &&
+          clinics.any((clinic) => clinic.id == widget.initialClinicId)) {
+        await _selectClinic(widget.initialClinicId);
+      }
     } on AppointmentException catch (error) {
       if (!mounted) return;
       setState(() {
         _loadingDirectory = false;
         _formError = error.message;
         _bookingState = _BookingState.error;
+      });
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _bookingState = _BookingState.error;
+        _formError = error.message;
+      });
+    } on StateError catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _bookingState = _BookingState.error;
+        _formError = error.message;
       });
     } catch (_) {
       if (!mounted) return;
@@ -99,6 +138,21 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
         _formError = 'Clinics could not be loaded. Please try again.';
         _bookingState = _BookingState.error;
       });
+    }
+  }
+
+  Future<void> _loadServices() async {
+    try {
+      final services = await _services.getActiveServices();
+      if (!mounted) return;
+      setState(() {
+        _serviceOptions = services;
+        _selectedService = services.isNotEmpty ? services.first : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+          () => _formError = 'Services could not be loaded. Please try again.');
     }
   }
 
@@ -128,10 +182,10 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
         _loadingClinicians = false;
         if (clinicians.isEmpty) {
           _clinicianError =
-              'No bookable clinicians are available at this clinic.';
+              'No health workers can be booked at this clinic right now.';
         } else if (_clinicianDirectory.isUsingCachedDirectory) {
           _formError =
-              'Showing the latest safely cached clinicians. Live appointment times require a connection.';
+              'Showing the last saved health worker list. Connect to the internet to see live times.';
         }
       });
     } catch (_) {
@@ -139,7 +193,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
       setState(() {
         _loadingClinicians = false;
         _clinicianError =
-            'Clinicians could not be loaded. Choose the clinic again to retry.';
+            'Health workers did not load. Choose the clinic again.';
       });
     }
   }
@@ -209,7 +263,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
     setState(() {
       _clinicError = _selectedClinic == null ? 'Please select a clinic.' : null;
       _clinicianError =
-          _selectedClinician == null ? 'Please select a clinician.' : null;
+          _selectedClinician == null ? 'Please choose a health worker.' : null;
       _dateError = _selectedDate.isBefore(normalizedToday)
           ? 'Please choose a date in the future.'
           : null;
@@ -231,6 +285,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
     setState(() {
       _bookingState = _BookingState.loading;
       _formError = null;
+      _successMessage = null;
     });
 
     try {
@@ -240,27 +295,365 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
         date: _selectedDate,
         slot: slot,
         reason: _reasonController.text,
+        idempotencyKey: _idempotencyKey,
+        service: _selectedService,
+        paymentMethod:
+            _paymentChoice == _PaymentChoice.cash ? 'cash' : 'online',
       );
       if (!mounted) return;
+      var paymentStatus = 'not_required';
+      String? paymentReference;
+      double? paymentAmount;
+      String? paymentCurrency;
+      if (appointment.isPaidSnapshot) {
+        if (_paymentChoice == _PaymentChoice.cash) {
+          _successMessage =
+              'Your appointment request has been sent. Payment is due at the clinic.';
+        } else {
+          var paymentCreated = false;
+          try {
+            final phoneNumber = await _requestPaymentPhone();
+            if (phoneNumber == null || !mounted) {
+              await _cancelUnpaidAppointment(appointment.id);
+              return;
+            }
+            final payment = await _payments.createPayment(
+              appointmentId: appointment.id,
+              phoneNumber: phoneNumber,
+            );
+            paymentCreated = true;
+            paymentReference = payment.referenceId;
+            paymentAmount = payment.amount;
+            paymentCurrency = payment.currency;
+            paymentStatus = await _showPaymentProgress(payment);
+            if (paymentStatus != 'successful') {
+              // The Mobile Money request was declined or cancelled on the
+              // phone; the appointment must not remain booked without payment.
+              if (const {'failed', 'cancelled', 'expired'}
+                  .contains(paymentStatus)) {
+                await _cancelUnpaidAppointment(appointment.id);
+              }
+              throw StateError(
+                _paymentStatusMessage(paymentStatus),
+              );
+            }
+            _successMessage =
+                'Payment received: ${payment.currency} ${payment.amount.toStringAsFixed(2)}. Your appointment request has been sent to the clinic.';
+          } catch (_) {
+            if (!paymentCreated) {
+              await _cancelUnpaidAppointment(appointment.id);
+            }
+            rethrow;
+          }
+        }
+      } else {
+        _successMessage =
+            'Your appointment request has been sent to the clinic.';
+      }
       setState(() => _bookingState = _BookingState.success);
       await Future<void>.delayed(const Duration(milliseconds: 1300));
-      if (mounted) Navigator.of(context).pop(appointment);
+      if (mounted) {
+        Navigator.of(context).pop(
+          AppointmentBookingResult(
+            appointment: appointment,
+            paymentStatus: paymentStatus,
+            paymentMethod:
+                _paymentChoice == _PaymentChoice.cash ? 'cash' : 'online',
+            paymentAmount: paymentAmount,
+            paymentCurrency: paymentCurrency,
+            paymentReference: paymentReference,
+          ),
+        );
+      }
     } on AppointmentException catch (error) {
       if (!mounted) return;
       setState(() {
         _bookingState = _BookingState.error;
         _formError = error.message;
+        _idempotencyKey = Uuid().v4();
       });
       if (error.retryable) {
         await _loadSlots();
       }
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _bookingState = _BookingState.error;
+        _formError = error.message;
+        _idempotencyKey = Uuid().v4();
+      });
+    } on StateError catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _bookingState = _BookingState.error;
+        _formError = error.message;
+        _idempotencyKey = Uuid().v4();
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _bookingState = _BookingState.error;
         _formError = 'We could not book your appointment. Please try again.';
+        _idempotencyKey = Uuid().v4();
       });
     }
+  }
+
+  Future<void> _cancelUnpaidAppointment(String appointmentId) async {
+    try {
+      await _appointments.cancelAppointment(appointmentId);
+    } catch (_) {
+      // Preserve the payment error shown to the user; cleanup is retryable.
+    }
+  }
+
+  Future<String> _showPaymentProgress(LipilaPaymentStart payment) async {
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        var status = 'pending';
+        var checking = false;
+        var started = false;
+        var attempts = 0;
+        var dialogOpen = true;
+        late StateSetter setDialogState;
+        late Future<void> Function() poll;
+
+        poll = () async {
+          if (checking) return;
+          checking = true;
+          try {
+            final result = await _payments.getStatus(payment.paymentId);
+            status = result.status;
+            attempts++;
+            if (dialogOpen &&
+                dialogContext.mounted &&
+                !{'pending', 'created'}.contains(status)) {
+              dialogOpen = false;
+              Navigator.pop(dialogContext, status);
+              return;
+            }
+            if (dialogOpen && dialogContext.mounted) {
+              setDialogState(() {});
+            }
+          } catch (_) {
+            status = 'check_error';
+            if (dialogOpen && dialogContext.mounted) {
+              setDialogState(() {});
+            }
+          } finally {
+            checking = false;
+          }
+        };
+
+        if (!started) {
+          started = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            for (var attempt = 0; attempt < 15; attempt++) {
+              if (!dialogOpen || !dialogContext.mounted) return;
+              await poll();
+              if (!dialogOpen ||
+                  !dialogContext.mounted ||
+                  !{'pending', 'created', 'check_error'}.contains(status)) {
+                return;
+              }
+              await Future<void>.delayed(const Duration(seconds: 2));
+            }
+            if (dialogOpen && dialogContext.mounted) {
+              status = 'pending_timeout';
+              setDialogState(() {});
+            }
+          });
+        }
+
+        final waiting = status == 'pending' || status == 'created';
+        final terminal =
+            !waiting && status != 'check_error' && status != 'pending_timeout';
+        return StatefulBuilder(
+          builder: (context, dialogSetState) {
+            setDialogState = dialogSetState;
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                children: [
+                  Icon(
+                    terminal
+                        ? (status == 'successful'
+                            ? Icons.check_circle_rounded
+                            : Icons.error_outline_rounded)
+                        : Icons.phone_iphone_rounded,
+                    color: terminal
+                        ? (status == 'successful'
+                            ? DawaColors.green
+                            : DawaColors.danger)
+                        : DawaColors.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      terminal
+                          ? (status == 'successful'
+                              ? 'Payment received'
+                              : 'Payment not completed')
+                          : 'Check your phone',
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (waiting || status == 'check_error') ...[
+                    const Center(
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Text(
+                    terminal
+                        ? _paymentStatusMessage(status)
+                        : status == 'check_error'
+                            ? 'We could not check the payment status. It is safe to check again.'
+                            : status == 'pending_timeout'
+                                ? 'Still waiting. Approve the Mobile Money prompt if it is still on your phone.'
+                                : "We've sent a payment request to your phone. Approve it to continue. Dawa is checking automatically.",
+                    textAlign: TextAlign.center,
+                  ),
+                  if (attempts > 0) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Reference: ${payment.referenceId}',
+                      style: TextStyle(
+                        color: DawaColors.textMuted,
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                if (!terminal)
+                  TextButton(
+                    onPressed: checking ? null : poll,
+                    child: Text(checking ? 'Checking…' : 'Check again'),
+                  ),
+                if (!waiting ||
+                    status == 'pending_timeout' ||
+                    status == 'check_error')
+                  TextButton(
+                    onPressed: () {
+                      dialogOpen = false;
+                      Navigator.pop(dialogContext, status);
+                    },
+                    child: const Text('Done'),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    return result ?? 'pending';
+  }
+
+  static String _paymentStatusMessage(String status) {
+    switch (status) {
+      case 'successful':
+        return 'Your appointment request has been sent to the clinic for confirmation.';
+      case 'failed':
+        return "The payment wasn't approved, so the appointment wasn't booked. You can try again.";
+      case 'cancelled':
+        return "The payment request was cancelled, so the appointment wasn't booked. You can try again.";
+      case 'expired':
+        return "The payment request expired, so the appointment wasn't booked. You can try again.";
+      case 'pending_timeout':
+        return 'The payment request is still pending. Check your phone, then try again if needed.';
+      default:
+        return "The payment wasn't completed, so the appointment wasn't booked. You can try again.";
+    }
+  }
+
+  Future<String?> _requestPaymentPhone() async {
+    var phoneNumber = '';
+    final price = _selectedService?.displayPrice ?? '';
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text('Mobile Money'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (price.isNotEmpty) ...[
+              Text(
+                price,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: DawaColors.primary,
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Text(
+              "We'll send a payment request to your phone.",
+              style: TextStyle(color: DawaColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+              onChanged: (value) => phoneNumber = value,
+              decoration: InputDecoration(
+                labelText: 'Phone number',
+                hintText: '0970 000 000',
+                helperText: "You'll approve the payment on your phone.",
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.shield_outlined,
+                  size: 16,
+                  color: DawaColors.textMuted,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Dawa will never ask for your Mobile Money PIN.',
+                    style: TextStyle(
+                      color: DawaColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, phoneNumber),
+            child: const Text('Send payment request'),
+          ),
+        ],
+      ),
+    );
+    return value?.trim().isEmpty == true ? null : value?.trim();
   }
 
   @override
@@ -302,10 +695,17 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
               ),
               Flexible(
                 child: _loadingDirectory
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(48),
-                          child: CircularProgressIndicator(),
+                    ? const SingleChildScrollView(
+                        padding: EdgeInsets.all(DawaSpacing.md),
+                        child: Column(
+                          children: [
+                            DawaLoadingSkeleton(
+                              label: 'Loading clinics',
+                              lines: 3,
+                            ),
+                            SizedBox(height: DawaSpacing.sm),
+                            DawaLoadingSkeleton(lines: 2),
+                          ],
                         ),
                       )
                     : SingleChildScrollView(
@@ -319,12 +719,85 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Choose a date, clinic, clinician and available time.',
+                              'Choose a date, clinic, health worker and time.',
                               style: theme.bodyMedium.copyWith(
                                 color: theme.secondaryText,
                               ),
                             ),
                             const SizedBox(height: 20),
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedService?.id,
+                              isExpanded: true,
+                              decoration: _inputDecoration(
+                                context,
+                                label: 'Service',
+                              ),
+                              hint: const Text('Select a service'),
+                              items: _serviceOptions
+                                  .map(
+                                    (service) => DropdownMenuItem(
+                                      value: service.id,
+                                      child: Text(
+                                        '${service.name} · ${service.displayPrice}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _bookingState == _BookingState.loading
+                                  ? null
+                                  : (id) => setState(() {
+                                        _selectedService = _serviceOptions
+                                            .where(
+                                                (service) => service.id == id)
+                                            .firstOrNull;
+                                      }),
+                            ),
+                            const SizedBox(height: 16),
+                            if (_selectedService?.isPaid == true) ...[
+                              Text(
+                                'Payment method',
+                                style: theme.titleSmall.copyWith(
+                                  color: theme.primaryText,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<_PaymentChoice>(
+                                initialValue: _paymentChoice,
+                                decoration: _inputDecoration(
+                                  context,
+                                  label: 'How would you like to pay?',
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: _PaymentChoice.online,
+                                    child: Text('Pay now · Mobile Money'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: _PaymentChoice.cash,
+                                    child: Text('Pay at clinic · Cash'),
+                                  ),
+                                ],
+                                onChanged: _bookingState ==
+                                        _BookingState.loading
+                                    ? null
+                                    : (value) => setState(() {
+                                          _paymentChoice =
+                                              value ?? _PaymentChoice.online;
+                                        }),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _paymentChoice == _PaymentChoice.cash
+                                    ? 'Pay in cash when you arrive for your appointment.'
+                                    : 'Use Mobile Money to pay before the clinic confirms your visit.',
+                                style: theme.bodySmall.copyWith(
+                                  color: theme.secondaryText,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
                             _DateSection(
                               selectedDate: _selectedDate,
                               errorText: _dateError,
@@ -365,7 +838,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                               isExpanded: true,
                               decoration: _inputDecoration(
                                 context,
-                                label: 'Clinician',
+                                label: 'Health worker',
                                 errorText: _clinicianError,
                                 suffix: _loadingClinicians
                                     ? const Padding(
@@ -382,31 +855,18 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                               hint: Text(
                                 _selectedClinic == null
                                     ? 'Select a clinic first'
-                                    : 'Select a clinician',
+                                    : 'Choose a health worker',
                               ),
                               items: _clinicians
                                   .map(
                                     (clinician) => DropdownMenuItem(
                                       value: clinician.id,
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            clinician.displayName,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          if (clinician.subtitle.isNotEmpty)
-                                            Text(
-                                              clinician.subtitle,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.bodySmall.copyWith(
-                                                color: theme.secondaryText,
-                                              ),
-                                            ),
-                                        ],
+                                      child: Text(
+                                        clinician.subtitle.isEmpty
+                                            ? clinician.displayName
+                                            : '${clinician.displayName} - ${clinician.subtitle}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   )
@@ -430,7 +890,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                               const LinearProgressIndicator(minHeight: 3)
                             else if (_selectedClinician == null)
                               Text(
-                                'Select a clinician to view appointment times.',
+                                'Choose a health worker to see appointment times.',
                                 style: theme.bodySmall.copyWith(
                                   color: theme.secondaryText,
                                 ),
@@ -503,8 +963,9 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
                             ],
                             if (_bookingState == _BookingState.success) ...[
                               const SizedBox(height: 8),
-                              const _StatusBanner(
-                                message: 'Appointment booked successfully',
+                              _StatusBanner(
+                                message: _successMessage ??
+                                    'Appointment booked successfully',
                                 isSuccess: true,
                               ),
                             ],

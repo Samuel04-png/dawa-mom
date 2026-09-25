@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 
 enum DawaMomLogoVariant {
   full,
@@ -16,7 +16,7 @@ class DawaMomLogo extends StatelessWidget {
     this.width,
     this.showSubtitle = false,
     this.fit = BoxFit.contain,
-    this.semanticLabel = 'Dawa Mom',
+    this.semanticLabel = 'DawaMom',
   });
 
   static const crossAsset =
@@ -65,18 +65,35 @@ class DawaMomLogo extends StatelessWidget {
           fit: fit,
         );
       case DawaMomLogoVariant.wordmarkOnly:
-        return Image.asset(
-          wordmarkAsset,
-          width: width ?? size * 2.65,
+        return SizedBox(
+          width: width ?? size * 2.9,
           height: size,
-          fit: fit,
+          child: FittedBox(
+            fit: BoxFit.contain,
+            alignment: Alignment.centerLeft,
+            child: _DawaMomWordmark(fontSize: size),
+          ),
         );
       case DawaMomLogoVariant.authentication:
-        return Image.asset(
-          fullAsset,
-          width: width ?? size,
+        return SizedBox(
+          width: width ?? size * 1.35,
           height: size,
-          fit: fit,
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  crossAsset,
+                  width: size * 0.6,
+                  height: size * 0.6,
+                  fit: fit,
+                ),
+                SizedBox(height: size * 0.06),
+                _DawaMomWordmark(fontSize: size * 0.3),
+              ],
+            ),
+          ),
         );
       case DawaMomLogoVariant.full:
         return SizedBox(
@@ -93,33 +110,31 @@ class DawaMomLogo extends StatelessWidget {
               ),
               SizedBox(width: size * 0.2),
               Flexible(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Flexible(
-                      child: Image.asset(
-                        wordmarkAsset,
-                        alignment: Alignment.centerLeft,
-                        fit: fit,
-                      ),
-                    ),
-                    if (showSubtitle)
-                      Text(
-                        'Dawa Mom maternal health',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.66),
-                          fontFamily: 'Poppins',
-                          fontSize: size * 0.18,
-                          fontWeight: FontWeight.w500,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _DawaMomWordmark(fontSize: size * 0.48),
+                      if (showSubtitle)
+                        Text(
+                          'Care that stays with you',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.66),
+                            fontFamily: 'Poppins',
+                            fontSize: size * 0.16,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -127,4 +142,34 @@ class DawaMomLogo extends StatelessWidget {
         );
     }
   }
+}
+
+class _DawaMomWordmark extends StatelessWidget {
+  const _DawaMomWordmark({required this.fontSize});
+
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) => Text.rich(
+        TextSpan(
+          children: [
+            const TextSpan(text: 'Dawa'),
+            TextSpan(
+              text: 'Mom',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.primary,
+          fontFamily: 'Poppins',
+          fontSize: fontSize,
+          height: 1,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.8,
+        ),
+      );
 }

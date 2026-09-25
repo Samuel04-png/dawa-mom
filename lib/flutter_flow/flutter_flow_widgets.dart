@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 
 class FFButtonOptions {
@@ -115,7 +115,7 @@ class _FFButtonWidgetState extends State<FFButtonWidget> {
             ),
           )
         : AutoSizeText(
-            text ?? '',
+            context.tr(text ?? ''),
             style:
                 text == null ? null : widget.options.textStyle?.withoutColor(),
             textAlign: widget.options.textAlign,

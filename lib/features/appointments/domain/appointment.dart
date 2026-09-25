@@ -16,6 +16,13 @@ class Appointment {
     required this.source,
     required this.createdAt,
     required this.integrationStatus,
+    this.serviceId = '',
+    this.externalServiceIdSnapshot,
+    this.serviceNameSnapshot,
+    this.isPaidSnapshot = false,
+    this.priceSnapshot = 0,
+    this.currencySnapshot = 'ZMW',
+    this.paymentMethod = 'online',
     this.reason,
     this.notes,
     this.externalAppointmentId,
@@ -43,6 +50,13 @@ class Appointment {
   final String source;
   final DateTime createdAt;
   final String integrationStatus;
+  final String serviceId;
+  final String? externalServiceIdSnapshot;
+  final String? serviceNameSnapshot;
+  final bool isPaidSnapshot;
+  final double priceSnapshot;
+  final String currencySnapshot;
+  final String paymentMethod;
   final String? externalAppointmentId;
   final String? integrationErrorCode;
   final String? patientSafeStatusMessage;
@@ -85,6 +99,13 @@ class Appointment {
         source: source,
         createdAt: createdAt,
         integrationStatus: integrationStatus,
+        serviceId: serviceId,
+        externalServiceIdSnapshot: externalServiceIdSnapshot,
+        serviceNameSnapshot: serviceNameSnapshot,
+        isPaidSnapshot: isPaidSnapshot,
+        priceSnapshot: priceSnapshot,
+        currencySnapshot: currencySnapshot,
+        paymentMethod: paymentMethod,
         externalAppointmentId: externalAppointmentId,
         integrationErrorCode: integrationErrorCode,
         patientSafeStatusMessage: patientSafeStatusMessage,
@@ -113,12 +134,20 @@ class Appointment {
       source: json['source']?.toString() ?? 'dawa_mom',
       createdAt: DateTime.parse(json['created_at'].toString()),
       integrationStatus: json['integration_status']?.toString() ?? 'pending',
+      serviceId: json['service_id']?.toString() ?? '',
+      externalServiceIdSnapshot:
+          json['external_service_id_snapshot']?.toString(),
+      serviceNameSnapshot: json['service_name_snapshot']?.toString(),
+      isPaidSnapshot: json['is_paid_snapshot'] as bool? ?? false,
+      priceSnapshot:
+          double.tryParse(json['price_snapshot']?.toString() ?? '') ?? 0,
+      currencySnapshot: json['currency_snapshot']?.toString() ?? 'ZMW',
+      paymentMethod: json['payment_method']?.toString() ?? 'online',
       externalAppointmentId:
           json['dawa_clinician_appointment_id']?.toString() ??
               json['external_appointment_id']?.toString(),
       integrationErrorCode: json['integration_error_code']?.toString(),
-      patientSafeStatusMessage:
-          json['patient_safe_status_message']?.toString(),
+      patientSafeStatusMessage: json['patient_safe_status_message']?.toString(),
     );
   }
 
@@ -139,18 +168,85 @@ class Appointment {
 }
 
 @immutable
+class AppointmentBookingResult {
+  const AppointmentBookingResult({
+    required this.appointment,
+    required this.paymentStatus,
+    required this.paymentMethod,
+    this.paymentAmount,
+    this.paymentCurrency,
+    this.paymentReference,
+  });
+
+  final Appointment appointment;
+  final String paymentStatus;
+  final String paymentMethod;
+  final double? paymentAmount;
+  final String? paymentCurrency;
+  final String? paymentReference;
+
+  bool get paymentSucceeded => paymentStatus == 'successful';
+}
+
+@immutable
 class ClinicOption {
-  const ClinicOption({required this.id, required this.name, this.address});
+  const ClinicOption({
+    required this.id,
+    required this.name,
+    this.address,
+    this.distanceKm,
+    this.isOpen,
+    this.services = const [],
+    this.nextAvailableAt,
+    this.openingHours,
+    this.isPreferred,
+    this.phone,
+    this.latitude,
+    this.longitude,
+    this.accessibility = const [],
+    this.languages = const [],
+  });
 
   final String id;
   final String name;
   final String? address;
+  final double? distanceKm;
+  final bool? isOpen;
+  final List<String> services;
+  final DateTime? nextAvailableAt;
+  final String? openingHours;
+  final bool? isPreferred;
+  final String? phone;
+  final double? latitude;
+  final double? longitude;
+  final List<String> accessibility;
+  final List<String> languages;
 
   factory ClinicOption.fromJson(Map<String, dynamic> json) => ClinicOption(
         id: json['id'].toString(),
         name: json['name']?.toString() ?? 'Clinic',
         address: json['address']?.toString(),
+        distanceKm: double.tryParse(json['distance_km']?.toString() ?? ''),
+        isOpen: json['is_open'] as bool?,
+        services: _stringList(json['services']),
+        nextAvailableAt:
+            DateTime.tryParse(json['next_available_at']?.toString() ?? ''),
+        openingHours: json['opening_hours']?.toString(),
+        isPreferred: json['is_preferred'] as bool?,
+        phone: json['phone']?.toString(),
+        latitude: double.tryParse(json['latitude']?.toString() ?? ''),
+        longitude: double.tryParse(json['longitude']?.toString() ?? ''),
+        accessibility: _stringList(json['accessibility']),
+        languages: _stringList(json['languages']),
       );
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
 }
 
 @immutable
@@ -197,7 +293,7 @@ class ClinicianProfile {
     );
     return ClinicianProfile(
       id: json['id'].toString(),
-      displayName: json['display_name']?.toString() ?? 'Clinician',
+      displayName: json['display_name']?.toString() ?? 'Health worker',
       professionalTitle: json['professional_title']?.toString(),
       speciality: json['speciality']?.toString(),
       clinicId: json['clinic_id'].toString(),

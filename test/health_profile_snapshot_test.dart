@@ -49,7 +49,7 @@ void main() {
     expect(profile.periodWasSkipped, isTrue);
     expect(
       profile.dashboardPrompt,
-      'Set up your Period Tracker to receive estimates.',
+      'Add your last period to see cycle dates.',
     );
   });
 
@@ -119,7 +119,7 @@ void main() {
     );
     expect(profile.pregnancyComplete, isTrue);
     expect(profile.periodComplete, isFalse);
-    expect(profile.dashboardPrompt, contains('Period Tracker'));
+    expect(profile.dashboardPrompt, contains('last period'));
     expect(profile.dashboardPrompt, isNot(contains('pregnancy')));
   });
 

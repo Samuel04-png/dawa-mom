@@ -5,7 +5,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
-import 'package:flutter/material.dart';
+import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'create_account_model.dart';
@@ -504,6 +504,10 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
                                               ),
                                           firstDate: DateTime(1900),
                                           lastDate: now,
+                                          helpText: context
+                                              .tr('Choose date of birth'),
+                                          cancelText: context.tr('Cancel'),
+                                          confirmText: context.tr('Save'),
                                         );
 
                                         if (_datePickedDate != null) {
@@ -1066,7 +1070,7 @@ class _CreateAccountWidgetState extends State<CreateAccountWidget> {
                                             }
 
                                             _showSnackBar(
-                                              'Account created! Welcome to Dawa Mom $name',
+                                              'Account created! Welcome to DawaMom $name',
                                               backgroundColor:
                                                   FlutterFlowTheme.of(context)
                                                       .secondary,

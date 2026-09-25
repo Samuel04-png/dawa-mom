@@ -58,5 +58,49 @@ void main() {
         throwsA(isA<PeriodTrackerException>()),
       );
     });
+
+    test('period record validation rejects future and impossible ranges', () {
+      final today = DateTime(2026, 7, 27);
+
+      expect(
+        () => PeriodTrackerService.validatePeriodRecord(
+          startDate: DateTime(2026, 7, 28),
+          today: today,
+        ),
+        throwsA(isA<PeriodTrackerException>()),
+      );
+      expect(
+        () => PeriodTrackerService.validatePeriodRecord(
+          startDate: DateTime(2026, 7, 20),
+          endDate: DateTime(2026, 7, 19),
+          today: today,
+        ),
+        throwsA(isA<PeriodTrackerException>()),
+      );
+      expect(
+        () => PeriodTrackerService.validatePeriodRecord(
+          startDate: DateTime(2026, 7, 20),
+          endDate: DateTime(2026, 7, 28),
+          today: today,
+        ),
+        throwsA(isA<PeriodTrackerException>()),
+      );
+      expect(
+        () => PeriodTrackerService.validatePeriodRecord(
+          startDate: DateTime(2026, 7, 1),
+          endDate: DateTime(2026, 7, 16),
+          today: today,
+        ),
+        throwsA(isA<PeriodTrackerException>()),
+      );
+      expect(
+        () => PeriodTrackerService.validatePeriodRecord(
+          startDate: DateTime(2026, 7, 23),
+          endDate: DateTime(2026, 7, 27),
+          today: today,
+        ),
+        returnsNormally,
+      );
+    });
   });
 }

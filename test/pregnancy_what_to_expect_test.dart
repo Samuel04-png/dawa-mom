@@ -52,7 +52,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_card(_profile(status: 'not_pregnant')));
 
-    expect(find.text('Pregnancy guidance is not active'), findsOneWidget);
+    expect(find.text('Pregnancy tips are off'), findsOneWidget);
     expect(find.text('No pregnancy data'), findsNothing);
   });
 

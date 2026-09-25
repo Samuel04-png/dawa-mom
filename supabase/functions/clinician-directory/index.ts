@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
-    return jsonResponse({ error: 'Dawa Mom function environment is not configured' }, 500);
+    return jsonResponse({ error: 'DawaMom function environment is not configured' }, 500);
   }
 
   const userClient = createClient(supabaseUrl, supabaseAnonKey, {
