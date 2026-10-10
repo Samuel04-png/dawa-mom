@@ -1,0 +1,22 @@
+project_id = "himbfndvsuwiudtzjojh"
+
+[functions.process-dawa-platform-outbox]
+verify_jwt = false
+
+[functions.receive-dawa-clinician-appointment-status]
+verify_jwt = false
+
+[functions.process-appointment-emails]
+verify_jwt = false
+
+[functions.lipila-create-payment]
+verify_jwt = true
+
+[functions.lipila-webhook]
+verify_jwt = false
+
+[functions.receive-service-catalog-sync]
+verify_jwt = false
+
+[functions.lipila-payment-status]
+verify_jwt = true
