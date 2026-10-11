@@ -20,6 +20,12 @@ begin
 end;
 $$;
 
+-- The fixture deliberately switches to authenticated/service_role below to
+-- exercise the real RPC grants and RLS paths. Permit those test-only roles to
+-- call the assertion helper; this schema exists only in the disposable CI DB.
+grant usage on schema test_release1 to authenticated, service_role;
+grant execute on all functions in schema test_release1 to authenticated, service_role;
+
 -- These rows existed before 202610100001 was applied. The migration must not
 -- reclassify a private legacy reservation as active, and it must preserve a
 -- completed legacy visit as successful.
