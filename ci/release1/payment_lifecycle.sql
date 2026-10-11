@@ -469,6 +469,7 @@ select test_release1.assert_true(
   ),
   'patient cancellation was not marked queued for Clinician synchronization'
 );
+reset role;
 select test_release1.assert_true(
   exists (
     select 1
@@ -479,6 +480,7 @@ select test_release1.assert_true(
   ),
   'patient cancellation did not enqueue a Clinician cancellation event'
 );
+set role authenticated;
 select public.book_dawa_mom_appointment(
   '00000000-0000-4000-8000-000000000031',
   '00000000-0000-4000-8000-000000000041',
