@@ -93,6 +93,7 @@ dependencies:
   http: ^1.4.0
   flutter_tts: ^4.2.5
   record: ^6.2.1
+  qr_flutter: ^4.1.0
 
 dependency_overrides:
   http: 1.4.0

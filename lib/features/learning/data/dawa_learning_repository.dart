@@ -75,6 +75,7 @@ class DawaLearningState {
     this.gameProgress = const <String, DawaGameProgress>{},
     this.coins = 180,
     this.streak = 1,
+    this.balanceVerified = false,
   });
 
   final Set<String> savedIds;
@@ -84,6 +85,10 @@ class DawaLearningState {
   final int coins;
   final int streak;
 
+  /// `coins` is displayable while offline, but only becomes reward-authoritative
+  /// after it has been returned by the owner-scoped server ledger.
+  final bool balanceVerified;
+
   DawaLearningState copyWith({
     Set<String>? savedIds,
     Set<String>? completedIds,
@@ -91,6 +96,7 @@ class DawaLearningState {
     Map<String, DawaGameProgress>? gameProgress,
     int? coins,
     int? streak,
+    bool? balanceVerified,
   }) =>
       DawaLearningState(
         savedIds: savedIds ?? this.savedIds,
@@ -99,6 +105,7 @@ class DawaLearningState {
         gameProgress: gameProgress ?? this.gameProgress,
         coins: coins ?? this.coins,
         streak: streak ?? this.streak,
+        balanceVerified: balanceVerified ?? this.balanceVerified,
       );
 }
 
@@ -108,13 +115,35 @@ class DawaRewardRedemption {
     required this.rewardCode,
     required this.voucherCode,
     required this.alreadyRedeemed,
+    this.id,
+    this.claimId,
+    this.claimReference,
+    this.status = DawaVoucherStatus.claimed,
+    this.expiresAt,
+    this.qrPayload,
   });
 
   final DawaLearningState state;
   final String rewardCode;
   final String voucherCode;
   final bool alreadyRedeemed;
+  final String? id;
+  final String? claimId;
+  final String? claimReference;
+  final DawaVoucherStatus status;
+  final DateTime? expiresAt;
+  final String? qrPayload;
 }
+
+enum DawaVoucherStatus { claimed, redeemed, expired, cancelled }
+
+DawaVoucherStatus dawaVoucherStatusFrom(Object? value) =>
+    switch (value?.toString().toLowerCase()) {
+      'redeemed' => DawaVoucherStatus.redeemed,
+      'expired' => DawaVoucherStatus.expired,
+      'cancelled' => DawaVoucherStatus.cancelled,
+      _ => DawaVoucherStatus.claimed,
+    };
 
 double dawaQuestProgress(DawaLearningState state) {
   if (state.completedIds.contains('screening-without-fear')) return 1;
@@ -143,7 +172,6 @@ class DawaLearningRepository {
   static const _gameProgressKey = 'dawa_learning_game_progress_v1';
   static const _coinsKey = 'dawa_learning_coins';
   static const _streakKey = 'dawa_learning_streak';
-  static const _freeScanVoucherKey = 'dawa_reward_free_scan_voucher';
   static const _localOwnerKey = 'dawa_learning_local_owner';
 
   String? _preparedStorageScope;
@@ -198,6 +226,7 @@ class DawaLearningRepository {
         gameProgress: local.gameProgress,
         coins: row['coin_balance'] as int? ?? local.coins,
         streak: row['streak_days'] as int? ?? local.streak,
+        balanceVerified: true,
       );
       final remoteProgress = await _loadRemoteGameProgress(client, userId);
       final mergedProgress = {...remoteProgress};
@@ -246,11 +275,14 @@ class DawaLearningRepository {
     if (state.completedIds.contains(id) && !pending.contains(id)) return state;
     final isNew = !state.completedIds.contains(id);
     final completed = {...state.completedIds, id};
+    // Content progress may be saved locally for offline learning, but points
+    // are deliberately never calculated by Flutter. The `rewardCoins`
+    // parameter remains for call-site compatibility and must not influence a
+    // balance; the server-owned award ledger decides the amount exactly once.
     final local = isNew
         ? await _persist(
             state.copyWith(
               completedIds: completed,
-              coins: state.coins + rewardCoins,
             ),
           )
         : state;
@@ -269,6 +301,7 @@ class DawaLearningRepository {
         completedIds:
             Set<String>.from(data['completed_content_ids'] ?? completed),
         coins: data['coin_balance'] as int? ?? local.coins,
+        balanceVerified: true,
       );
       final remaining = await _pendingCompletionIds()
         ..remove(id);
@@ -358,7 +391,7 @@ class DawaLearningRepository {
         'Please sign in before redeeming a reward.',
       );
     }
-    if (state.coins < cost) {
+    if (state.balanceVerified && state.coins < cost) {
       final previous = await loadRedemption(state: state);
       if (previous != null) return previous;
       throw const DawaLearningException(
@@ -366,13 +399,26 @@ class DawaLearningRepository {
       );
     }
     try {
-      final result = await client.rpc(
-        'redeem_dawa_mom_reward',
-        params: {
-          'p_reward_code': 'free_scan_voucher',
-          'p_cost': cost,
-        },
-      );
+      dynamic result;
+      try {
+        result = await client.rpc(
+          'claim_dawa_mom_reward',
+          params: {'p_reward_code': 'free_scan_voucher'},
+        );
+      } on PostgrestException catch (error) {
+        // The current production schema may not yet have the additive claim
+        // RPC. Keep the released wallet usable during its approved rolling
+        // deployment; the legacy RPC is replaced with a safe wrapper by the
+        // migration before the new endpoint is enabled.
+        if (error.code != 'PGRST202' && error.code != '42883') rethrow;
+        result = await client.rpc(
+          'redeem_dawa_mom_reward',
+          params: {
+            'p_reward_code': 'free_scan_voucher',
+            'p_cost': cost,
+          },
+        );
+      }
       final data = result is Map ? Map<String, dynamic>.from(result) : null;
       final balance = data?['coin_balance'] as int?;
       final voucherCode = data?['voucher_code']?.toString();
@@ -381,13 +427,20 @@ class DawaLearningRepository {
           'The reward service did not confirm a voucher.',
         );
       }
-      final next = await _persist(state.copyWith(coins: balance));
-      await (await _prefs).setString(_keyFor(_freeScanVoucherKey), voucherCode);
+      final next = await _persist(
+        state.copyWith(coins: balance, balanceVerified: true),
+      );
       return DawaRewardRedemption(
         state: next,
         rewardCode: data?['reward_code']?.toString() ?? 'free_scan_voucher',
         voucherCode: voucherCode,
         alreadyRedeemed: data?['already_redeemed'] as bool? ?? false,
+        id: data?['id']?.toString(),
+        claimId: data?['claim_id']?.toString(),
+        claimReference: data?['claim_reference']?.toString() ?? voucherCode,
+        status: dawaVoucherStatusFrom(data?['status']),
+        expiresAt: DateTime.tryParse(data?['expires_at']?.toString() ?? ''),
+        qrPayload: data?['qr_payload']?.toString(),
       );
     } on PostgrestException catch (error) {
       debugPrint('Reward redemption unavailable: ${error.code}');
@@ -407,35 +460,29 @@ class DawaLearningRepository {
   }) async {
     await _prepareOwnerScopedStorage();
     final current = state ?? await load();
-    final prefs = await _prefs;
-    final localVoucher = prefs.getString(_keyFor(_freeScanVoucherKey));
-    if (localVoucher != null && localVoucher.isNotEmpty) {
-      return DawaRewardRedemption(
-        state: current,
-        rewardCode: 'free_scan_voucher',
-        voucherCode: localVoucher,
-        alreadyRedeemed: true,
-      );
-    }
-
     final client = _supabase;
     final userId = client?.auth.currentUser?.id;
     if (client == null || userId == null) return null;
     try {
       final row = await client
           .from('dawa_mom_reward_redemptions')
-          .select('reward_code, voucher_code')
+          .select()
           .eq('profile_id', userId)
           .eq('reward_code', 'free_scan_voucher')
           .maybeSingle();
       final voucherCode = row?['voucher_code']?.toString();
       if (voucherCode == null || voucherCode.isEmpty) return null;
-      await prefs.setString(_keyFor(_freeScanVoucherKey), voucherCode);
       return DawaRewardRedemption(
         state: current,
         rewardCode: row?['reward_code']?.toString() ?? 'free_scan_voucher',
         voucherCode: voucherCode,
         alreadyRedeemed: true,
+        id: row?['id']?.toString(),
+        claimId: row?['claim_id']?.toString(),
+        claimReference: row?['claim_reference']?.toString() ?? voucherCode,
+        status: dawaVoucherStatusFrom(row?['status']),
+        expiresAt: DateTime.tryParse(row?['expires_at']?.toString() ?? ''),
+        qrPayload: _voucherQrPayload(row),
       );
     } on PostgrestException catch (error) {
       debugPrint('Reward voucher lookup unavailable: ${error.code}');
@@ -448,6 +495,18 @@ class DawaLearningRepository {
     unawaited(_sync(state));
     changes.value += 1;
     return state;
+  }
+
+  String? _voucherQrPayload(Map<String, dynamic>? row) {
+    final claimId = row?['claim_id']?.toString();
+    final reference = row?['claim_reference']?.toString();
+    if (claimId == null ||
+        claimId.isEmpty ||
+        reference == null ||
+        reference.isEmpty) {
+      return null;
+    }
+    return 'dawa-mom://voucher/$claimId?ref=$reference';
   }
 
   Future<void> _saveLocal(DawaLearningState state) async {
@@ -631,10 +690,6 @@ class DawaLearningRepository {
       final gameProgress = prefs.getString(_gameProgressKey);
       if (gameProgress != null && gameProgress.isNotEmpty) {
         await prefs.setString(_keyFor(_gameProgressKey), gameProgress);
-      }
-      final voucher = prefs.getString(_freeScanVoucherKey);
-      if (voucher != null && voucher.isNotEmpty) {
-        await prefs.setString(_keyFor(_freeScanVoucherKey), voucher);
       }
     }
     await prefs.setString(_localOwnerKey, userId);

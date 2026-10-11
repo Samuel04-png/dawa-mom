@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import '/localization/dawa_localized_material.dart';
 import '/components/booking_bottom_sheet/booking_bottom_sheet_widget.dart';
 import '/design_system/dawa_components.dart';
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/domain/appointment.dart';
 import '/features/appointments/presentation/dawa_booking_success_dialog.dart';
+import '/features/feedback/dawa_feedback_effects.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/navbar/appointments/appointment_details/appointment_details_widget.dart';
@@ -24,6 +27,9 @@ class UpcomingAppointmentSection extends StatelessWidget {
       builder: (_) => const BookingBottomSheetWidget(),
     );
     if (result == null || !context.mounted) return;
+    if (!result.appointment.requiresOnlinePayment || result.paymentSucceeded) {
+      unawaited(DawaFeedbackEffects.appointmentBooked());
+    }
     await showDawaBookingSuccessDialog(
       context,
       result.appointment,

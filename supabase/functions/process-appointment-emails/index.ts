@@ -5,6 +5,7 @@ type OutboxJob = {
   id: string;
   appointment_id: string;
   recipient_kind: "patient" | "clinician";
+  template_key: "appointment_requested" | "appointment_confirmed" | "appointment_cancelled" | "appointment_reminder";
   attempt_count: number;
 };
 
@@ -193,6 +194,46 @@ function buildMessage(
   if (job.recipient_kind === "patient") {
     if (!context.patientEmail) {
       throw new DeliveryError("Patient email is unavailable", false);
+    }
+    if (job.template_key === "appointment_confirmed") {
+      return {
+        to: context.patientEmail,
+        subject: "Your DawaMom visit is confirmed",
+        text: [
+          `Hello ${context.patientName},`,
+          "Your clinic confirmed your visit.",
+          `When: ${when}`,
+          `Clinic: ${context.clinicName}`,
+          "You can review your visit in DawaMom.",
+        ].join("\n\n"),
+        html: `<p>Hello ${escapeHtml(context.patientName)},</p><p><strong>Your clinic confirmed your visit.</strong></p><p><strong>When:</strong> ${escapeHtml(when)}<br><strong>Clinic:</strong> ${escapeHtml(context.clinicName)}</p><p>You can review your visit in DawaMom.</p>`,
+      };
+    }
+    if (job.template_key === "appointment_cancelled") {
+      return {
+        to: context.patientEmail,
+        subject: "Your DawaMom visit was cancelled",
+        text: [
+          `Hello ${context.patientName},`,
+          "Your visit was cancelled.",
+          `Clinic: ${context.clinicName}`,
+          "You can book another visit in DawaMom when you are ready.",
+        ].join("\n\n"),
+        html: `<p>Hello ${escapeHtml(context.patientName)},</p><p>Your visit was cancelled.</p><p><strong>Clinic:</strong> ${escapeHtml(context.clinicName)}</p><p>You can book another visit in DawaMom when you are ready.</p>`,
+      };
+    }
+    if (job.template_key === "appointment_reminder") {
+      return {
+        to: context.patientEmail,
+        subject: "Reminder: your DawaMom visit is coming up",
+        text: [
+          `Hello ${context.patientName},`,
+          "This is a reminder about your upcoming visit.",
+          `When: ${when}`,
+          `Clinic: ${context.clinicName}`,
+        ].join("\n\n"),
+        html: `<p>Hello ${escapeHtml(context.patientName)},</p><p>This is a reminder about your upcoming visit.</p><p><strong>When:</strong> ${escapeHtml(when)}<br><strong>Clinic:</strong> ${escapeHtml(context.clinicName)}</p>`,
+      };
     }
     const subject = "We received your DawaMom appointment request";
     const text = [

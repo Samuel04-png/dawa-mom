@@ -215,6 +215,9 @@ class _DawaCarePageState extends State<DawaCarePage> {
       _statusFeedbackMessage = details.message;
       _statusFeedbackTone = details.tone;
     });
+    if (status == 'confirmed') {
+      unawaited(DawaFeedbackEffects.appointmentConfirmed());
+    }
   }
 
   Future<void> _refresh() async {
@@ -251,9 +254,11 @@ class _DawaCarePageState extends State<DawaCarePage> {
       setState(() => _appointments = Future.value([...current, appointment]));
     }
     if (!mounted) return;
-    // A request may still await a clinic review. The dialog communicates that
-    // state; this is only a quiet acknowledgement that the write succeeded.
-    unawaited(DawaFeedbackEffects.confirmed());
+    // Do not celebrate an online booking until the provider has verified the
+    // payment. Clinic confirmation remains a separate later transition.
+    if (!appointment.requiresOnlinePayment || result.paymentSucceeded) {
+      unawaited(DawaFeedbackEffects.appointmentBooked());
+    }
     await showDawaBookingSuccessDialog(context, appointment, result: result);
   }
 
@@ -1390,25 +1395,30 @@ class _ClinicCard extends StatelessWidget {
         ),
       ),
     );
-    Widget actions() => Row(
-          children: [
-            Flexible(
-              child: DawaTextButton(
-                label: 'View clinic',
-                compact: true,
-                onPressed: onView,
+    Widget actions() => LayoutBuilder(
+          builder: (context, constraints) => Row(
+            children: [
+              Flexible(
+                child: DawaTextButton(
+                  label: 'View clinic',
+                  compact: true,
+                  onPressed: onView,
+                ),
               ),
-            ),
-            const Spacer(),
-            ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 88),
-              child: DawaCompactButton(
-                label: 'Book',
-                filled: true,
-                onPressed: onBook,
+              if (constraints.maxWidth >= 300)
+                const Spacer()
+              else
+                const SizedBox(width: DawaSpacing.xs),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 88),
+                child: DawaCompactButton(
+                  label: 'Book',
+                  filled: true,
+                  onPressed: onBook,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
     return DawaCard(
       key: ValueKey('clinic-card-${clinic.id}'),

@@ -1,0 +1,54 @@
+name: Release 1 migration validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'tool/ci/release1_migration_validation.sh'
+      - 'ci/release1/**'
+      - '.github/workflows/release1-migration-validation.yml'
+  push:
+    branches:
+      - main
+      - master
+      - 'release/**'
+    paths:
+      - 'supabase/migrations/**'
+      - 'tool/ci/release1_migration_validation.sh'
+      - 'ci/release1/**'
+      - '.github/workflows/release1-migration-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release1-migration-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  structural-release1-schema:
+    name: Structural Release 1 schema and payment lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # This starts a local Docker-based Supabase stack. It does not link to,
+      # read from, or write to the connected Dawa Mom project.
+      - uses: supabase/setup-cli@v1
+
+      - name: Validate Release 1 migrations on disposable Supabase
+        run: ./tool/ci/release1_migration_validation.sh
+
+      - name: Record baseline limitation
+        if: always()
+        run: |
+          {
+            echo '## Baseline scope'
+            echo ''
+            echo 'This job reconstructs the checked-in migration chain through `202609240002`, then applies only `202610090002` and `202610100001`.'
+            echo 'It deliberately excludes Care Plan and Release 2 migrations and has no production credentials.'
+            echo ''
+            echo '> Structural validation is not production-equivalent until a sanitized, authoritative schema baseline covers the out-of-band `202609170001` history. See `ci/release1/README.md`.'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 
+import '/features/preferences/dawa_user_preferences_repository.dart';
+
 abstract class DawaGameFeedback {
   Future<void> correct();
   Future<void> wrong();
@@ -19,17 +21,23 @@ class DawaGameFeedbackService implements DawaGameFeedback {
 
   @override
   Future<void> correct() async {
+    if (!(await _preferences()).hapticFeedbackEnabled) return;
     await HapticFeedback.selectionClick();
   }
 
   @override
   Future<void> wrong() async {
+    if (!(await _preferences()).hapticFeedbackEnabled) return;
     await HapticFeedback.lightImpact();
   }
 
   @override
   Future<void> completed() async {
-    await HapticFeedback.mediumImpact();
+    final preferences = await _preferences();
+    if (preferences.hapticFeedbackEnabled) {
+      await HapticFeedback.mediumImpact();
+    }
+    if (!preferences.soundEffectsEnabled) return;
     try {
       await _player.stop();
       await _player.play(
@@ -44,6 +52,9 @@ class DawaGameFeedbackService implements DawaGameFeedback {
 
   @override
   Future<void> dispose() => _player.dispose();
+
+  Future<DawaUserPreferences> _preferences() =>
+      DawaUserPreferencesRepository().load();
 
   static final Uint8List _completionChime = _buildWav();
 

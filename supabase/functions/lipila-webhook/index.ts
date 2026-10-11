@@ -10,15 +10,29 @@ Deno.serve(async (req) => {
   const timestamp = req.headers.get("webhook-timestamp");
   const signature = req.headers.get("webhook-signature");
   const secret = Deno.env.get("LIPILA_WEBHOOK_SECRET");
-  if (!webhookId || !timestamp || !signature || !secret) return json({ error: "Invalid webhook." }, 400);
+  if (!webhookId || !timestamp || !signature || !secret) {
+    return json({ error: "Invalid webhook." }, 400);
+  }
 
   const timestampNumber = Number(timestamp);
-  if (!Number.isSafeInteger(timestampNumber) || Math.abs(Math.floor(Date.now() / 1000) - timestampNumber) > maxAgeSeconds) {
-    return json({ error: "Webhook timestamp is outside the allowed window." }, 400);
+  if (
+    !Number.isSafeInteger(timestampNumber) ||
+    Math.abs(Math.floor(Date.now() / 1000) - timestampNumber) > maxAgeSeconds
+  ) {
+    return json(
+      { error: "Webhook timestamp is outside the allowed window." },
+      400,
+    );
   }
 
   const rawBody = await req.text();
-  if (!(await verifySignature(`${webhookId}.${timestamp}.${rawBody}`, signature, secret))) {
+  if (
+    !(await verifySignature(
+      `${webhookId}.${timestamp}.${rawBody}`,
+      signature,
+      secret,
+    ))
+  ) {
     return json({ error: "Invalid webhook signature." }, 401);
   }
 
@@ -33,74 +47,121 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) return json({ error: "Webhook backend is not configured." }, 500);
-  const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json({ error: "Webhook backend is not configured." }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 
-  const referenceId = text(payload.referenceId) ?? text(data(payload)?.referenceId);
-  const status = normalizeStatus(text(payload.status) ?? text(data(payload)?.status));
+  const referenceId = text(payload.referenceId) ??
+    text(data(payload)?.referenceId);
+  const status = normalizeStatus(
+    text(payload.status) ?? text(data(payload)?.status),
+  );
   const amount = number(payload.amount) ?? number(data(payload)?.amount);
   const currency = text(payload.currency) ?? text(data(payload)?.currency);
-  if (!referenceId || !status) return json({ error: "Payment reference and status are required." }, 400);
+  if (!referenceId || !status) {
+    return json({ error: "Payment reference and status are required." }, 400);
+  }
 
-  const { data: payment, error: paymentError } = await supabase.from("payments").select("*").eq("reference_id", referenceId).maybeSingle();
+  const { data: payment, error: paymentError } = await supabase.from("payments")
+    .select("*").eq("reference_id", referenceId).maybeSingle();
   if (paymentError) return json({ error: "Payment lookup failed." }, 500);
   if (!payment) return json({ error: "Unknown payment reference." }, 404);
-  if (amount !== null && Number(payment.amount) !== amount) return json({ error: "Payment amount does not match." }, 409);
-  if (currency !== null && payment.currency !== currency) return json({ error: "Payment currency does not match." }, 409);
-  if (["successful", "failed", "cancelled", "expired"].includes(payment.status) && payment.status !== status) {
-    return json({ ok: true, terminal: true, status: payment.status });
+  if (amount !== null && Number(payment.amount) !== amount) {
+    return json({ error: "Payment amount does not match." }, 409);
   }
-
-  const { error: eventError } = await supabase.from("payment_events").insert({
-    payment_id: payment.id,
-    webhook_id: webhookId,
-    event_type: text(payload.event) ?? "collection.status.changed",
-    payload,
-  });
-  if (eventError?.code === "23505") return json({ ok: true, duplicate: true });
-  if (eventError) return json({ error: "Webhook event could not be recorded." }, 500);
-
-  const nextStatus = status === "successful" ? "successful" : status;
-  const update: JsonRecord = { status: nextStatus, updated_at: new Date().toISOString() };
-  if (nextStatus === "successful") update.paid_at = new Date().toISOString();
-  if (["failed", "expired", "cancelled"].includes(nextStatus)) update.failed_at = new Date().toISOString();
-  await supabase.from("payments").update(update).eq("id", payment.id);
-
-  if (nextStatus === "successful") {
-    const { error } = await supabase.rpc("release_paid_appointment_workflow", {
+  if (currency !== null && payment.currency !== currency) {
+    return json({ error: "Payment currency does not match." }, 409);
+  }
+  // The SQL transition records the event and applies the ledger + appointment
+  // state in one transaction. This avoids a duplicate callback being accepted
+  // after event insertion but before the appointment has been released.
+  const { data: transition, error: transitionError } = await supabase.rpc(
+    "apply_lipila_payment_status",
+    {
       p_payment_id: payment.id,
       p_webhook_id: webhookId,
-    });
-    if (error) return json({ error: "Payment was recorded but appointment release needs retry." }, 500);
+      p_event_type: text(payload.event) ?? "collection.status.changed",
+      p_status: status,
+      p_payload: payload,
+      p_provider_identifier: providerIdentifier(payload) ??
+        providerIdentifier(data(payload)),
+    },
+  );
+  if (transitionError) {
+    return json({ error: "Payment status could not be applied safely." }, 500);
   }
-  return json({ ok: true, status: nextStatus });
+  return json(isRecord(transition) ? transition : { ok: true, status });
 });
 
-async function verifySignature(content: string, header: string, secret: string): Promise<boolean> {
+async function verifySignature(
+  content: string,
+  header: string,
+  secret: string,
+): Promise<boolean> {
   const secretBytes = secret.startsWith("whsec_") ? secret.slice(6) : secret;
-  const keyBytes = Uint8Array.from(atob(secretBytes), (char) => char.charCodeAt(0));
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(content)));
+  const keyBytes = Uint8Array.from(
+    atob(secretBytes),
+    (char) => char.charCodeAt(0),
+  );
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = new Uint8Array(
+    await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(content)),
+  );
   const expected = `v1,${btoa(String.fromCharCode(...digest))}`;
-  return header.split(" ").some((candidate) => timingSafeEqual(candidate, expected));
+  return header.split(" ").some((candidate) =>
+    timingSafeEqual(candidate, expected)
+  );
 }
 function timingSafeEqual(left: string, right: string): boolean {
-  const a = new TextEncoder().encode(left); const b = new TextEncoder().encode(right);
+  const a = new TextEncoder().encode(left);
+  const b = new TextEncoder().encode(right);
   if (a.length !== b.length) return false;
-  let result = 0; for (let index = 0; index < a.length; index++) result |= a[index] ^ b[index];
+  let result = 0;
+  for (let index = 0; index < a.length; index++) result |= a[index] ^ b[index];
   return result === 0;
 }
-function isRecord(value: unknown): value is JsonRecord { return typeof value === "object" && value !== null && !Array.isArray(value); }
-function data(value: JsonRecord): JsonRecord | null { return isRecord(value.data) ? value.data : null; }
-function text(value: unknown): string | null { const result = typeof value === "string" ? value.trim() : ""; return result || null; }
-function number(value: unknown): number | null { const result = Number(value); return Number.isFinite(result) ? result : null; }
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function data(value: JsonRecord): JsonRecord | null {
+  return isRecord(value.data) ? value.data : null;
+}
+function text(value: unknown): string | null {
+  const result = typeof value === "string" ? value.trim() : "";
+  return result || null;
+}
+function number(value: unknown): number | null {
+  const result = Number(value);
+  return Number.isFinite(result) ? result : null;
+}
+function providerIdentifier(value: JsonRecord | null): string | null {
+  if (!value) return null;
+  return text(value.id) ?? text(value.transactionId) ?? text(value.externalId);
+}
 function normalizeStatus(value: string | null): string | null {
-  if (!value) return null; const normalized = value.toLowerCase();
-  if (["successful", "success", "completed"].includes(normalized)) return "successful";
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (["successful", "success", "completed"].includes(normalized)) {
+    return "successful";
+  }
   if (["failed", "failure"].includes(normalized)) return "failed";
   if (["cancelled", "canceled"].includes(normalized)) return "cancelled";
   if (["expired"].includes(normalized)) return "expired";
   if (["pending", "processing"].includes(normalized)) return "pending";
   return null;
 }
-function json(body: JsonRecord, status = 200): Response { return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }); }
+function json(body: JsonRecord, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}

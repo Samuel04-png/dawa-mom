@@ -3,6 +3,7 @@ import '/localization/dawa_localized_material.dart';
 import '/auth/login/login_widget.dart';
 import '/auth/supabase_auth/auth_util.dart';
 import '/components/period_setup/period_setup_flow.dart';
+import '/config/dawa_release_features.dart';
 import '/design_system/dawa_components.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
@@ -363,7 +364,6 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
               children: [
                 DawaAppHeader(
                   title: 'My profile',
-                  notificationUnread: true,
                   onNotifications: () => context.push('/notifications'),
                 ),
                 const SizedBox(height: 8),
@@ -549,17 +549,24 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
                                 ),
                                 const SizedBox(height: DawaSpacing.xxs),
                                 Text(
-                                  state.coins >= 1000
-                                      ? 'Clinic scan voucher available'
-                                      : '${1000 - state.coins} points to a clinic scan voucher',
+                                  !DawaReleaseFeatures.voucherRedemptionEnabled
+                                      ? 'Your points are saved while clinic rewards are prepared'
+                                      : state.coins >= 1000
+                                          ? 'Clinic scan voucher available'
+                                          : '${1000 - state.coins} points to a clinic scan voucher',
                                   style: context.dawaCaption,
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 10),
-                          const Icon(Icons.redeem_rounded,
-                              color: DawaColors.primary, size: 36),
+                          Icon(
+                            DawaReleaseFeatures.voucherRedemptionEnabled
+                                ? Icons.redeem_rounded
+                                : Icons.workspace_premium_rounded,
+                            color: DawaColors.primary,
+                            size: 36,
+                          ),
                           const Icon(Icons.chevron_right_rounded,
                               color: DawaColors.primary),
                         ],

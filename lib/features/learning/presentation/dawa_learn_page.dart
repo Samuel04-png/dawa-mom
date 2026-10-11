@@ -76,7 +76,6 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
         children: [
           DawaAppHeader(
             title: 'Learn',
-            notificationUnread: true,
             onNotifications: () => context.push('/notifications'),
             onProfile: () => context.go('/settings'),
           ),

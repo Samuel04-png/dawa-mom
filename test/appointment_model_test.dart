@@ -60,6 +60,75 @@ void main() {
       expect(appointment.isPaidSnapshot, isTrue);
     });
 
+    test('only shows an online paid appointment after verified payment', () {
+      final base = {
+        'id': 'appointment-id',
+        'mother_id': 'mother-id',
+        'patient_id': 'patient-id',
+        'clinician_id': 'clinician-id',
+        'clinic_id': 'clinic-id',
+        'appointment_date': '2099-07-20',
+        'start_time': '09:00:00',
+        'end_time': '09:30:00',
+        'appointment_type': 'maternal_health',
+        'status': 'pending',
+        'source': 'dawa_mom',
+        'created_at': '2026-07-15T06:00:00Z',
+        'integration_status': 'pending',
+        'is_paid_snapshot': true,
+        'payment_method': 'online',
+      };
+
+      for (final state in ['not_started', 'pending', 'processing']) {
+        final appointment =
+            Appointment.fromJson({...base, 'payment_state': state});
+        expect(appointment.isUpcoming, isFalse, reason: state);
+        expect(appointment.paymentAwaitingResolution, isTrue, reason: state);
+      }
+      for (final state in ['failed', 'cancelled', 'expired']) {
+        final appointment = Appointment.fromJson({
+          ...base,
+          'status': 'cancelled',
+          'payment_state': state,
+        });
+        expect(appointment.isUpcoming, isFalse, reason: state);
+        expect(appointment.paymentUnsuccessful, isTrue, reason: state);
+      }
+
+      final paid =
+          Appointment.fromJson({...base, 'payment_state': 'successful'});
+      expect(paid.paymentConfirmed, isTrue);
+      expect(paid.isUpcoming, isTrue);
+    });
+
+    test('keeps free and pay-at-clinic visits in their supported flow', () {
+      final fields = {
+        'id': 'appointment-id',
+        'mother_id': 'mother-id',
+        'patient_id': 'patient-id',
+        'clinician_id': 'clinician-id',
+        'clinic_id': 'clinic-id',
+        'appointment_date': '2099-07-20',
+        'start_time': '09:00:00',
+        'end_time': '09:30:00',
+        'appointment_type': 'maternal_health',
+        'status': 'pending',
+        'source': 'dawa_mom',
+        'created_at': '2026-07-15T06:00:00Z',
+        'integration_status': 'pending',
+      };
+      expect(Appointment.fromJson(fields).isUpcoming, isTrue);
+      expect(
+        Appointment.fromJson({
+          ...fields,
+          'is_paid_snapshot': true,
+          'payment_method': 'cash',
+          'payment_state': 'pay_at_clinic',
+        }).isUpcoming,
+        isTrue,
+      );
+    });
+
     test('normalizes a date and time into a local DateTime', () {
       expect(
         Appointment.dateAtTime(DateTime(2026, 7, 20), '14:30'),

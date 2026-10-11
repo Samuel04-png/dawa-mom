@@ -68,25 +68,137 @@ class HealthProfileRepository {
     return snapshot;
   }
 
+  /// Persists the two personal-profile records as one user-facing operation.
+  /// `mothers.profile_id` is unique, so an upsert prevents a second maternal
+  /// row when a saved form is retried or two devices save close together.
+  Future<HealthProfilePersonalSave> savePersonalInformation({
+    required String name,
+    required DateTime dateOfBirth,
+    required String phone,
+    required String address,
+    String? occupation,
+  }) async {
+    final userId = _requireUserId();
+    final cleanName = name.trim();
+    final cleanPhone = phone.trim();
+    final cleanAddress = address.trim();
+    if (cleanName.length < 2) {
+      throw const HealthProfileException('Enter your full name.');
+    }
+    if (cleanPhone.replaceAll(RegExp(r'\D'), '').length < 8) {
+      throw const HealthProfileException('Enter a valid mobile number.');
+    }
+    if (cleanAddress.length < 3) {
+      throw const HealthProfileException('Enter your address.');
+    }
+    final today = DateTime.now();
+    if (dateOfBirth.isAfter(DateTime(today.year, today.month, today.day))) {
+      throw const HealthProfileException(
+          'Date of birth cannot be in the future.');
+    }
+
+    try {
+      if (kDebugMode) debugPrint('[HealthProfile] Saving personal section.');
+      final results = await Future.wait<dynamic>([
+        SupabaseDatabase.instance.runWithFreshSession(
+          () => _client
+              .from('profiles')
+              .update({
+                'display_name': cleanName,
+                'phone_number': cleanPhone,
+              })
+              .eq('id', userId)
+              .select('id,display_name,phone_number')
+              .single(),
+        ),
+        SupabaseDatabase.instance.runWithFreshSession(
+          () => _client
+              .from('mothers')
+              .upsert(
+                {
+                  'profile_id': userId,
+                  'name': cleanName,
+                  'phone_number': cleanPhone,
+                  'date_of_birth': _dateId(dateOfBirth),
+                  'occupation': _nullIfBlank(occupation),
+                  'address': cleanAddress,
+                },
+                onConflict: 'profile_id',
+              )
+              .select(
+                'id,profile_id,name,phone_number,date_of_birth,occupation,address,pregnancy_status',
+              )
+              .single(),
+        ),
+      ]);
+      notifyChanged();
+      if (kDebugMode) debugPrint('[HealthProfile] Personal section saved.');
+      return HealthProfilePersonalSave(
+        profile: Map<String, dynamic>.from(results[0] as Map),
+        mother: Map<String, dynamic>.from(results[1] as Map),
+      );
+    } on PostgrestException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[HealthProfile] Personal section save failed '
+          '(${error.code ?? 'unknown'}): ${error.message}',
+        );
+      }
+      throw const HealthProfileException(
+        'Your details could not be saved. Check your connection and try again.',
+      );
+    }
+  }
+
   Future<void> savePregnancyInformation({
     required String status,
     DateTime? lastMenstrualPeriod,
     DateTime? estimatedDueDate,
   }) async {
     _requireUserId();
+    if (!const {
+      'not_provided',
+      'pregnant',
+      'not_pregnant',
+      'prefer_not_to_say',
+    }.contains(status)) {
+      throw const HealthProfileException('Choose a valid pregnancy option.');
+    }
+    final today = DateTime.now();
+    final dateOnly = DateTime(today.year, today.month, today.day);
+    if (lastMenstrualPeriod != null && lastMenstrualPeriod.isAfter(dateOnly)) {
+      throw const HealthProfileException(
+        'Last menstrual period cannot be in the future.',
+      );
+    }
+    if (estimatedDueDate != null && estimatedDueDate.isBefore(dateOnly)) {
+      throw const HealthProfileException('Due date cannot be in the past.');
+    }
     if (kDebugMode) {
       debugPrint('[HealthProfile] Saving pregnancy profile section.');
     }
-    await SupabaseDatabase.instance.runWithFreshSession(
-      () => _client.rpc(
-        'upsert_patient_health_profile',
-        params: {
-          'p_pregnancy_status': status,
-          'p_lnmp': _dateId(lastMenstrualPeriod),
-          'p_estimated_due_date': _dateId(estimatedDueDate),
-        },
-      ),
-    );
+    try {
+      await SupabaseDatabase.instance.runWithFreshSession(
+        () => _client.rpc(
+          'upsert_patient_health_profile',
+          params: {
+            'p_pregnancy_status': status,
+            'p_lnmp': _dateId(lastMenstrualPeriod),
+            'p_estimated_due_date': _dateId(estimatedDueDate),
+          },
+        ),
+      );
+    } on PostgrestException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[HealthProfile] Pregnancy section save failed '
+          '(${error.code ?? 'unknown'}): ${error.message}',
+        );
+      }
+      throw const HealthProfileException(
+        'Pregnancy information could not be saved. Please try again.',
+      );
+    }
     notifyChanged();
     if (kDebugMode) {
       debugPrint('[HealthProfile] Pregnancy profile section saved.');
@@ -116,6 +228,22 @@ class HealthProfileRepository {
       : '${value.year.toString().padLeft(4, '0')}-'
           '${value.month.toString().padLeft(2, '0')}-'
           '${value.day.toString().padLeft(2, '0')}';
+
+  static String? _nullIfBlank(String? value) {
+    final clean = value?.trim() ?? '';
+    return clean.isEmpty ? null : clean;
+  }
+}
+
+@immutable
+class HealthProfilePersonalSave {
+  const HealthProfilePersonalSave({
+    required this.profile,
+    required this.mother,
+  });
+
+  final Map<String, dynamic> profile;
+  final Map<String, dynamic> mother;
 }
 
 enum PregnancyProfileStatus {
@@ -137,6 +265,20 @@ class HealthProfileSnapshot {
   final Map<String, dynamic> mother;
   final Map<String, dynamic>? pregnancy;
   final Map<String, dynamic>? periodSettings;
+
+  HealthProfileSnapshot copyWith({
+    Map<String, dynamic>? profile,
+    Map<String, dynamic>? mother,
+    Map<String, dynamic>? pregnancy,
+    Map<String, dynamic>? periodSettings,
+    bool clearPregnancy = false,
+  }) =>
+      HealthProfileSnapshot(
+        profile: profile ?? this.profile,
+        mother: mother ?? this.mother,
+        pregnancy: clearPregnancy ? null : pregnancy ?? this.pregnancy,
+        periodSettings: periodSettings ?? this.periodSettings,
+      );
 
   String get name => _firstText([mother['name'], profile['display_name']]);
   String get email => _text(profile['email']);

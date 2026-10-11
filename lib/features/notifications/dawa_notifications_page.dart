@@ -16,6 +16,8 @@ import '/features/appointments/data/dawa_appointment_reminder_repository.dart';
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/domain/appointment.dart';
 import '/features/learning/data/dawa_learning_repository.dart';
+import '/features/feedback/dawa_feedback_effects.dart';
+import '/features/notifications/dawa_notification_counter.dart';
 import '/features/preferences/dawa_user_preferences_repository.dart';
 
 enum DawaNotificationCategory {
@@ -86,6 +88,9 @@ class DawaNotificationsRepository {
   static SupabaseClient? _realtimeClient;
   static String? _realtimeUserId;
 
+  static void ensureRealtime([SupabaseClient? client]) =>
+      _ensureRealtime(client ?? _trySupabaseClient());
+
   Future<SharedPreferences> get _prefs async =>
       _preferences ??= await SharedPreferences.getInstance();
 
@@ -93,6 +98,14 @@ class DawaNotificationsRepository {
     if (_client != null) return _client;
     try {
       return _client = Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static SupabaseClient? _trySupabaseClient() {
+    try {
+      return Supabase.instance.client;
     } catch (_) {
       return null;
     }
@@ -139,9 +152,23 @@ class DawaNotificationsRepository {
             column: 'profile_id',
             value: userId,
           ),
-          callback: (_) => changes.value += 1,
+          callback: (payload) {
+            changes.value += 1;
+            unawaited(DawaNotificationCounter.refresh(client: client));
+            if (payload.eventType == PostgresChangeEvent.insert) {
+              unawaited(_announceIncomingNotification());
+            }
+          },
         )
         .subscribe();
+  }
+
+  static Future<void> _announceIncomingNotification() async {
+    final preferences = await DawaUserPreferencesRepository().load();
+    if (!preferences.reducedAnimations) {
+      DawaNotificationCounter.announceIncoming();
+    }
+    await DawaFeedbackEffects.notificationReceived();
   }
 
   Future<(List<DawaNotificationItem>, Set<String>)> load() async {
@@ -326,6 +353,10 @@ class DawaNotificationsRepository {
         debugPrint('Notification read sync unavailable: ${error.code}');
       }
     }
+    DawaNotificationCounter.unreadCount.value = notifications
+        .where((item) => item.id.startsWith('server:'))
+        .where((item) => !read.contains(item.id))
+        .length;
     return (notifications, read);
   }
 
@@ -334,6 +365,7 @@ class DawaNotificationsRepository {
     await (await _prefs).setStringList(_readKey, next.toList()..sort());
     unawaited(_markServerRead(id));
     unawaited(_syncRead(next));
+    unawaited(DawaNotificationCounter.refresh(client: _supabase));
     return next;
   }
 
@@ -345,6 +377,7 @@ class DawaNotificationsRepository {
     await (await _prefs).setStringList(_readKey, next.toList()..sort());
     unawaited(_markServerReadMany(next));
     unawaited(_syncRead(next));
+    unawaited(DawaNotificationCounter.refresh(client: _supabase));
     return next;
   }
 

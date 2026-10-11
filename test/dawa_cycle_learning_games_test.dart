@@ -185,7 +185,7 @@ void main() {
       rewardCoins: 10,
     );
 
-    expect(replay.coins, 190);
+    expect(replay.coins, 180);
     expect(
       replay.completedIds,
       contains(DawaHealthGameCatalog.phaseMatchId),

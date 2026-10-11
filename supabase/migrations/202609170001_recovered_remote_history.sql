@@ -1,0 +1,6 @@
+-- This migration was applied directly to the linked project before this
+-- repository snapshot was created. Its SQL is not available locally.
+--
+-- The file intentionally contains no executable schema changes: it restores
+-- the local migration history entry so subsequent targeted migrations can be
+-- deployed without altering the already-applied remote migration.

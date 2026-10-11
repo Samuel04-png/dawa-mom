@@ -128,4 +128,28 @@ void main() {
     HealthProfileRepository.notifyChanged();
     expect(HealthProfileRepository.changes.value, before + 1);
   });
+
+  test('a confirmed personal save can update completion before refresh', () {
+    const before = HealthProfileSnapshot(
+      profile: {'email': 'chipo@example.test'},
+      mother: {'pregnancy_status': 'not_pregnant'},
+      pregnancy: null,
+      periodSettings: {'lastPeriodStart': null},
+    );
+    final after = before.copyWith(
+      profile: {'email': 'chipo@example.test', 'display_name': 'Chipo'},
+      mother: {
+        'name': 'Chipo',
+        'phone_number': '+260 970000000',
+        'date_of_birth': '1995-01-01',
+        'address': 'Lusaka',
+        'pregnancy_status': 'not_pregnant',
+      },
+    );
+
+    expect(before.personalComplete, isFalse);
+    expect(after.personalComplete, isTrue);
+    expect(after.contactComplete, isTrue);
+    expect(after.completedSections, 3);
+  });
 }

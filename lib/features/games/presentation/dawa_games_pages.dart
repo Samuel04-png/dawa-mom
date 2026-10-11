@@ -8,6 +8,7 @@ import '/design_system/dawa_components.dart';
 import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
+import '/features/feedback/dawa_feedback_effects.dart';
 import '/features/learning/data/dawa_learning_repository.dart';
 import '/services/voice_service.dart';
 import '../domain/dawa_health_game.dart';
@@ -817,7 +818,11 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
       _state = Future.value(next);
       _busy = false;
     });
-    await _feedback.completed();
+    final awardConfirmed = next.coins > current.coins;
+    if (awardConfirmed) {
+      await _feedback.completed();
+      unawaited(DawaFeedbackEffects.learningAwardConfirmed());
+    }
     if (!mounted) return;
     final pageContext = context;
     final replay = await showDialog<bool>(
@@ -827,9 +832,11 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
         title: alreadyCompleted ? 'Brilliant replay!' : 'Game complete!',
         message: alreadyCompleted
             ? 'Your knowledge is getting stronger. You already collected this game’s reward.'
-            : widget.game.activity == DawaGameActivity.kitBuilder
-                ? 'Your period-kit checklist is saved. You also earned ${widget.game.rewardCoins} Dawa points.'
-                : 'You earned ${widget.game.rewardCoins} Dawa points for completing ${widget.game.title}.',
+            : !awardConfirmed
+                ? 'Your game is saved. Points will appear after Dawa confirms your progress.'
+                : widget.game.activity == DawaGameActivity.kitBuilder
+                    ? 'Your period-kit checklist is saved. You also earned ${widget.game.rewardCoins} Dawa points.'
+                    : 'You earned ${widget.game.rewardCoins} Dawa points for completing ${widget.game.title}.',
         asset: DawaArtwork.banaCelebrate,
         visualAssetId: widget.game.completionAssetId,
         primaryLabel: 'Play again',
@@ -837,7 +844,7 @@ class _DawaHealthGamePageState extends State<DawaHealthGamePage> {
         passed: true,
         score: _score,
         total: widget.game.questions.length,
-        rewardCoins: alreadyCompleted ? 0 : widget.game.rewardCoins,
+        rewardCoins: awardConfirmed ? widget.game.rewardCoins : 0,
         onSecondary: () {
           Navigator.pop(dialogContext, false);
           pageContext.push(widget.game.relatedActionRoute);

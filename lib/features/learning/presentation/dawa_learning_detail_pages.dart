@@ -10,6 +10,7 @@ import '/design_system/dawa_contextual_image.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_interactions.dart';
 import '/design_system/dawa_page_scaffold.dart';
+import '/features/feedback/dawa_feedback_effects.dart';
 import '/features/profile/data/health_profile_repository.dart';
 import '/services/voice_service.dart';
 import '../data/dawa_learning_repository.dart';
@@ -320,6 +321,9 @@ class _DawaPregnancyGuideDetailPageState
       _completionAfter = next;
       _state = Future.value(next);
     });
+    if (next.coins > state.coins) {
+      unawaited(DawaFeedbackEffects.learningAwardConfirmed());
+    }
   }
 
   Future<void> _listenToGuide(String title, String subtitle) async {
@@ -887,6 +891,9 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
           _completionAfter = next;
           _state = Future.value(next);
         });
+      }
+      if (next.coins > state.coins) {
+        unawaited(DawaFeedbackEffects.learningAwardConfirmed());
       }
     } catch (_) {
       if (mounted) {

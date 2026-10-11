@@ -9,7 +9,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('learning completion is locally idempotent and queues server sync',
+  test('offline learning completion queues sync without minting client points',
       () async {
     final preferences = await SharedPreferences.getInstance();
     final repository = DawaLearningRepository(preferences: preferences);
@@ -27,7 +27,8 @@ void main() {
     );
 
     expect(completed.completedIds, contains('myth-vs-fact'));
-    expect(completed.coins, initial.coins + 5);
+    expect(completed.coins, initial.coins);
+    expect(completed.balanceVerified, isFalse);
     expect(repeated.coins, completed.coins);
     expect(
       preferences.getStringList('dawa_learning_pending_completions'),

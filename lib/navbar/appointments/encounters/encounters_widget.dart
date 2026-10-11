@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '/localization/dawa_localized_material.dart';
 
 import '/components/booking_bottom_sheet/booking_bottom_sheet_widget.dart';
@@ -5,6 +7,7 @@ import '/design_system/dawa_components.dart';
 import '/features/appointments/data/appointment_repository.dart';
 import '/features/appointments/domain/appointment.dart';
 import '/features/appointments/presentation/dawa_booking_success_dialog.dart';
+import '/features/feedback/dawa_feedback_effects.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
@@ -57,6 +60,11 @@ class _EncountersWidgetState extends State<EncountersWidget> {
     if (result == null || !mounted) return;
     await _refresh();
     if (!mounted) return;
+    // Do not sound a pending online payment. The appointment feedback belongs
+    // to a persisted cash/free request or a provider-verified payment only.
+    if (!result.appointment.requiresOnlinePayment || result.paymentSucceeded) {
+      unawaited(DawaFeedbackEffects.appointmentBooked());
+    }
     await showDawaBookingSuccessDialog(
       context,
       result.appointment,

@@ -34,7 +34,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
 
   late Future<void> _loading;
   DateTime? _dateOfBirth;
-  String? _motherId;
+  late final HealthProfileRepository _repository;
   bool _saving = false;
   bool _submitted = false;
   String? _loadError;
@@ -43,6 +43,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
   @override
   void initState() {
     super.initState();
+    _repository = HealthProfileRepository();
     _loading = _load();
   }
 
@@ -84,7 +85,6 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
       final mother = results[1] == null
           ? <String, dynamic>{}
           : Map<String, dynamic>.from(results[1] as Map);
-      _motherId = mother['id']?.toString();
       _name.text = _firstText([mother['name'], profile['display_name']]);
       _email.text = _firstText([profile['email'], currentUserEmail]);
       _phone.text = _firstText([
@@ -138,47 +138,25 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
     setState(() => _saving = true);
     try {
       if (kDebugMode) debugPrint('[HealthProfile] Saving personal profile.');
-      final client = Supabase.instance.client;
-      final name = _name.text.trim();
-      final phone = _phone.text.trim();
-      await SupabaseDatabase.instance.runWithFreshSession(
-        () => client.from('profiles').update({
-          'display_name': name,
-          'phone_number': phone,
-        }).eq('id', userId),
+      final saved = await _repository.savePersonalInformation(
+        name: _name.text,
+        dateOfBirth: _dateOfBirth!,
+        phone: _phone.text,
+        occupation: _occupation.text,
+        address: _address.text,
       );
-      final motherData = {
-        'profile_id': userId,
-        'name': name,
-        'phone_number': phone,
-        'date_of_birth': _dateId(_dateOfBirth!),
-        'occupation': _nullIfBlank(_occupation.text),
-        'address': _address.text.trim(),
-      };
-      if (_motherId == null) {
-        final inserted = await SupabaseDatabase.instance.runWithFreshSession(
-          () => client
-              .from('mothers')
-              .insert({
-                'id': userId,
-                ...motherData,
-              })
-              .select('id')
-              .single(),
-        );
-        _motherId = inserted['id'].toString();
-      } else {
-        await SupabaseDatabase.instance.runWithFreshSession(
-          () => client.from('mothers').update(motherData).eq('id', _motherId!),
-        );
-      }
-      HealthProfileRepository.notifyChanged();
       if (kDebugMode) debugPrint('[HealthProfile] Personal profile saved.');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile updated successfully.')),
       );
-      Navigator.pop(context, true);
+      Navigator.pop(context, saved);
+    } on HealthProfileException catch (error) {
+      if (mounted) {
+        setState(() {
+          _saveError = error.message;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -409,12 +387,6 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
   static String _firstText(List<dynamic> values) => values
       .map(_text)
       .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-  static String _dateId(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-'
-      '${date.month.toString().padLeft(2, '0')}-'
-      '${date.day.toString().padLeft(2, '0')}';
-  static String? _nullIfBlank(String value) =>
-      value.trim().isEmpty ? null : value.trim();
 }
 
 class _FormSection extends StatelessWidget {

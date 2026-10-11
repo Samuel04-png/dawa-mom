@@ -3,7 +3,9 @@ import 'dart:async';
 import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
+import '/config/dawa_release_features.dart';
 import '/content/dawa_learning_asset_registry.dart';
 import '/design_system/dawa_components.dart';
 import '/design_system/dawa_contextual_image.dart';
@@ -718,15 +720,15 @@ class _DawaQuestCheckpointPageState extends State<DawaQuestCheckpointPage> {
         rewardCoins: 5,
       );
       if (!mounted) return;
-      final newlyCompleted =
-          !state.completedIds.contains('screening-checkpoint') &&
-              next.completedIds.contains('screening-checkpoint');
+      final awardConfirmed = next.coins > state.coins;
       setState(() {
         _completionBefore = state;
         _completionAfter = next;
         _state = Future.value(next);
       });
-      if (newlyCompleted) unawaited(DawaFeedbackEffects.confirmed());
+      if (awardConfirmed) {
+        unawaited(DawaFeedbackEffects.learningAwardConfirmed());
+      }
     } finally {
       if (mounted) setState(() => _savingCompletion = false);
     }
@@ -929,7 +931,7 @@ class _DawaQuestCompletionFeedback extends StatelessWidget {
           title: newlyCompleted ? completedTitle : 'Already completed',
           message: newlyCompleted ? completedMessage : alreadyCompletedMessage,
         ),
-        if (newlyCompleted) ...[
+        if (pointsChanged) ...[
           const SizedBox(height: DawaSpacing.xs),
           const Center(
             child: DawaOptionalFeedbackAnimation(
@@ -1063,9 +1065,8 @@ class _DawaQuestCompletePageState extends State<DawaQuestCompletePage> {
       'screening-without-fear',
       rewardCoins: 20,
     );
-    if (!_wasAlreadyComplete &&
-        completed.completedIds.contains('screening-without-fear')) {
-      unawaited(DawaFeedbackEffects.confirmed());
+    if (!_wasAlreadyComplete && completed.coins > state.coins) {
+      unawaited(DawaFeedbackEffects.learningAwardConfirmed());
     }
     return completed;
   }
@@ -1309,6 +1310,26 @@ Future<DawaLearningState?> showDawaRewardDialog(
   required DawaLearningRepository repository,
   required DawaLearningState state,
 }) {
+  // A completion flow can reach this helper directly. Keep Release 1 honest:
+  // points remain visible, but no voucher is advertised or claimable until the
+  // verified clinic-redemption service ships.
+  if (!DawaReleaseFeatures.voucherRedemptionEnabled) {
+    return showDialog<DawaLearningState>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rewards are being prepared'),
+        content: const Text(
+          'Your Dawa points are saved. Clinic reward claiming will appear here when it is available.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
   return showDialog<DawaLearningState>(
     context: context,
     barrierDismissible: false,
@@ -1349,6 +1370,9 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
       );
       if (mounted) {
         setState(() => _redemption = result);
+      }
+      if (!result.alreadyRedeemed) {
+        unawaited(DawaFeedbackEffects.rewardUnlocked());
       }
     } on DawaLearningException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -1407,7 +1431,10 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
                   const SizedBox(height: 12),
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: .84, end: 1),
-                    duration: const Duration(milliseconds: 420),
+                    duration: DawaMotion.resolve(
+                      context,
+                      DawaMotion.celebration,
+                    ),
                     curve: Curves.easeOutBack,
                     builder: (context, value, child) =>
                         Transform.scale(scale: value, child: child),
@@ -1447,7 +1474,7 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Free scan voucher',
+                                    Text('Clinic scan voucher',
                                         style: context.dawaSectionTitle),
                                     const Text(
                                       '1000 points',
@@ -1467,11 +1494,11 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
                           )
                         : Semantics(
                             label:
-                                'Free scan voucher code ${_redemption!.voucherCode}',
+                                'Clinic scan voucher reference ${_redemption!.claimReference ?? _redemption!.voucherCode}',
                             child: Column(
                               children: [
                                 Text(
-                                  'FREE SCAN VOUCHER',
+                                  'CLINIC SCAN VOUCHER',
                                   style: context.dawaCaption.copyWith(
                                     color: DawaColors.green,
                                     fontWeight: FontWeight.w600,
@@ -1480,7 +1507,8 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
                                 const SizedBox(height: 6),
                                 SelectionArea(
                                   child: Text(
-                                    _redemption!.voucherCode,
+                                    _redemption!.claimReference ??
+                                        _redemption!.voucherCode,
                                     textAlign: TextAlign.center,
                                     style: context.dawaTitle.copyWith(
                                       color: DawaColors.green,
@@ -1489,11 +1517,27 @@ class _DawaRewardDialogState extends State<_DawaRewardDialog> {
                                   ),
                                 ),
                                 const SizedBox(height: 7),
+                                if (_redemption!.qrPayload != null &&
+                                    _redemption!.qrPayload!.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 7),
+                                    child: QrImageView(
+                                      data: _redemption!.qrPayload!,
+                                      size: 124,
+                                      eyeStyle: const QrEyeStyle(
+                                        color: DawaColors.primary,
+                                      ),
+                                      dataModuleStyle: const QrDataModuleStyle(
+                                        color: DawaColors.ink,
+                                      ),
+                                    ),
+                                  ),
                                 TextButton.icon(
                                   onPressed: () async {
                                     await Clipboard.setData(
                                       ClipboardData(
-                                        text: _redemption!.voucherCode,
+                                        text: _redemption!.claimReference ??
+                                            _redemption!.voucherCode,
                                       ),
                                     );
                                     if (context.mounted) {

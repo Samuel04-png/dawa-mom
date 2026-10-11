@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:dawa_mom/navbar/appointments/appointment_details/appointment_details_widget.dart';
 
+import '/features/appointments/domain/appointment.dart';
+
 import '/auth/supabase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/booking_bottom_sheet/booking_bottom_sheet_widget.dart';
@@ -13,6 +15,7 @@ import '/components/responsive/upcoming_appointment_section.dart';
 import '/components/shimmer/shimmer_widget.dart';
 import '/features/settings/dawa_mom_settings_page.dart';
 import '/features/preferences/dawa_user_preferences_repository.dart';
+import '/features/feedback/dawa_feedback_effects.dart';
 import '/features/pregnancy/presentation/pregnancy_what_to_expect.dart';
 import '/features/period_tracker/presentation/period_cycle_status_card.dart';
 import '/features/rudo/presentation/rudo_action_cards.dart';
@@ -884,7 +887,8 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                       },
                                     );
                                   } else {
-                                    await showModalBottomSheet(
+                                    final result = await showModalBottomSheet<
+                                        AppointmentBookingResult>(
                                       isScrollControlled: true,
                                       backgroundColor: Colors.transparent,
                                       enableDrag: false,
@@ -903,7 +907,16 @@ class _HomeWidgetState extends State<HomeWidget> with TickerProviderStateMixin {
                                           ),
                                         );
                                       },
-                                    ).then((value) => safeSetState(() {}));
+                                    );
+                                    if (result != null &&
+                                        (!result.appointment
+                                                .requiresOnlinePayment ||
+                                            result.paymentSucceeded)) {
+                                      unawaited(
+                                        DawaFeedbackEffects.appointmentBooked(),
+                                      );
+                                    }
+                                    safeSetState(() {});
                                   }
 
                                   safeSetState(() {});

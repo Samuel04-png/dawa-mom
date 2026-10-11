@@ -540,7 +540,6 @@ class _DawaCycleTrackerPageState extends State<DawaCycleTrackerPage> {
         DawaAppHeader(
           title:
               DawaBreakpoints.isMobile(context) ? 'Track' : 'Track your cycle',
-          notificationUnread: true,
           onNotifications: () => context.push('/notifications'),
           onProfile: () => context.go('/settings'),
         ),

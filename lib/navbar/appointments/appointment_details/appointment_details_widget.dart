@@ -99,13 +99,12 @@ class _AppointmentDetailsWidgetState extends State<AppointmentDetailsWidget> {
   }
 
   Future<void> _refreshPayment() async {
-    final paymentFuture = _loadPayment();
-    setState(() {
-      _payment = paymentFuture;
-      _paymentNotice = null;
-    });
     try {
-      await paymentFuture;
+      // A provider callback can change both the payment ledger and the
+      // appointment's server-owned payment state. Reload both so a successful
+      // payment becomes visible without restarting the app.
+      await _refresh();
+      if (mounted) setState(() => _paymentNotice = null);
     } catch (_) {
       if (mounted) {
         setState(() {

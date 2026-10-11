@@ -316,58 +316,48 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
           _successTitle = 'Appointment requested';
           _successTone = DawaFeedbackTone.information;
         } else {
-          var paymentCreated = false;
-          try {
-            final phoneNumber = await _requestPaymentPhone();
-            if (phoneNumber == null || !mounted) {
-              await _cancelUnpaidAppointment(appointment.id);
-              return;
-            }
-            final payment = await _payments.createPayment(
-              appointmentId: appointment.id,
-              phoneNumber: phoneNumber,
+          final phoneNumber = await _requestPaymentPhone();
+          if (phoneNumber == null || !mounted) {
+            // No provider request has been sent yet, so releasing this private
+            // reservation is safe. After a request starts, only a verified
+            // provider status may cancel or release it.
+            await _cancelUnpaidAppointment(appointment.id);
+            return;
+          }
+          final payment = await _payments.createPayment(
+            appointmentId: appointment.id,
+            phoneNumber: phoneNumber,
+          );
+          paymentReference = payment.referenceId;
+          paymentAmount = payment.amount;
+          paymentCurrency = payment.currency;
+          paymentStatus = await _showPaymentProgress(payment);
+          if (paymentStatus == 'successful') {
+            _successMessage =
+                'Payment confirmed. Your appointment request has been sent to the clinic.';
+            _successTitle = 'Payment confirmed';
+            _successTone = DawaFeedbackTone.success;
+          } else if (const {
+            'pending',
+            'created',
+            'pending_timeout',
+            'check_error',
+          }.contains(paymentStatus)) {
+            // A payment record was created and may still be confirmed by
+            // Lipila after this screen closes. Keep the appointment intact
+            // and return a truthful pending state instead of claiming that
+            // the booking failed.
+            paymentStatus = 'pending';
+            _successMessage =
+                'Your Mobile Money request is still waiting for approval. Approve it on your phone and we will send the appointment request to the clinic after payment is confirmed.';
+            _successTitle = 'Payment still pending';
+            _successTone = DawaFeedbackTone.pending;
+          } else {
+            // A terminal status was verified by the provider. The backend
+            // has already cancelled the private reservation atomically.
+            throw StateError(
+              _paymentStatusMessage(paymentStatus),
             );
-            paymentCreated = true;
-            paymentReference = payment.referenceId;
-            paymentAmount = payment.amount;
-            paymentCurrency = payment.currency;
-            paymentStatus = await _showPaymentProgress(payment);
-            if (paymentStatus == 'successful') {
-              _successMessage =
-                  'Payment confirmed. Your appointment request has been sent to the clinic.';
-              _successTitle = 'Payment confirmed';
-              _successTone = DawaFeedbackTone.success;
-            } else if (const {
-              'pending',
-              'created',
-              'pending_timeout',
-              'check_error',
-            }.contains(paymentStatus)) {
-              // A payment record was created and may still be confirmed by
-              // Lipila after this screen closes. Keep the appointment intact
-              // and return a truthful pending state instead of claiming that
-              // the booking failed.
-              paymentStatus = 'pending';
-              _successMessage =
-                  'Your Mobile Money request is still waiting for approval. Approve it on your phone and we will send the appointment request to the clinic after payment is confirmed.';
-              _successTitle = 'Payment still pending';
-              _successTone = DawaFeedbackTone.pending;
-            } else {
-              // The Mobile Money request was declined or cancelled on the
-              // phone; the appointment must not remain booked without payment.
-              if (const {'failed', 'cancelled', 'expired'}
-                  .contains(paymentStatus)) {
-                await _cancelUnpaidAppointment(appointment.id);
-              }
-              throw StateError(
-                _paymentStatusMessage(paymentStatus),
-              );
-            }
-          } catch (_) {
-            if (!paymentCreated) {
-              await _cancelUnpaidAppointment(appointment.id);
-            }
-            rethrow;
           }
         }
       } else {
@@ -572,7 +562,7 @@ class _BookingBottomSheetWidgetState extends State<BookingBottomSheetWidget> {
       case 'failed':
         return "We couldn't confirm your payment. Your appointment will not be sent to the clinic. You can try again.";
       case 'cancelled':
-        return 'The payment request was cancelled. Your appointment will not be sent to the clinic. You can try again.';
+        return 'Payment cancelled. Your payment was not completed. Your visit has not been booked. Try again.';
       case 'expired':
         return 'The payment request expired. Your appointment will not be sent to the clinic. You can try again.';
       case 'pending_timeout':

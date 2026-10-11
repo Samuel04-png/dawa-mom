@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '/backend/period_tracker_service.dart';
+import '/config/dawa_release_features.dart';
 import '/components/booking_bottom_sheet/booking_bottom_sheet_widget.dart';
 import '/components/period_setup/period_setup_flow.dart';
 import '/content/dawa_content_announcement_repository.dart';
@@ -28,6 +29,8 @@ import '/features/home/presentation/dawa_adaptive_featured_card.dart';
 import '/features/games/domain/dawa_health_game.dart';
 import '/features/learning/data/dawa_learning_repository.dart';
 import '/features/learning/domain/dawa_learning_content.dart';
+import '/features/notifications/dawa_notification_counter.dart';
+import '/features/notifications/dawa_notifications_page.dart';
 import '/features/period_tracker/domain/period_cycle_summary.dart';
 import '/features/period_tracker/presentation/dawa_daily_check_in_sheet.dart';
 import '/features/profile/data/health_profile_repository.dart';
@@ -106,6 +109,8 @@ class _DawaMomResponsiveDashboardState
     DawaCarePlanRepository.changes.addListener(_onDataChanged);
     DawaLearningRepository.changes.addListener(_onDataChanged);
     _data = _load();
+    DawaNotificationsRepository.ensureRealtime();
+    unawaited(DawaNotificationCounter.refresh());
   }
 
   @override
@@ -215,7 +220,9 @@ class _DawaMomResponsiveDashboardState
     if (result == null || !mounted) return;
     await _refresh();
     if (!mounted) return;
-    unawaited(DawaFeedbackEffects.confirmed());
+    if (!result.appointment.requiresOnlinePayment || result.paymentSucceeded) {
+      unawaited(DawaFeedbackEffects.appointmentBooked());
+    }
     await showDawaBookingSuccessDialog(
       context,
       result.appointment,
@@ -382,7 +389,6 @@ class _DawaMomResponsiveDashboardState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DawaAppHeader(
-          notificationUnread: true,
           notificationKey: widget.notificationsTourKey,
           onNotifications: () => context.push('/notifications'),
           onProfile: () => context.go('/settings'),
@@ -1190,17 +1196,19 @@ class _HomeRewardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The rewards centre configures this programme threshold and the matching
-    // clinic scan voucher. Home only summarizes that existing programme; it
-    // does not grant or promise a separate benefit.
+    // Home can show earned points before a reward redemption programme has
+    // completed its separate clinic-verification release.
     const goal = 1000;
+    final redemptionEnabled = DawaReleaseFeatures.voucherRedemptionEnabled;
     final remaining = (goal - coins).clamp(0, goal);
     final progress = available ? (coins / goal).clamp(0, 1).toDouble() : 0.0;
     return Semantics(
       button: true,
-      label: available
-          ? 'Dawa Points. $coins points. $remaining points to a clinic scan voucher.'
-          : 'Dawa Points are unavailable. Pull down to try again.',
+      label: !available
+          ? 'Dawa Points are unavailable. Pull down to try again.'
+          : redemptionEnabled
+              ? 'Dawa Points. $coins points. $remaining points to a clinic scan voucher.'
+              : 'Dawa Points. $coins points. Clinic reward redemption is being prepared.',
       child: Material(
         color: DawaColors.surfaceStrong,
         borderRadius: BorderRadius.circular(DawaRadii.large),
@@ -1240,16 +1248,20 @@ class _HomeRewardCard extends StatelessWidget {
                       const SizedBox(height: 7),
                       DawaProgressBar(
                         value: progress,
-                        semanticLabel: 'Clinic scan voucher progress',
+                        semanticLabel: redemptionEnabled
+                            ? 'Clinic scan voucher progress'
+                            : 'Dawa Points progress',
                         color: DawaColors.gold,
                       ),
                       const SizedBox(height: 3),
                       Text(
                         !available
                             ? 'Pull down to try again'
-                            : remaining == 0
-                                ? 'Clinic scan voucher available'
-                                : '$remaining points to a clinic scan voucher',
+                            : !redemptionEnabled
+                                ? 'Your points are saved'
+                                : remaining == 0
+                                    ? 'Clinic scan voucher available'
+                                    : '$remaining points to a clinic scan voucher',
                         style: context.dawaCaption,
                       ),
                     ],

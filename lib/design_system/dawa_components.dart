@@ -2,6 +2,7 @@ import '/localization/dawa_localized_material.dart';
 
 import '/components/branding/dawa_mom_logo.dart';
 import '/content/dawa_learning_asset_registry.dart';
+import '/features/notifications/dawa_notification_counter.dart';
 import 'dawa_contextual_image.dart';
 import 'dawa_design_tokens.dart';
 
@@ -1024,19 +1025,65 @@ class DawaAppHeader extends StatelessWidget {
                       icon: const Icon(Icons.notifications_none_rounded),
                       color: DawaColors.primary,
                     ),
-                    if (notificationUnread)
-                      Positioned(
-                        right: 10,
-                        top: 9,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: DawaColors.green,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                    ValueListenableBuilder<int>(
+                      valueListenable: DawaNotificationCounter.unreadCount,
+                      builder: (context, count, _) =>
+                          ValueListenableBuilder<int>(
+                        valueListenable: DawaNotificationCounter.pulse,
+                        builder: (context, pulse, __) {
+                          final hasUnread = count > 0 || notificationUnread;
+                          if (!hasUnread) return const SizedBox.shrink();
+                          final label = count > 99 ? '99+' : '$count';
+                          final reducedMotion =
+                              MediaQuery.disableAnimationsOf(context);
+                          final badge = Semantics(
+                            liveRegion: true,
+                            label: count > 0
+                                ? '$label unread notifications'
+                                : 'Unread notifications',
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 18),
+                              height: 18,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                              alignment: Alignment.center,
+                              decoration: const BoxDecoration(
+                                color: DawaColors.green,
+                                shape: BoxShape.circle,
+                              ),
+                              child: count > 0
+                                  ? Text(
+                                      label,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          );
+                          return Positioned(
+                            right: 5,
+                            top: 5,
+                            child: reducedMotion
+                                ? badge
+                                : TweenAnimationBuilder<double>(
+                                    key: ValueKey(pulse),
+                                    duration: const Duration(milliseconds: 420),
+                                    tween: Tween(begin: .76, end: 1.0),
+                                    curve: Curves.elasticOut,
+                                    builder: (context, scale, child) =>
+                                        Transform.scale(
+                                      scale: scale,
+                                      child: child,
+                                    ),
+                                    child: badge,
+                                  ),
+                          );
+                        },
                       ),
+                    ),
                   ],
                 ),
               ),

@@ -1,7 +1,9 @@
 import '/localization/dawa_localized_material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
+import '/config/dawa_release_features.dart';
 import '/design_system/dawa_components.dart';
 import '/design_system/dawa_design_tokens.dart';
 import '/design_system/dawa_page_scaffold.dart';
@@ -10,12 +12,22 @@ import '/features/learning/data/dawa_learning_repository.dart';
 import '/features/learning/presentation/dawa_quest_pages.dart';
 
 class DawaRewardsPage extends StatefulWidget {
-  const DawaRewardsPage({super.key, this.repository});
+  const DawaRewardsPage({
+    super.key,
+    this.repository,
+    this.previewState,
+    this.previewRedemption,
+  });
 
   static const routeName = 'DawaRewards';
   static const routePath = '/learn/rewards';
 
   final DawaLearningRepository? repository;
+
+  /// Deterministic visual-test fixture only. Production callers leave these
+  /// null and always load the authenticated server-derived wallet.
+  final DawaLearningState? previewState;
+  final DawaRewardRedemption? previewRedemption;
 
   @override
   State<DawaRewardsPage> createState() => _DawaRewardsPageState();
@@ -33,6 +45,12 @@ class _DawaRewardsPageState extends State<DawaRewardsPage> {
   }
 
   Future<_RewardsSnapshot> _load() async {
+    if (widget.previewState != null) {
+      return _RewardsSnapshot(
+        state: widget.previewState!,
+        redemption: widget.previewRedemption,
+      );
+    }
     final state = await _repository.load();
     final redemption = await _repository.loadRedemption(state: state);
     return _RewardsSnapshot(state: state, redemption: redemption);
@@ -171,11 +189,17 @@ class _DawaRewardsPageState extends State<DawaRewardsPage> {
                       state: DawaLearningState(),
                     );
                 final activities = _rewardActivities(value.state);
+                final voucherRedemptionEnabled =
+                    DawaReleaseFeatures.voucherRedemptionEnabled;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _RewardsHero(state: value.state),
-                    if (value.redemption != null) ...[
+                    _RewardsHero(
+                      state: value.state,
+                      voucherRedemptionEnabled: voucherRedemptionEnabled,
+                    ),
+                    if (value.redemption != null &&
+                        voucherRedemptionEnabled) ...[
                       const SizedBox(height: 14),
                       _ActiveVoucherCard(
                         redemption: value.redemption!,
@@ -191,8 +215,11 @@ class _DawaRewardsPageState extends State<DawaRewardsPage> {
                     const SizedBox(height: 10),
                     _ScanRewardCard(
                       state: value.state,
-                      alreadyRedeemed: value.redemption != null,
-                      onRedeem: () => _redeem(value),
+                      voucherStatus: value.redemption?.status,
+                      redemptionEnabled: voucherRedemptionEnabled,
+                      onRedeem: voucherRedemptionEnabled
+                          ? () => _redeem(value)
+                          : null,
                     ),
                     const SizedBox(height: 18),
                     const DawaSectionHeader(
@@ -276,16 +303,21 @@ class _DawaRewardsPageState extends State<DawaRewardsPage> {
 }
 
 class _RewardsHero extends StatelessWidget {
-  const _RewardsHero({required this.state});
+  const _RewardsHero({
+    required this.state,
+    required this.voucherRedemptionEnabled,
+  });
 
   final DawaLearningState state;
+  final bool voucherRedemptionEnabled;
 
   @override
   Widget build(BuildContext context) => DawaIllustratedHeroCard(
         category: 'YOUR HEALTHY-ACTION BALANCE',
         title: '${state.coins} Dawa points',
-        subtitle:
-            '${(1000 - state.coins).clamp(0, 1000)} points until your clinic scan voucher',
+        subtitle: voucherRedemptionEnabled
+            ? '${(1000 - state.coins).clamp(0, 1000)} points until your clinic scan voucher'
+            : 'Your points are saved while clinic rewards are prepared',
         illustrationPath: DawaArtwork.banaCelebrate,
         progress: state.coins / 1000,
         progressLabel: 'Reward progress',
@@ -298,17 +330,46 @@ class _RewardsHero extends StatelessWidget {
 class _ScanRewardCard extends StatelessWidget {
   const _ScanRewardCard({
     required this.state,
-    required this.alreadyRedeemed,
+    required this.voucherStatus,
+    required this.redemptionEnabled,
     required this.onRedeem,
   });
 
   final DawaLearningState state;
-  final bool alreadyRedeemed;
-  final VoidCallback onRedeem;
+  final DawaVoucherStatus? voucherStatus;
+  final bool redemptionEnabled;
+  final VoidCallback? onRedeem;
 
   @override
   Widget build(BuildContext context) {
     final available = state.coins >= 1000;
+    final hasVoucher = voucherStatus != null;
+    final redeemed = voucherStatus == DawaVoucherStatus.redeemed;
+    final statusLabel = !redemptionEnabled
+        ? 'Preparing'
+        : redeemed
+            ? 'Redeemed'
+            : hasVoucher
+                ? 'Claimed'
+                : available
+                    ? 'Ready'
+                    : 'Locked';
+    final statusIcon = !redemptionEnabled
+        ? Icons.hourglass_top_rounded
+        : redeemed
+            ? Icons.check_rounded
+            : hasVoucher
+                ? Icons.confirmation_number_outlined
+                : available
+                    ? Icons.redeem_rounded
+                    : Icons.lock_outline_rounded;
+    final statusColor = !redemptionEnabled
+        ? DawaColors.muted
+        : redeemed
+            ? DawaColors.green
+            : hasVoucher || available
+                ? DawaColors.primary
+                : DawaColors.muted;
     return DawaCard(
       child: Column(
         children: [
@@ -325,47 +386,44 @@ class _ScanRewardCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Clinic scan voucher',
+                      redemptionEnabled
+                          ? 'Clinic scan voucher'
+                          : 'Clinic rewards',
                       style: context.dawaSectionTitle,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '1000 points • Eligible participating Dawa clinics',
+                      redemptionEnabled
+                          ? '1000 points • Eligible participating Dawa clinics'
+                          : 'Your points are safely saved',
                       style: context.dawaCaption,
                     ),
                   ],
                 ),
               ),
               DawaStatusPill(
-                label: alreadyRedeemed
-                    ? 'Redeemed'
-                    : available
-                        ? 'Ready'
-                        : 'Locked',
-                icon: alreadyRedeemed
-                    ? Icons.check_rounded
-                    : available
-                        ? Icons.redeem_rounded
-                        : Icons.lock_outline_rounded,
-                color: alreadyRedeemed
-                    ? DawaColors.green
-                    : available
-                        ? DawaColors.primary
-                        : DawaColors.muted,
+                label: statusLabel,
+                icon: statusIcon,
+                color: statusColor,
               ),
             ],
           ),
           const SizedBox(height: 12),
           DawaProgressBar(
-            value: alreadyRedeemed ? 1 : state.coins / 1000,
+            value: hasVoucher ? 1 : state.coins / 1000,
             semanticLabel: 'Clinic scan reward progress',
             color: DawaColors.green,
           ),
           const SizedBox(height: 12),
-          if (alreadyRedeemed || available)
+          if (!redemptionEnabled)
+            Text(
+              'Clinic reward redemption is not available yet. Keep learning—your points remain saved.',
+              style: context.dawaCaption.copyWith(color: DawaColors.ink),
+            )
+          else if (hasVoucher || available)
             DawaPrimaryButton(
-              label: alreadyRedeemed ? 'View voucher' : 'Redeem voucher',
-              icon: alreadyRedeemed
+              label: hasVoucher ? 'View voucher' : 'Redeem voucher',
+              icon: hasVoucher
                   ? Icons.confirmation_number_outlined
                   : Icons.redeem_rounded,
               onPressed: onRedeem,
@@ -405,61 +463,110 @@ class _ActiveVoucherCard extends StatelessWidget {
   final DawaRewardRedemption redemption;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        container: true,
-        label: 'Active free scan voucher ${redemption.voucherCode}',
-        child: DawaCard(
-          color: DawaColors.softGreen,
-          borderColor: DawaColors.green.withValues(alpha: .35),
-          child: Row(
-            children: [
-              const DawaIconBadge(
-                icon: Icons.verified_rounded,
-                color: DawaColors.green,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Your active voucher',
-                        style: context.dawaSectionTitle),
-                    const SizedBox(height: 3),
-                    SelectionArea(
-                      child: Text(
-                        redemption.voucherCode,
-                        style: context.dawaTitle.copyWith(
-                          letterSpacing: 1.4,
-                          color: DawaColors.green,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'Show this code at a participating Dawa clinic.',
-                      style: context.dawaCaption,
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'Copy voucher code',
-                onPressed: () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: redemption.voucherCode),
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Voucher code copied')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.copy_rounded),
-                color: DawaColors.primary,
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final active = redemption.status == DawaVoucherStatus.claimed;
+    final status = switch (redemption.status) {
+      DawaVoucherStatus.claimed => (
+          'Ready to use',
+          Icons.verified_rounded,
+          DawaColors.green
         ),
-      );
+      DawaVoucherStatus.redeemed => (
+          'Used',
+          Icons.check_circle_rounded,
+          DawaColors.primary
+        ),
+      DawaVoucherStatus.expired => (
+          'Expired',
+          Icons.schedule_outlined,
+          DawaColors.warning
+        ),
+      DawaVoucherStatus.cancelled => (
+          'Cancelled',
+          Icons.cancel_outlined,
+          DawaColors.danger
+        ),
+    };
+    final reference = redemption.claimReference ?? redemption.voucherCode;
+    return Semantics(
+      container: true,
+      label: 'Clinic scan voucher. ${status.$1}. Reference $reference.',
+      child: DawaCard(
+        color: active ? DawaColors.softGreen : DawaColors.softBlue,
+        borderColor: status.$3.withValues(alpha: .35),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                DawaIconBadge(icon: status.$2, color: status.$3),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Clinic scan voucher',
+                          style: context.dawaSectionTitle),
+                      Text(status.$1,
+                          style:
+                              context.dawaCaption.copyWith(color: status.$3)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Copy voucher reference',
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: reference));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Voucher reference copied')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.copy_rounded),
+                  color: DawaColors.primary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text('Reference', style: context.dawaCaption),
+            SelectionArea(
+              child: Text(
+                reference,
+                style: context.dawaTitle
+                    .copyWith(letterSpacing: 1.15, color: status.$3),
+              ),
+            ),
+            if (active) ...[
+              const SizedBox(height: 4),
+              Text(
+                  'Show this reference or QR code at a participating Dawa clinic.',
+                  style: context.dawaCaption),
+              if (redemption.qrPayload != null &&
+                  redemption.qrPayload!.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Center(
+                  child: Semantics(
+                    label:
+                        'Voucher QR code. A clinic worker scans it to look up this voucher.',
+                    image: true,
+                    child: QrImageView(
+                      data: redemption.qrPayload!,
+                      size: 132,
+                      eyeStyle: const QrEyeStyle(color: DawaColors.primary),
+                      dataModuleStyle:
+                          const QrDataModuleStyle(color: DawaColors.ink),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _EarnCard extends StatelessWidget {
