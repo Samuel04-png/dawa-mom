@@ -320,6 +320,7 @@ insert into test_release1_terminal_cases values
   ('failed', time '10:00', '00000000-0000-4000-8000-000000000062', 'release1-webhook-failed'),
   ('expired', time '11:00', '00000000-0000-4000-8000-000000000063', 'release1-webhook-expired'),
   ('cancelled', time '12:00', '00000000-0000-4000-8000-000000000064', 'release1-webhook-cancelled');
+grant select on test_release1_terminal_cases to authenticated;
 
 reset role;
 set role authenticated;
