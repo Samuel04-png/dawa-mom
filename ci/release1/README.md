@@ -14,6 +14,12 @@ migrations by construction. The incremental application tests
 only a local Docker stack and carries no Supabase access token, project ref,
 database URL, provider credential, or real patient data.
 
+`202607180001_schedule_dawa_platform_outbox.sql` correctly requires the
+`dawa_mom_worker_secret` in Vault. The runner injects a named, non-production
+placeholder as a temporary `202607170002` fixture so that the historical chain
+can run unchanged. The fixture is never placed in `supabase/migrations`,
+deployed, or used as an application secret.
+
 ## Important baseline limitation
 
 `202609170001_recovered_remote_history.sql` deliberately contains no schema

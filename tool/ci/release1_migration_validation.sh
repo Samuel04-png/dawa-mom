@@ -20,6 +20,11 @@ for migration in "$repo_root"/supabase/migrations/*.sql; do
   fi
 done
 
+# 202607180001 deliberately refuses to schedule an outbox without a Vault
+# secret. Supply a non-production placeholder only in this disposable chain.
+cp "$repo_root/ci/release1/pre_outbox_vault_fixture.sql" \
+  "$migrations_dir/202607170002_ci_release1_vault_fixture.sql"
+
 for excluded in 202610090001 202610090002 202610100001 202610100002 202610100003; do
   if compgen -G "$migrations_dir/${excluded}_*.sql" > /dev/null; then
     echo "Unexpected pre-fixture migration $excluded in Release 1 workspace." >&2
