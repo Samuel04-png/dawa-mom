@@ -166,11 +166,20 @@ database migration or Edge Function has been deployed.
   booking overload did not set the new paid online initial state. The unapplied
   `202610100001` migration now delegates that overload to the secure
   eleven-argument implementation with `online` explicitly selected.
-- Local Docker is unavailable and this checkout has no Git remote, so the
-  Actions workflow remains unexecuted. Moreover,
-  `202609170001_recovered_remote_history.sql` has no source schema changes;
-  structural CI cannot be treated as a production-equivalent baseline until a
-  sanitized staging schema snapshot is available.
+- Published the protected Release 1 branch at
+  `origin/release/1-core-backend` and ran the workflow in GitHub Actions.
+  [Run 38134957088](https://github.com/Samuel04-png/dawa-mom/actions/runs/38134957088)
+  passed on commit `b4e27fe`: both target migrations applied in a disposable
+  local Supabase stack, local schema lint passed, and all synthetic lifecycle
+  cases passed with no production credential or patient data.
+- The run found and validated a pre-deployment payment-sync correction in the
+  pending `202610100001`: `release_paid_appointment_workflow` now scopes its
+  outbox insert to `mother.id = appointment_row.mother_id`, preventing duplicate
+  Clinician appointment events when multiple mothers exist.
+- `202609170001_recovered_remote_history.sql` still has no source schema
+  changes. This is therefore a structural CI pass, not a
+  production-equivalent representative baseline; a sanitized schema-only
+  staging baseline remains required before cutover approval.
 - Added `docs/DAWA_MOM_RELEASE_1_TEST_ACCESS_CHECKLIST.md` for the controlled
   profile, booking, cancellation, notification, Airtel/Lipila, and Clinician
   staging evidence required next.

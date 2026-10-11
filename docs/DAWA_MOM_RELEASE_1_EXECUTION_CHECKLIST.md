@@ -125,9 +125,18 @@ branch’s release manifest. No current checkout may receive an automatic full
   both booking signatures, idempotency, free/cash compatibility, cancellation
   queuing, pending / processing / successful / failed / cancelled / expired /
   replay / late-success payment states, and Clinician outbox release.
-- Docker is installed but its daemon is unavailable locally; this checkout has
-  no Git remote on which to trigger Actions. The new workflow has therefore
-  not yet executed in a disposable runner.
+- GitHub Actions run
+  [`38134957088`](https://github.com/Samuel04-png/dawa-mom/actions/runs/38134957088)
+  passed on 2026-10-11 for commit `b4e27fe`. It applied
+  `202610090002` then `202610100001` in a GitHub-hosted disposable Supabase
+  stack, passed `supabase db lint --local`, and completed the synthetic
+  lifecycle/RLS/idempotency suite. No connected-project credential, patient
+  data, payment credential, or Care Plan/Release 2 migration was used.
+- That run also exposed and verified the fix for a genuine pre-deployment
+  defect: `release_paid_appointment_workflow` selected every mother when
+  composing an outbox row. `202610100001` now constrains it to
+  `mother.id = appointment_row.mother_id`, so a verified payment releases one
+  Clinician workflow for its own appointment.
 - `202609170001_recovered_remote_history.sql` is intentionally non-executable
   because its original remote SQL was unavailable. The first CI run is
   structural only, not a representative production baseline, until an
@@ -288,7 +297,7 @@ and the separately custom-authorized server-to-server outbox worker.
 | Migration `202609220001` recorded and 11-argument RPC resolves remotely | Confirmed |
 | Flutter and Supabase CLI point to the same project | Confirmed |
 | Care Plan excluded from Release 1 | Locally gated; production sequencing decision pending |
-| Isolated Release 1 migration/RLS/idempotency validation | Blocked |
+| Isolated Release 1 migration/RLS/idempotency validation | Structural pass — [run 38134957088](https://github.com/Samuel04-png/dawa-mom/actions/runs/38134957088); authoritative representative baseline still required |
 | Controlled profile/booking/Clinician connected tests | Blocked |
 | Airtel/Lipila sandbox lifecycle evidence | Blocked |
 | Release 1 notification connected evidence | Blocked |
