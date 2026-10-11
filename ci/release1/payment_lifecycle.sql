@@ -184,6 +184,10 @@ select test_release1.assert_true(
   ),
   'new paid online booking did not start as a private not_started reservation'
 );
+
+-- Outbox internals are intentionally not readable by a patient. Inspect this
+-- server-side invariant as the database owner, then resume the patient path.
+reset role;
 select test_release1.assert_true(
   not exists (
     select 1
@@ -194,6 +198,7 @@ select test_release1.assert_true(
   ),
   'unresolved paid appointment was sent to Dawa Clinician'
 );
+set role authenticated;
 
 -- The same idempotency key returns the same appointment rather than a second
 -- reservation or future charge opportunity.
