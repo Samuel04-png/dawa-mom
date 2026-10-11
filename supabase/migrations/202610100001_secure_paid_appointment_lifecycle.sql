@@ -343,6 +343,113 @@ $$;
 revoke all on function public.create_lipila_payment(uuid, text) from public, anon;
 grant execute on function public.create_lipila_payment(uuid, text) to authenticated;
 
+-- The original release function joined every mother while preparing the
+-- Clinician outbox row. Replacing it here keeps the already-applied migration
+-- immutable and guarantees exactly one release event for the appointment's
+-- own patient after a verified payment.
+create or replace function public.release_paid_appointment_workflow(
+  p_payment_id uuid,
+  p_webhook_id text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  payment_row public.payments%rowtype;
+  appointment_row public.appointments%rowtype;
+begin
+  select * into payment_row
+  from public.payments
+  where id = p_payment_id
+  for update;
+  if payment_row.id is null then
+    raise exception using errcode = 'P0002', message = 'Payment was not found';
+  end if;
+  if payment_row.status <> 'successful' then
+    raise exception using errcode = '23514', message = 'Payment is not successful';
+  end if;
+
+  select * into appointment_row
+  from public.appointments
+  where id = payment_row.appointment_id
+  for update;
+  if appointment_row.id is null then
+    raise exception using errcode = 'P0002', message = 'Appointment was not found';
+  end if;
+  if not appointment_row.is_paid_snapshot then
+    raise exception using errcode = '23514', message = 'Appointment is not paid';
+  end if;
+
+  perform set_config('dawa.integration_transition', 'allowed', true);
+
+  insert into public.integration_outbox (
+    event_type,
+    aggregate_type,
+    aggregate_id,
+    payload
+  )
+  select
+    'appointment.created',
+    'appointment',
+    appointment_row.id,
+    jsonb_strip_nulls(jsonb_build_object(
+      'source', 'dawa_mom',
+      'source_appointment_id', appointment_row.id,
+      'source_mother_id', appointment_row.mother_id,
+      'dawa_clinician_patient_id', mother.dawa_clinician_patient_id,
+      'dawa_clinician_clinician_id', doctor.dawa_clinician_clinician_id,
+      'dawa_clinician_clinic_id', clinic.dawa_clinician_clinic_id,
+      'appointment_date', appointment_row.appointment_date,
+      'start_time', appointment_row.start_time,
+      'end_time', appointment_row.end_time,
+      'appointment_type', appointment_row.appointment_type,
+      'reason', appointment_row.reason,
+      'notes', appointment_row.notes,
+      'status', appointment_row.status,
+      'service_id', appointment_row.service_id,
+      'external_service_id', appointment_row.external_service_id_snapshot,
+      'price', appointment_row.price_snapshot,
+      'currency', appointment_row.currency_snapshot,
+      'created_at', appointment_row.created_at,
+      'updated_at', appointment_row.updated_at
+    ))
+  from public.mothers mother
+  join public.doctors doctor on doctor.id = appointment_row.clinician_id
+  join public.clinics clinic on clinic.id = appointment_row.clinic_id
+  where mother.id = appointment_row.mother_id
+    and not exists (
+      select 1 from public.integration_outbox queued
+      where queued.event_type = 'appointment.created'
+        and queued.aggregate_type = 'appointment'
+        and queued.aggregate_id = appointment_row.id
+    );
+
+  insert into public.appointment_email_outbox (
+    appointment_id,
+    recipient_kind,
+    template_key
+  ) values
+    (appointment_row.id, 'patient', 'appointment_requested'),
+    (appointment_row.id, 'clinician', 'appointment_requested')
+  on conflict (appointment_id, recipient_kind, template_key) do nothing;
+
+  return jsonb_build_object(
+    'ok', true,
+    'appointment_id', appointment_row.id,
+    'payment_id', payment_row.id,
+    'released', true,
+    'webhook_id', p_webhook_id
+  );
+end;
+$$;
+
+revoke all on function public.release_paid_appointment_workflow(uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.release_paid_appointment_workflow(uuid, text)
+  to service_role;
+
 -- Atomically record the provider event and move both the payment ledger and
 -- its private appointment reservation. An event cannot be marked duplicate
 -- before its state transition has committed.

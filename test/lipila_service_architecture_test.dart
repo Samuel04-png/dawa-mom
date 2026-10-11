@@ -97,6 +97,14 @@ void main() {
     expect(migration, contains('release_paid_appointment_workflow'));
   });
 
+  test('a successful payment releases one workflow for its own mother only',
+      () {
+    expect(paidLifecycleMigration,
+        contains('where mother.id = appointment_row.mother_id'));
+    expect(paidLifecycleMigration,
+        contains("queued.event_type = 'appointment.created'"));
+  });
+
   test('Rudo receives backend service pricing context', () {
     expect(rudoFunction, contains('service_catalog'));
     expect(rudoFunction, contains('from("service_catalog")'));
