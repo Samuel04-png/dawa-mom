@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '/backend/supabase/supabase_database.dart';
+import '/config/dawa_release_features.dart';
 import '../domain/dawa_care_item.dart';
 
 @immutable
@@ -30,17 +31,25 @@ class DawaCarePlanSnapshot {
       actionable.isEmpty ? null : actionable.first;
 }
 
-enum DawaCarePlanAvailability { available, cached, schemaUnavailable }
+enum DawaCarePlanAvailability {
+  available,
+  cached,
+  schemaUnavailable,
+  disabled,
+}
 
 class DawaCarePlanRepository {
   DawaCarePlanRepository({
     SupabaseClient? client,
     SharedPreferences? preferences,
+    bool? enabled,
   })  : _client = client,
-        _preferences = preferences;
+        _preferences = preferences,
+        _enabled = enabled ?? DawaReleaseFeatures.carePlanEnabled;
 
   SupabaseClient? _client;
   SharedPreferences? _preferences;
+  final bool _enabled;
 
   static final ValueNotifier<int> changes = ValueNotifier<int>(0);
   static RealtimeChannel? _carePlanChannel;
@@ -56,6 +65,16 @@ class DawaCarePlanRepository {
       _preferences ??= await SharedPreferences.getInstance();
 
   Future<DawaCarePlanSnapshot> load() async {
+    // This must be checked before resolving Supabase/auth/cache. Release 1
+    // intentionally excludes the care-plan migration, and a catch after the
+    // request cannot stop PostgREST from logging PGRST205 in the browser.
+    if (!_enabled) {
+      return const DawaCarePlanSnapshot(
+        items: [],
+        isCached: false,
+        availability: DawaCarePlanAvailability.disabled,
+      );
+    }
     final userId = _requireUserId();
     try {
       final rows = await SupabaseDatabase.instance.runWithFreshSession(

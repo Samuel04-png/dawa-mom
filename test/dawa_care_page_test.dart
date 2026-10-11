@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dawa_mom/components/responsive/dawa_mom_responsive_shell.dart';
+import 'package:dawa_mom/config/dawa_release_features.dart';
 import 'package:dawa_mom/design_system/dawa_design_tokens.dart';
 import 'package:dawa_mom/features/appointments/data/appointment_repository.dart';
 import 'package:dawa_mom/features/appointments/domain/appointment.dart';
@@ -9,6 +10,8 @@ import 'package:dawa_mom/features/care_plan/data/dawa_care_plan_repository.dart'
 import 'package:dawa_mom/features/care_plan/domain/dawa_care_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -41,6 +44,33 @@ const _mobileDestinations = <DawaMomShellDestination>[
 ];
 
 void main() {
+  test('Release 1 disables Care Plan before any Supabase client is resolved',
+      () async {
+    expect(DawaReleaseFeatures.carePlanEnabled, isFalse);
+
+    var requestCount = 0;
+    final httpClient = MockClient((_) async {
+      requestCount += 1;
+      return http.Response('unexpected request', 500);
+    });
+    final repository = DawaCarePlanRepository(
+      client: SupabaseClient(
+        'https://care-plan-test.invalid',
+        'test-anon-key',
+        httpClient: httpClient,
+      ),
+      enabled: false,
+    );
+
+    final snapshot = await repository.load();
+
+    expect(snapshot.items, isEmpty);
+    expect(snapshot.isCached, isFalse);
+    expect(snapshot.availability, DawaCarePlanAvailability.disabled);
+    expect(requestCount, 0);
+    httpClient.close();
+  });
+
   test('care repository identifies an undeployed care-plan table', () {
     expect(
       DawaCarePlanRepository.isMissingSchemaError(
