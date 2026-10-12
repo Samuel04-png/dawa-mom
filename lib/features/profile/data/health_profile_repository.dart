@@ -188,16 +188,9 @@ class HealthProfileRepository {
           },
         ),
       );
-    } on PostgrestException catch (error) {
-      if (kDebugMode) {
-        debugPrint(
-          '[HealthProfile] Pregnancy section save failed '
-          '(${error.code ?? 'unknown'}): ${error.message}',
-        );
-      }
-      throw const HealthProfileException(
-        'Pregnancy information could not be saved. Please try again.',
-      );
+    } catch (error, stackTrace) {
+      _logPregnancySaveFailure(error, stackTrace);
+      throw HealthProfileException(_pregnancySaveMessage(error));
     }
     notifyChanged();
     if (kDebugMode) {
@@ -232,6 +225,47 @@ class HealthProfileRepository {
   static String? _nullIfBlank(String? value) {
     final clean = value?.trim() ?? '';
     return clean.isEmpty ? null : clean;
+  }
+
+  /// Keeps the UI useful without exposing raw database diagnostics to a user.
+  /// This particular RPC intentionally requires the maternal profile row that
+  /// is created by the personal-details step.
+  @visibleForTesting
+  static String pregnancySaveMessage(Object error) =>
+      _pregnancySaveMessage(error);
+
+  static String _pregnancySaveMessage(Object error) {
+    if (error is PostgrestException) {
+      final message = error.message.toLowerCase();
+      if (message.contains('complete your personal profile first')) {
+        return 'Add your personal details before saving pregnancy information.';
+      }
+      if (message.contains('authentication is required')) {
+        return 'Please sign in again before saving pregnancy information.';
+      }
+    }
+    return 'Pregnancy information could not be saved. Please try again.';
+  }
+
+  static void _logPregnancySaveFailure(Object error, StackTrace stackTrace) {
+    if (!kDebugMode) return;
+    if (error is PostgrestException) {
+      debugPrint(
+        '[HealthProfile] operation=save_pregnancy stage=rpc '
+        'error_type=PostgrestException code=${error.code ?? 'unknown'} '
+        'message=${error.message}',
+      );
+    } else {
+      debugPrint(
+        '[HealthProfile] operation=save_pregnancy stage=rpc '
+        'error_type=${error.runtimeType}',
+      );
+    }
+    debugPrintStack(
+      label: '[HealthProfile] save_pregnancy/rpc',
+      stackTrace: stackTrace,
+      maxFrames: 5,
+    );
   }
 }
 
@@ -299,6 +333,7 @@ class HealthProfileSnapshot {
       _text(mother['dawa_clinician_patient_id']).isNotEmpty;
   bool get patientSyncNeedsAttention =>
       _text(mother['dawa_clinician_sync_error_code']).isNotEmpty;
+  bool get hasMaternalProfile => _text(mother['id']).isNotEmpty;
 
   PregnancyProfileStatus get pregnancyProfileStatus {
     switch (pregnancyStatus) {

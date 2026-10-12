@@ -28,6 +28,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
   bool _retryingPatientSync = false;
   bool _savingPregnancy = false;
   _ProfileFeedback? _feedback;
+  final _feedbackKey = GlobalKey();
 
   @override
   void initState() {
@@ -38,7 +39,9 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
 
   Future<HealthProfileSnapshot> _refresh() async {
     final future = _repository.load();
-    setState(() => _profile = future);
+    setState(() {
+      _profile = future;
+    });
     return future;
   }
 
@@ -49,12 +52,18 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
       profile: {...before.profile, ...result.profile},
       mother: {...before.mother, ...result.mother},
     );
-    setState(() => _profile = Future.value(savedSnapshot));
+    setState(() {
+      _profile = Future.value(savedSnapshot);
+    });
     HealthProfileSnapshot after = savedSnapshot;
     var refreshUnavailable = false;
     try {
       after = await _repository.load();
-      if (mounted) setState(() => _profile = Future.value(after));
+      if (mounted) {
+        setState(() {
+          _profile = Future.value(after);
+        });
+      }
     } catch (_) {
       refreshUnavailable = true;
     }
@@ -100,6 +109,13 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
   }
 
   Future<void> _editPregnancy(HealthProfileSnapshot data) async {
+    // The pregnancy RPC correctly rejects users who do not yet have a mother
+    // record. Personal details creates that record, so make the prerequisite
+    // clear before opening a form that cannot be saved.
+    if (!data.hasMaternalProfile) {
+      _showPrerequisiteFeedback();
+      return;
+    }
     final result = await showDialog<_PregnancyResult>(
       context: context,
       builder: (context) => _PregnancyDialog(data: data),
@@ -124,12 +140,18 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
             : null,
         clearPregnancy: result.status != 'pregnant',
       );
-      setState(() => _profile = Future.value(savedSnapshot));
+      setState(() {
+        _profile = Future.value(savedSnapshot);
+      });
       HealthProfileSnapshot after = savedSnapshot;
       var refreshUnavailable = false;
       try {
         after = await _repository.load();
-        if (mounted) setState(() => _profile = Future.value(after));
+        if (mounted) {
+          setState(() {
+            _profile = Future.value(after);
+          });
+        }
       } catch (_) {
         refreshUnavailable = true;
       }
@@ -158,7 +180,16 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message)),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[HealthProfile] operation=save_pregnancy stage=profile_ui '
+        'error_type=${error.runtimeType}',
+      );
+      debugPrintStack(
+        label: '[HealthProfile] save_pregnancy/profile_ui',
+        stackTrace: stackTrace,
+        maxFrames: 5,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -214,6 +245,38 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
         milestone: after.isComplete && !before.isComplete,
       ),
     );
+    // The acknowledgement is part of the page rather than a transient toast,
+    // so screen readers can announce it and the user can read it again. Bring
+    // it into view when a lower step initiated the save.
+    _revealFeedback();
+  }
+
+  void _showPrerequisiteFeedback() {
+    if (!mounted) return;
+    setState(
+      () => _feedback = const _ProfileFeedback(
+        title: 'Add your details first',
+        message:
+            'Add your name, date of birth, phone number, and address. Then you can save pregnancy information.',
+        milestone: false,
+        tone: DawaFeedbackTone.information,
+      ),
+    );
+    _revealFeedback();
+  }
+
+  void _revealFeedback() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final feedbackContext = _feedbackKey.currentContext;
+      if (mounted && feedbackContext != null) {
+        Scrollable.ensureVisible(
+          feedbackContext,
+          duration: DawaMotion.resolve(context, DawaMotion.standard),
+          curve: Curves.easeOutCubic,
+          alignment: .08,
+        );
+      }
+    });
   }
 
   @override
@@ -341,9 +404,10 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                 if (_feedback != null) ...[
                   const SizedBox(height: DawaSpacing.sm),
                   DawaActionFeedback(
+                    key: _feedbackKey,
                     title: _feedback!.title,
                     message: _feedback!.message,
-                    tone: DawaFeedbackTone.success,
+                    tone: _feedback!.tone,
                     dismissLabel: 'Close',
                     onDismiss: () => setState(() => _feedback = null),
                   ),
@@ -453,11 +517,13 @@ class _ProfileFeedback {
     required this.title,
     required this.message,
     required this.milestone,
+    this.tone = DawaFeedbackTone.success,
   });
 
   final String title;
   final String message;
   final bool milestone;
+  final DawaFeedbackTone tone;
 }
 
 enum _CompletionStatus { complete, incomplete, skipped }

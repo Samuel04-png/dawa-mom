@@ -1,5 +1,6 @@
 import 'package:dawa_mom/features/profile/data/health_profile_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   test('health profile completion reflects actual missing sections', () {
@@ -127,6 +128,39 @@ void main() {
     final before = HealthProfileRepository.changes.value;
     HealthProfileRepository.notifyChanged();
     expect(HealthProfileRepository.changes.value, before + 1);
+  });
+
+  test('pregnancy save explains the required personal-profile record', () {
+    final message = HealthProfileRepository.pregnancySaveMessage(
+      const PostgrestException(
+        message: 'Complete your personal profile first',
+        code: 'P0001',
+      ),
+    );
+
+    expect(
+      message,
+      'Add your personal details before saving pregnancy information.',
+    );
+  });
+
+  test('pregnancy data reports whether the required maternal record exists',
+      () {
+    const missingMother = HealthProfileSnapshot(
+      profile: {'email': 'member@example.test'},
+      mother: {},
+      pregnancy: null,
+      periodSettings: null,
+    );
+    const savedMother = HealthProfileSnapshot(
+      profile: {'email': 'member@example.test'},
+      mother: {'id': '4fe4fd1c-bb51-4aa9-b264-c78b6a27639f'},
+      pregnancy: null,
+      periodSettings: null,
+    );
+
+    expect(missingMother.hasMaternalProfile, isFalse);
+    expect(savedMother.hasMaternalProfile, isTrue);
   });
 
   test('a confirmed personal save can update completion before refresh', () {

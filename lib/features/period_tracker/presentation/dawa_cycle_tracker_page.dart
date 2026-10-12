@@ -106,7 +106,9 @@ class _DawaCycleTrackerPageState extends State<DawaCycleTrackerPage> {
     if (!mounted) return;
     final next = _load();
     if (!preserveCurrentOnFailure) {
-      setState(() => _data = next);
+      setState(() {
+        _data = next;
+      });
     }
     try {
       final loaded = await next;
