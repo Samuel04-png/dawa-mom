@@ -9,6 +9,7 @@ import '/features/appointments/domain/appointment.dart';
 import '/features/care_plan/domain/dawa_care_item.dart';
 import '/features/home/domain/dawa_home_presentation.dart';
 import '/features/period_tracker/domain/period_cycle_summary.dart';
+import '/features/pregnancy/domain/dawa_pregnancy_journey.dart';
 
 /// The single primary Home surface. Its information is selected by the pure
 /// Home presentation mapper; this widget only gives each supported journey a
@@ -358,6 +359,9 @@ class _FeaturedVisual extends StatelessWidget {
           _CyclePreviewRing(summary: presentation.cycle!, size: size),
         DawaHomeFeaturedKind.pregnancy => _PregnancyVisual(
             week: presentation.pregnancyWeek!,
+            day: presentation.pregnancyDay ?? 1,
+            progress: presentation.pregnancyProgress ?? 0,
+            daysUntilDue: presentation.daysUntilDue,
             color: style.color,
             size: size,
           ),
@@ -539,37 +543,76 @@ class _HomeCycleRingPainter extends CustomPainter {
 class _PregnancyVisual extends StatelessWidget {
   const _PregnancyVisual({
     required this.week,
+    required this.day,
+    required this.progress,
+    required this.daysUntilDue,
     required this.color,
     required this.size,
   });
 
   final int week;
+  final int day;
+  final double progress;
+  final int? daysUntilDue;
   final Color color;
   final double size;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) {
+    final stage = DawaPregnancyDevelopment.forWeek(week);
+    return SizedBox(
         height: size,
+        width: size,
         child: Stack(
           alignment: Alignment.center,
           children: [
             CircularProgressIndicator(
-              value: (week / 40).clamp(0, 1),
-              strokeWidth: 8,
+              value: progress.clamp(0, 1),
+              strokeWidth: 7,
               color: color,
               backgroundColor: DawaColors.surface,
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.pregnant_woman_rounded,
-                    color: DawaColors.purple, size: 34),
-                Text('Week $week', style: context.dawaSectionTitle),
-              ],
+            ClipOval(
+              child: stage.assetPath == null
+                  ? Container(
+                      width: size - 24,
+                      height: size - 24,
+                      color: DawaColors.surface,
+                      child: const Icon(Icons.favorite_outline_rounded,
+                          color: DawaColors.purple, size: 30),
+                    )
+                  : Image.asset(
+                      stage.assetPath!,
+                      width: size - 24,
+                      height: size - 24,
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.low,
+                      semanticLabel: 'Illustrative pregnancy development stage',
+                    ),
+            ),
+            Positioned(
+              bottom: 1,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: DawaColors.surface,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  daysUntilDue == null
+                      ? 'Week $week · Day $day'
+                      : '$daysUntilDue days',
+                  style: context.dawaCaption.copyWith(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
           ],
-        ),
-      );
+        ));
+  }
 }
 
 class _AppointmentVisual extends StatelessWidget {

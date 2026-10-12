@@ -18,6 +18,7 @@ import '/features/period_tracker/domain/period_cycle_summary.dart';
 import '/features/feedback/dawa_success_feedback.dart';
 import '/features/profile/data/health_profile_repository.dart';
 import '/features/period_tracker/presentation/dawa_daily_check_in_sheet.dart';
+import '/features/pregnancy/presentation/dawa_pregnancy_journey_overview.dart';
 
 class DawaCycleTrackerPage extends StatefulWidget {
   const DawaCycleTrackerPage({
@@ -561,7 +562,7 @@ class _DawaCycleTrackerPageState extends State<DawaCycleTrackerPage> {
         ),
         const SizedBox(height: DawaSpacing.md),
         if (_pregnancyTab) ...[
-          _PregnancyTrackingOverview(profile: data.profile),
+          DawaPregnancyJourneyOverview(profile: data.profile),
         ] else ...[
           if (!summary.isConfigured) ...[
             DawaCard(
@@ -1357,6 +1358,9 @@ class _TrackerModeSelector extends StatelessWidget {
       );
 }
 
+// Retained temporarily for the existing setup illustration composition while
+// the interactive journey lives in its dedicated presentation component.
+// ignore: unused_element
 class _PregnancyTrackingOverview extends StatelessWidget {
   const _PregnancyTrackingOverview({required this.profile});
 
@@ -1548,6 +1552,7 @@ class _PregnancyTrackingOverview extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _PregnancySetupBenefit extends StatelessWidget {
   const _PregnancySetupBenefit({required this.icon, required this.title});
 

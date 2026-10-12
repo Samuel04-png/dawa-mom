@@ -1,6 +1,7 @@
 import '/features/appointments/domain/appointment.dart';
 import '/features/care_plan/domain/dawa_care_item.dart';
 import '/features/period_tracker/domain/period_cycle_summary.dart';
+import '/features/pregnancy/domain/dawa_pregnancy_journey.dart';
 import '/features/profile/data/health_profile_repository.dart';
 
 enum DawaHomeFeaturedKind {
@@ -40,7 +41,10 @@ class DawaHomePresentation {
     this.appointment,
     this.careItem,
     this.pregnancyWeek,
+    this.pregnancyDay,
     this.trimester,
+    this.pregnancyProgress,
+    this.daysUntilDue,
     this.profileAvailable = true,
   });
 
@@ -53,7 +57,10 @@ class DawaHomePresentation {
   final Appointment? appointment;
   final DawaCareItem? careItem;
   final int? pregnancyWeek;
+  final int? pregnancyDay;
   final int? trimester;
+  final double? pregnancyProgress;
+  final int? daysUntilDue;
   final bool profileAvailable;
 
   bool get showsCyclePreview =>
@@ -115,20 +122,23 @@ abstract final class DawaHomePresentationMapper {
       );
     }
 
-    final week = profile.pregnancyWeek;
-    if (week != null) {
+    final pregnancy = DawaPregnancyJourney.fromProfile(profile);
+    if (pregnancy != null) {
       return DawaHomePresentation(
         kind: DawaHomeFeaturedKind.pregnancy,
         action: DawaHomeAction.pregnancy,
         // The eyebrow and progress visual already establish the context.
         // Keeping this brief preserves a clear single-line heading on phones.
-        title: 'Week $week',
-        message: profile.trimester == null
-            ? 'Your pregnancy care, one step at a time.'
-            : 'Your ${_ordinal(profile.trimester!)} trimester.',
+        title: 'Week ${pregnancy.actualWeek}',
+        message: pregnancy.isPastDue
+            ? 'Your due date has passed. Contact your health worker for guidance.'
+            : 'Your ${_ordinal(pregnancy.trimester)} trimester.',
         actionLabel: 'View pregnancy',
-        pregnancyWeek: week,
-        trimester: profile.trimester,
+        pregnancyWeek: pregnancy.actualWeek,
+        pregnancyDay: pregnancy.dayOfWeek,
+        trimester: pregnancy.trimester,
+        pregnancyProgress: pregnancy.progress,
+        daysUntilDue: pregnancy.daysRemaining,
         profileAvailable: profileAvailable,
       );
     }
