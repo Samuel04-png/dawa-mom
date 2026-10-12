@@ -750,7 +750,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Week 24'), findsNWidgets(2));
+    expect(find.text('Week 24'), findsOneWidget);
     expect(find.text('Some updates are unavailable.'), findsOneWidget);
     expect(find.text('Points unavailable'), findsOneWidget);
     expect(find.text('Book visit'), findsOneWidget);
@@ -1025,8 +1025,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Set up pregnancy tracking'), findsOneWidget);
-    expect(find.text('After setup you’ll see'), findsOneWidget);
-    expect(find.text('Current pregnancy week'), findsOneWidget);
+    expect(
+      find.text(
+          'Add a last period or due date to see guidance for your stage.'),
+      findsOneWidget,
+    );
     expect(find.text('Not set'), findsNothing);
     expect(tester.takeException(), isNull);
   });

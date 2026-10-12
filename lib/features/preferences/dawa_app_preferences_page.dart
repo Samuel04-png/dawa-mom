@@ -8,7 +8,7 @@ import '/localization/dawa_localized_material.dart';
 
 import 'dawa_user_preferences_repository.dart';
 
-/// Controls optional, non-clinical feedback used across Dawa Mom.
+/// Controls optional, non-clinical feedback used across DawaMom.
 ///
 /// These settings are stored on the device. They do not need health data or a
 /// network connection, so a user can change them even while offline.

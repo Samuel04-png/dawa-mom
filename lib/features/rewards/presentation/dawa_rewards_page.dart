@@ -417,7 +417,7 @@ class _ScanRewardCard extends StatelessWidget {
           const SizedBox(height: 12),
           if (!redemptionEnabled)
             Text(
-              'Clinic reward redemption is not available yet. Keep learning—your points remain saved.',
+              'Clinic reward redemption is not available yet. Keep learning. Your points remain saved.',
               style: context.dawaCaption.copyWith(color: DawaColors.ink),
             )
           else if (hasVoucher || available)

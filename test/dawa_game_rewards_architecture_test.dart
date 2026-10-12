@@ -31,7 +31,9 @@ void main() {
 
     expect(repository, contains('dawa_learning_local_owner'));
     expect(repository, contains(r"'${base}_$userId'"));
-    expect(repository, contains('_keyFor(_freeScanVoucherKey)'));
+    expect(repository, contains("from('dawa_mom_reward_redemptions')"));
+    expect(repository, contains("'free_scan_voucher'"));
+    expect(repository, isNot(contains('_freeScanVoucherKey')));
     expect(repository, contains('_keyFor(_completedKey)'));
     expect(repository, contains('_prepareOwnerScopedStorage'));
   });

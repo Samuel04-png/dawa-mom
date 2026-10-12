@@ -30,7 +30,8 @@ void main() {
     }
   });
 
-  testWidgets('passing Myth Match awards points once and allows replay',
+  testWidgets(
+      'passing Myth Match keeps progress locally until points are verified',
       (tester) async {
     final preferences = await SharedPreferences.getInstance();
     final repository = DawaLearningRepository(preferences: preferences);
@@ -61,13 +62,17 @@ void main() {
     }
 
     expect(find.text('Game complete!'), findsOneWidget);
-    expect(find.text('+10 points'), findsOneWidget);
+    expect(
+      find.textContaining('Points will appear after Dawa confirms'),
+      findsOneWidget,
+    );
+    expect(find.text('+10 points'), findsNothing);
     await tester.tap(find.text('Play again'));
     await tester.pumpAndSettle();
 
     final state = await repository.load();
     expect(state.completedIds, contains(DawaHealthGameCatalog.mythMatchId));
-    expect(state.coins, 190);
+    expect(state.coins, 180);
     expect(find.textContaining('Cervical screening can find'), findsOneWidget);
   });
 
