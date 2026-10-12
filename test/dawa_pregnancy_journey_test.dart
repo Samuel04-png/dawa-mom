@@ -2,6 +2,7 @@ import 'package:dawa_mom/features/pregnancy/domain/dawa_pregnancy_journey.dart';
 import 'package:dawa_mom/features/pregnancy/presentation/dawa_pregnancy_journey_overview.dart';
 import 'package:dawa_mom/features/profile/data/health_profile_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 HealthProfileSnapshot _pregnantProfile({required DateTime dueDate}) =>
@@ -21,7 +22,7 @@ void main() {
 
     expect(journey, isNotNull);
     expect(journey!.actualWeek, 18);
-    expect(journey.dayOfWeek, 2);
+    expect(journey.dayOfWeek, 1);
     expect(journey.trimester, 2);
     expect(journey.daysRemaining, 153);
   });
@@ -45,6 +46,40 @@ void main() {
         contains('10_03_02 AM-7.png'));
     expect(DawaPregnancyDevelopment.forWeek(42).assetPath,
         contains('10_03_06 AM-10.png'));
+  });
+
+  test('an explicit due date keeps the gestational stage and countdown aligned',
+      () {
+    final profile = HealthProfileSnapshot(
+      profile: const {},
+      mother: const {'pregnancy_status': 'pregnant'},
+      pregnancy: <String, dynamic>{
+        // This LMP is inconsistent with the explicitly entered due date.
+        'lnmp': DateTime(2026, 10, 9).toIso8601String(),
+        'estimated_due_date': DateTime(2027, 6, 10).toIso8601String(),
+      },
+      periodSettings: null,
+    );
+
+    final journey = DawaPregnancyJourney.fromProfile(
+      profile,
+      now: DateTime(2026, 10, 12),
+    );
+
+    expect(journey, isNotNull);
+    expect(journey!.actualWeek, 5);
+    expect(journey.dayOfWeek, 4);
+    expect(journey.daysRemaining, 241);
+    expect(DawaPregnancyDevelopment.forWeek(journey.actualWeek).week, 4);
+  });
+
+  testWidgets('all supplied development art resolves from the asset bundle',
+      (tester) async {
+    for (final week in const [4, 6, 8, 12, 16, 20, 24, 28, 32, 40]) {
+      final asset = DawaPregnancyDevelopment.forWeek(week).assetPath!;
+      final bytes = await rootBundle.load(asset);
+      expect(bytes.lengthInBytes, greaterThan(0), reason: asset);
+    }
   });
 
   testWidgets('Track pregnancy journey supports safe week exploration at 320px',
@@ -71,6 +106,10 @@ void main() {
     expect(find.byKey(const ValueKey('pregnancy-development-wheel')),
         findsOneWidget);
     expect(find.text('Week ${journey.actualWeek} of 40'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('pregnancy-development-20')),
+      findsNWidgets(2),
+    );
 
     await tester.tap(find.byTooltip('Next week'));
     await tester.pumpAndSettle();

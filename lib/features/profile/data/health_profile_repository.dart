@@ -353,9 +353,14 @@ class HealthProfileSnapshot {
   bool get hasBookingDetails => personalComplete && contactComplete;
   DateTime? get calculatedDueDate =>
       estimatedDueDate ?? lastMenstrualPeriod?.add(const Duration(days: 280));
+
+  /// An explicitly saved due date is the source of truth for all pregnancy
+  /// presentation dates. When both dates exist, deriving the start from the
+  /// due date keeps the displayed week, day, progress, and countdown aligned.
+  /// If only an LMP is saved, the established 280-day estimate still applies.
   DateTime? get calculatedPregnancyStart =>
-      lastMenstrualPeriod ??
-      estimatedDueDate?.subtract(const Duration(days: 280));
+      estimatedDueDate?.subtract(const Duration(days: 280)) ??
+      lastMenstrualPeriod;
   int? get pregnancyWeek {
     final start = calculatedPregnancyStart;
     if (start == null) return null;

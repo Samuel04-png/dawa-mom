@@ -205,7 +205,9 @@ class _DawaMomResponsiveDashboardState
 
   Future<void> _refresh() async {
     final future = _load();
-    setState(() => _data = future);
+    setState(() {
+      _data = future;
+    });
     await future;
   }
 

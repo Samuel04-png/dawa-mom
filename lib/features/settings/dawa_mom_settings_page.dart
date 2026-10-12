@@ -54,7 +54,9 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
 
   Future<void> _refresh() async {
     final future = _profiles.load();
-    setState(() => _profile = future);
+    setState(() {
+      _profile = future;
+    });
     await future;
   }
 
@@ -75,7 +77,11 @@ class _DawaMomSettingsPageState extends State<DawaMomSettingsPage> {
     );
     if (result == null) return;
     final saved = await _preferencesRepository.save(result);
-    if (mounted) setState(() => _preferences = Future.value(saved));
+    if (mounted) {
+      setState(() {
+        _preferences = Future.value(saved);
+      });
+    }
   }
 
   Future<void> _showRewards(DawaLearningState value) async {

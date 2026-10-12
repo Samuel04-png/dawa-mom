@@ -52,7 +52,10 @@ class DawaPregnancyJourney {
     final remaining = dueDay.difference(today).inDays;
     return DawaPregnancyJourney._(
       actualWeek: week,
-      dayOfWeek: (elapsedDays % 7) + 1,
+      // A gestational day is zero-indexed within the week: 39 elapsed days
+      // reads as Week 5, Day 4. This also avoids presenting an inconsistent
+      // day beside the date-only countdown.
+      dayOfWeek: elapsedDays % 7,
       trimester: trimester,
       dueDate: dueDay,
       daysRemaining: remaining < 0 ? 0 : remaining,

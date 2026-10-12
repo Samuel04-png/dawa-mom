@@ -284,22 +284,63 @@ class _DevelopmentImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
         borderRadius: BorderRadius.circular(size / 2),
-        child: development.assetPath == null
-            ? Container(
-                width: size,
-                height: size,
-                color: DawaColors.surface,
-                child: const Icon(Icons.favorite_outline_rounded,
-                    color: DawaColors.purple),
-              )
-            : Image.asset(
-                development.assetPath!,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.low,
-                semanticLabel: 'Illustrative pregnancy development stage',
-              ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: development.assetPath == null
+              ? _EarlyDatingVisual(key: const ValueKey('pregnancy-dating'))
+              : Image.asset(
+                  development.assetPath!,
+                  key: ValueKey('pregnancy-development-${development.week}'),
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.low,
+                  semanticLabel: 'Illustrative pregnancy development stage',
+                  errorBuilder: (_, error, __) {
+                    debugPrint(
+                      '[Pregnancy] development asset unavailable '
+                      'stage=${development.week} error_type=${error.runtimeType}',
+                    );
+                    return const _UnavailableDevelopmentVisual();
+                  },
+                ),
+        ),
+      );
+}
+
+class _EarlyDatingVisual extends StatelessWidget {
+  const _EarlyDatingVisual({super.key});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: 'Early pregnancy dating information',
+        child: Container(
+          color: DawaColors.surface,
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.calendar_month_outlined,
+            color: DawaColors.purple,
+            size: 38,
+          ),
+        ),
+      );
+}
+
+class _UnavailableDevelopmentVisual extends StatelessWidget {
+  const _UnavailableDevelopmentVisual();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: 'Pregnancy development illustration unavailable',
+        child: Container(
+          color: DawaColors.surface,
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.image_not_supported_outlined,
+            color: DawaColors.textMuted,
+            size: 34,
+          ),
+        ),
       );
 }
 

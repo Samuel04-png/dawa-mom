@@ -36,7 +36,11 @@ class _PregnancyWhatToExpectLoaderState
   }
 
   void _reload() {
-    if (mounted) setState(() => _profile = _repository.load());
+    if (mounted) {
+      setState(() {
+        _profile = _repository.load();
+      });
+    }
   }
 
   @override

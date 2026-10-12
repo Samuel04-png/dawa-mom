@@ -578,16 +578,34 @@ class _PregnancyVisual extends StatelessWidget {
                       width: size - 24,
                       height: size - 24,
                       color: DawaColors.surface,
-                      child: const Icon(Icons.favorite_outline_rounded,
+                      child: const Icon(Icons.calendar_month_outlined,
                           color: DawaColors.purple, size: 30),
                     )
                   : Image.asset(
                       stage.assetPath!,
+                      key: ValueKey('home-pregnancy-development-${stage.week}'),
                       width: size - 24,
                       height: size - 24,
                       fit: BoxFit.cover,
                       filterQuality: FilterQuality.low,
                       semanticLabel: 'Illustrative pregnancy development stage',
+                      errorBuilder: (_, error, __) {
+                        debugPrint(
+                          '[Home] pregnancy development asset unavailable '
+                          'stage=${stage.week} error_type=${error.runtimeType}',
+                        );
+                        return Container(
+                          width: size - 24,
+                          height: size - 24,
+                          color: DawaColors.surface,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: DawaColors.textMuted,
+                            size: 26,
+                          ),
+                        );
+                      },
                     ),
             ),
             Positioned(
