@@ -1334,6 +1334,25 @@ class _FakeAppointmentRepository extends AppointmentRepository {
 
 class _FakeHealthProfileRepository implements HealthProfileRepository {
   @override
+  Future<HealthProfilePersonalSave> savePersonalInformation({
+    required String name,
+    required DateTime dateOfBirth,
+    required String phone,
+    required String address,
+    String? occupation,
+  }) async =>
+      HealthProfilePersonalSave(
+        profile: {'display_name': name, 'phone_number': phone},
+        mother: {
+          'name': name,
+          'phone_number': phone,
+          'date_of_birth': dateOfBirth.toIso8601String(),
+          'address': address,
+          'occupation': occupation,
+        },
+      );
+
+  @override
   Future<HealthProfileSnapshot> load() async => _healthProfile();
 
   @override
