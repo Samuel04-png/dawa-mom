@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -16,24 +17,36 @@ class AppointmentRepository {
   AppointmentRepository({
     SupabaseClient? client,
     ClinicianDirectoryRepository? clinicianDirectory,
+    FlutterSecureStorage? appointmentCacheStorage,
   })  : _client = client ?? Supabase.instance.client,
         _clinicianDirectory = clinicianDirectory ??
-            SupabaseClinicianDirectoryRepository(client: client) {
+            SupabaseClinicianDirectoryRepository(client: client),
+        _appointmentCacheStorage = appointmentCacheStorage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(encryptedSharedPreferences: true),
+            ) {
     _ensureRealtime(_client);
   }
 
   final SupabaseClient _client;
   final ClinicianDirectoryRepository _clinicianDirectory;
+  final FlutterSecureStorage _appointmentCacheStorage;
   bool _lastClinicLoadUsedCache = false;
   DateTime? _lastClinicCacheAt;
+  bool _lastAppointmentLoadUsedCache = false;
+  DateTime? _lastAppointmentCacheAt;
 
   static final ValueNotifier<int> changes = ValueNotifier<int>(0);
   static RealtimeChannel? _appointmentsChannel;
   static String? _realtimeUserId;
   static const _clinicCachePrefix = 'dawa_mom_booking_clinics_v1';
+  static const _appointmentCachePrefix = 'dawa_mom_appointments_v1';
+  static const _appointmentCacheMaxAge = Duration(hours: 24);
 
   bool get lastClinicLoadUsedCache => _lastClinicLoadUsedCache;
   DateTime? get lastClinicCacheAt => _lastClinicCacheAt;
+  bool get lastAppointmentLoadUsedCache => _lastAppointmentLoadUsedCache;
+  DateTime? get lastAppointmentCacheAt => _lastAppointmentCacheAt;
 
   static void _ensureRealtime(SupabaseClient client) {
     final userId = client.auth.currentUser?.id;
@@ -92,20 +105,34 @@ class AppointmentRepository {
   }
 
   Future<List<Appointment>> getAppointments() async {
-    _requireUserId();
-    final rows = await SupabaseDatabase.instance.runWithFreshSession(
-      () => _client
-          .from('appointments')
-          .select()
-          .order('appointment_date')
-          .order('start_time'),
-    );
-    final appointments = (rows as List)
-        .map((row) => Appointment.fromJson(
-              Map<String, dynamic>.from(row as Map),
-            ))
-        .toList();
-    return _decorateAppointments(appointments);
+    final userId = _requireUserId();
+    try {
+      final rows = await SupabaseDatabase.instance.runWithFreshSession(
+        () => _client
+            .from('appointments')
+            .select()
+            .order('appointment_date')
+            .order('start_time'),
+      );
+      final appointments = (rows as List)
+          .map((row) => Appointment.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ))
+          .toList();
+      final decorated = await _decorateAppointments(appointments);
+      _lastAppointmentLoadUsedCache = false;
+      _lastAppointmentCacheAt = DateTime.now();
+      await _saveAppointmentCache(userId, decorated, _lastAppointmentCacheAt!);
+      return decorated;
+    } catch (_) {
+      final cached = await _loadAppointmentCache(userId);
+      if (cached != null) {
+        _lastAppointmentLoadUsedCache = true;
+        _lastAppointmentCacheAt = cached.$1;
+        return cached.$2;
+      }
+      rethrow;
+    }
   }
 
   Future<Appointment?> getNextAppointment() async {
@@ -400,6 +427,62 @@ class AppointmentRepository {
           )
           .toList(growable: false);
       return clinics.isEmpty ? null : (cachedAt, clinics);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveAppointmentCache(
+    String userId,
+    List<Appointment> appointments,
+    DateTime cachedAt,
+  ) async {
+    try {
+      await _appointmentCacheStorage.write(
+        key: '$_appointmentCachePrefix-$userId',
+        value: jsonEncode({
+          'cached_at': cachedAt.toUtc().toIso8601String(),
+          'appointments': appointments
+              .map((appointment) => appointment.toOfflineSnapshot())
+              .toList(growable: false),
+        }),
+      );
+    } catch (_) {
+      // Offline display is a resilience enhancement. It must never make a
+      // successful live appointment read fail when local storage is absent.
+    }
+  }
+
+  Future<(DateTime, List<Appointment>)?> _loadAppointmentCache(
+    String userId,
+  ) async {
+    try {
+      final encoded = await _appointmentCacheStorage.read(
+        key: '$_appointmentCachePrefix-$userId',
+      );
+      if (encoded == null || encoded.isEmpty) return null;
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map) return null;
+      final json = Map<String, dynamic>.from(decoded);
+      final cachedAt = DateTime.tryParse(json['cached_at']?.toString() ?? '');
+      final rows = json['appointments'];
+      if (cachedAt == null || rows is! List) return null;
+      // Booking state and payment state are server-authoritative. Do not show
+      // a dated appointment snapshot as if it were still current.
+      if (DateTime.now().toUtc().difference(cachedAt.toUtc()) >
+          _appointmentCacheMaxAge) {
+        return null;
+      }
+      final appointments = rows
+          .whereType<Map>()
+          .map(
+            (row) => Appointment.fromOfflineSnapshot(
+              Map<String, dynamic>.from(row),
+            ),
+          )
+          .where((appointment) => appointment.id.isNotEmpty)
+          .toList(growable: false);
+      return (cachedAt, appointments);
     } catch (_) {
       return null;
     }

@@ -172,9 +172,11 @@ class _DawaLibraryPageState extends State<DawaLibraryPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DawaSectionHeader(
-                      title: _section == 'Audio'
-                          ? 'Downloaded audio'
-                          : 'Saved learning',
+                      title: switch (_section) {
+                        'Audio' => 'Audio lessons',
+                        'Offline' => 'Offline learning',
+                        _ => 'Saved learning',
+                      },
                       subtitle: '${items.length} items',
                     ),
                     const SizedBox(height: 9),
@@ -289,7 +291,7 @@ class _LibraryItemCard extends StatelessWidget {
                   Text(item.title, style: context.dawaSectionTitle),
                   const SizedBox(height: 3),
                   Text(
-                    '${item.durationMinutes} min • ${offline ? 'Available offline' : 'Online'}',
+                    '${item.durationMinutes} min • ${_availabilityLabel(item, offline)}',
                     style: context.dawaCaption,
                   ),
                   const SizedBox(height: 5),
@@ -315,8 +317,8 @@ class _LibraryItemCard extends StatelessWidget {
                       ),
                       IconButton(
                         tooltip: offline
-                            ? 'Remove offline copy'
-                            : 'Make transcript available offline',
+                            ? _removeOfflineTooltip(item)
+                            : _saveOfflineTooltip(item),
                         onPressed: onToggleOffline,
                         icon: Icon(
                           offline
@@ -334,4 +336,25 @@ class _LibraryItemCard extends StatelessWidget {
           ],
         ),
       );
+
+  String _availabilityLabel(DawaLearningItem item, bool offline) {
+    if (offline) {
+      return item.type == DawaLearningType.audio
+          ? 'Transcript saved offline'
+          : 'Saved for offline reading';
+    }
+    return item.type == DawaLearningType.audio
+        ? 'Audio needs connection'
+        : 'Available in app';
+  }
+
+  String _saveOfflineTooltip(DawaLearningItem item) =>
+      item.type == DawaLearningType.audio
+          ? 'Save transcript for offline reading'
+          : 'Save for offline reading';
+
+  String _removeOfflineTooltip(DawaLearningItem item) =>
+      item.type == DawaLearningType.audio
+          ? 'Remove saved offline transcript'
+          : 'Remove saved offline lesson';
 }

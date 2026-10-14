@@ -177,6 +177,68 @@ class Appointment {
               json['external_appointment_id']?.toString(),
       integrationErrorCode: json['integration_error_code']?.toString(),
       patientSafeStatusMessage: json['patient_safe_status_message']?.toString(),
+      clinicianName: json['clinician_name']?.toString(),
+      clinicName: json['clinic_name']?.toString(),
+      clinicianTitle: json['clinician_title']?.toString(),
+      clinicianSpeciality: json['clinician_speciality']?.toString(),
+      clinicAddress: json['clinic_address']?.toString(),
+    );
+  }
+
+  /// Minimal, patient-safe schedule data for a temporary offline view.
+  ///
+  /// Do not add notes, reasons, payment references, contact details, or other
+  /// clinical information here. The snapshot is display-only: all actions
+  /// that can change a booking still require a fresh server response.
+  Map<String, dynamic> toOfflineSnapshot() => {
+        'id': id,
+        'appointment_date':
+            '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+        'start_time': startTime,
+        'end_time': endTime,
+        'appointment_type': appointmentType,
+        'status': status,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'service_name_snapshot': serviceNameSnapshot,
+        'is_paid_snapshot': isPaidSnapshot,
+        'payment_method': paymentMethod,
+        'payment_state': paymentState,
+        'patient_safe_status_message': patientSafeStatusMessage,
+        'clinician_name': clinicianName,
+        'clinic_name': clinicName,
+      };
+
+  factory Appointment.fromOfflineSnapshot(Map<String, dynamic> json) {
+    final date = DateTime.tryParse(json['appointment_date']?.toString() ?? '');
+    final createdAt = DateTime.tryParse(json['created_at']?.toString() ?? '');
+    if (date == null || createdAt == null) {
+      throw const FormatException('Invalid offline appointment snapshot.');
+    }
+    return Appointment(
+      id: json['id']?.toString() ?? '',
+      // Identity and routing values are intentionally not persisted in the
+      // offline snapshot. A fresh, authenticated read is required for any
+      // action that needs them.
+      motherId: '',
+      patientId: '',
+      clinicianId: '',
+      clinicId: '',
+      date: date,
+      startTime: normalizeDatabaseTime(json['start_time']),
+      endTime: normalizeDatabaseTime(json['end_time']),
+      appointmentType:
+          json['appointment_type']?.toString() ?? 'maternal_health',
+      status: json['status']?.toString() ?? 'pending',
+      source: 'offline_snapshot',
+      createdAt: createdAt,
+      integrationStatus: 'offline_snapshot',
+      serviceNameSnapshot: json['service_name_snapshot']?.toString(),
+      isPaidSnapshot: json['is_paid_snapshot'] as bool? ?? false,
+      paymentMethod: json['payment_method']?.toString() ?? 'online',
+      paymentState: json['payment_state']?.toString() ?? 'not_required',
+      patientSafeStatusMessage: json['patient_safe_status_message']?.toString(),
+      clinicianName: json['clinician_name']?.toString(),
+      clinicName: json['clinic_name']?.toString(),
     );
   }
 

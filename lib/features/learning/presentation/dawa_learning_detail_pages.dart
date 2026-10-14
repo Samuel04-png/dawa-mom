@@ -1092,7 +1092,7 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
                         Text('Transcript available offline',
                             style: context.dawaSectionTitle),
                         Text(
-                          'Audio uses the secure voice service or your device voice.',
+                          'Audio may need a connection. You can always read this transcript offline.',
                           style: context.dawaCaption,
                         ),
                       ],

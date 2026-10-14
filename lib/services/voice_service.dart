@@ -170,14 +170,22 @@ class VoiceService {
 
     try {
       final audioBytes = await synthesizeSpeech(trimmedText, language);
-      await playAudio(audioBytes);
+      // Sahara generates WAV audio. Supplying an MP3 MIME type makes some web
+      // browsers reject otherwise valid Sahara responses.
+      await playAudio(
+        audioBytes,
+        mimeType: _shouldUseSahara ? 'audio/wav' : 'audio/mpeg',
+      );
     } catch (error) {
       debugPrint('Cloud voice synthesis failed, using device TTS: $error');
       await speakWithDeviceVoice(trimmedText, language);
     }
   }
 
-  Future<void> playAudio(Uint8List audioBytes) async {
+  Future<void> playAudio(
+    Uint8List audioBytes, {
+    String mimeType = 'audio/mpeg',
+  }) async {
     if (audioBytes.isEmpty) {
       return;
     }
@@ -191,7 +199,7 @@ class VoiceService {
           .then((_) {}),
     ]);
     await audioPlayer.play(
-      BytesSource(audioBytes, mimeType: 'audio/mpeg'),
+      BytesSource(audioBytes, mimeType: mimeType),
     );
     await playbackEnded.timeout(const Duration(seconds: 120), onTimeout: () {});
   }

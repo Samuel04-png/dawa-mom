@@ -456,6 +456,8 @@ class _DawaCarePageState extends State<DawaCarePage> {
                 Appointment.dateAtTime(b.date, b.startTime),
               ),
             );
+          final usingSavedAppointments = widget.initialAppointments == null &&
+              _repo.lastAppointmentLoadUsedCache;
           return FutureBuilder<DawaCarePlanSnapshot>(
             future: _carePlan,
             builder: (context, careSnapshot) {
@@ -463,6 +465,14 @@ class _DawaCarePageState extends State<DawaCarePage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (usingSavedAppointments) ...[
+                    DawaOfflineBanner(
+                      message: 'Showing saved appointment information'
+                          '${_repo.lastAppointmentCacheAt == null ? '' : ' from ${DateFormat('d MMM, h:mm a').format(_repo.lastAppointmentCacheAt!.toLocal())}'}. Connect to update, book, or cancel a visit.',
+                      onRetry: _refreshAppointments,
+                    ),
+                    const SizedBox(height: DawaSpacing.md),
+                  ],
                   if (careSnapshot.connectionState ==
                       ConnectionState.waiting) ...[
                     const DawaLoadingSkeleton(
@@ -487,6 +497,7 @@ class _DawaCarePageState extends State<DawaCarePage> {
                   ],
                   if (upcoming.isEmpty)
                     _NoUpcomingAppointment(
+                      offline: usingSavedAppointments,
                       onBook: () => _openBooking(),
                       onBrowseClinics: () =>
                           setState(() => _section = _CareSection.clinics),
@@ -502,11 +513,14 @@ class _DawaCarePageState extends State<DawaCarePage> {
                       appointment: upcoming.first,
                       reminder: _reminderFor(upcoming.first.id),
                       cancelling: _cancellingAppointmentId == upcoming.first.id,
-                      onOpen: () => context.push(
-                        '/appointmentDetails?appointmentId=${upcoming.first.id}',
-                      ),
+                      onOpen: usingSavedAppointments
+                          ? null
+                          : () => context.push(
+                                '/appointmentDetails?appointmentId=${upcoming.first.id}',
+                              ),
                       onReminder: () => _openReminder(upcoming.first),
-                      onCancel: upcoming.first.canPatientCancel
+                      onCancel: !usingSavedAppointments &&
+                              upcoming.first.canPatientCancel
                           ? () => _cancelAppointment(upcoming.first)
                           : null,
                     ),
@@ -526,9 +540,11 @@ class _DawaCarePageState extends State<DawaCarePage> {
                               child: _CareHistoryCard(
                                 appointment: appointment,
                                 actionLabel: 'View appointment',
-                                onOpen: () => context.push(
-                                  '/appointmentDetails?appointmentId=${appointment.id}',
-                                ),
+                                onOpen: usingSavedAppointments
+                                    ? null
+                                    : () => context.push(
+                                          '/appointmentDetails?appointmentId=${appointment.id}',
+                                        ),
                               ),
                             ),
                           ),
@@ -557,6 +573,8 @@ class _DawaCarePageState extends State<DawaCarePage> {
           if (clinics.isEmpty) {
             return _EmptyClinics(onRetry: _refresh);
           }
+          final usingSavedClinics =
+              widget.initialClinics == null && _repo.lastClinicLoadUsedCache;
           final availableFilters = _availableClinicFilters(clinics);
           final selectedFilter = availableFilters.contains(_clinicFilter)
               ? _clinicFilter
@@ -574,8 +592,7 @@ class _DawaCarePageState extends State<DawaCarePage> {
                 title: 'Find care near you',
                 description: 'Choose a clinic to see details or book a visit.',
               ),
-              if (widget.initialClinics == null &&
-                  _repo.lastClinicLoadUsedCache) ...[
+              if (usingSavedClinics) ...[
                 const SizedBox(height: DawaSpacing.sm),
                 DawaCard(
                   color: DawaColors.warningSurface,
@@ -674,8 +691,13 @@ class _DawaCarePageState extends State<DawaCarePage> {
                       .map(
                         (clinic) => _ClinicCard(
                           clinic: clinic,
-                          onView: () => _showClinicDetails(clinic),
-                          onBook: () => _openBooking(clinicId: clinic.id),
+                          onView: () => _showClinicDetails(
+                            clinic,
+                            allowBooking: !usingSavedClinics,
+                          ),
+                          onBook: usingSavedClinics
+                              ? null
+                              : () => _openBooking(clinicId: clinic.id),
                           onCall: clinic.phone?.trim().isNotEmpty == true
                               ? () => _launchClinicCall(clinic)
                               : null,
@@ -712,6 +734,8 @@ class _DawaCarePageState extends State<DawaCarePage> {
                 Appointment.dateAtTime(a.date, a.startTime),
               ),
             );
+          final usingSavedAppointments = widget.initialAppointments == null &&
+              _repo.lastAppointmentLoadUsedCache;
           return FutureBuilder<DawaCarePlanSnapshot>(
             future: _carePlan,
             builder: (context, careSnapshot) {
@@ -725,12 +749,23 @@ class _DawaCarePageState extends State<DawaCarePage> {
                       .compareTo(a.completedAt ?? a.updatedAt),
                 );
               if (history.isEmpty && careHistory.isEmpty) {
-                return _EmptyHistory(onBook: () => _openBooking());
+                return _EmptyHistory(
+                  offline: usingSavedAppointments,
+                  onBook: () => _openBooking(),
+                );
               }
               final groups = _historyGroups(history);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (usingSavedAppointments) ...[
+                    DawaOfflineBanner(
+                      message: 'Showing saved appointment information'
+                          '${_repo.lastAppointmentCacheAt == null ? '' : ' from ${DateFormat('d MMM, h:mm a').format(_repo.lastAppointmentCacheAt!.toLocal())}'}. Connect to view details or book a follow-up.',
+                      onRetry: _refreshAppointments,
+                    ),
+                    const SizedBox(height: DawaSpacing.md),
+                  ],
                   const _SectionIntroduction(
                     eyebrow: 'HISTORY',
                     title: 'Your previous care',
@@ -758,10 +793,13 @@ class _DawaCarePageState extends State<DawaCarePage> {
                           actionLabel: appointment.status == 'completed'
                               ? 'View summary'
                               : 'View details',
-                          onOpen: () => context.push(
-                            '/appointmentDetails?appointmentId=${appointment.id}',
-                          ),
-                          onBookFollowUp: appointment.status == 'completed'
+                          onOpen: usingSavedAppointments
+                              ? null
+                              : () => context.push(
+                                    '/appointmentDetails?appointmentId=${appointment.id}',
+                                  ),
+                          onBookFollowUp: !usingSavedAppointments &&
+                                  appointment.status == 'completed'
                               ? () =>
                                   _openBooking(clinicId: appointment.clinicId)
                               : null,
@@ -793,7 +831,10 @@ class _DawaCarePageState extends State<DawaCarePage> {
         },
       );
 
-  Future<void> _showClinicDetails(ClinicOption clinic) async {
+  Future<void> _showClinicDetails(
+    ClinicOption clinic, {
+    required bool allowBooking,
+  }) async {
     final book = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -807,9 +848,10 @@ class _DawaCarePageState extends State<DawaCarePage> {
         onDirections: clinic.latitude != null && clinic.longitude != null
             ? () => _launchDirections(clinic)
             : null,
+        allowBooking: allowBooking,
       ),
     );
-    if (book == true && mounted) {
+    if (book == true && allowBooking && mounted) {
       await _openBooking(clinicId: clinic.id);
     }
   }
@@ -1022,10 +1064,12 @@ class _NoUpcomingAppointment extends StatelessWidget {
   const _NoUpcomingAppointment({
     required this.onBook,
     required this.onBrowseClinics,
+    this.offline = false,
   });
 
   final VoidCallback onBook;
   final VoidCallback onBrowseClinics;
+  final bool offline;
 
   @override
   Widget build(BuildContext context) => DawaCard(
@@ -1059,7 +1103,9 @@ class _NoUpcomingAppointment extends StatelessWidget {
                 ),
                 const SizedBox(height: DawaSpacing.xxs),
                 Text(
-                  'Book a clinic visit when you are ready.',
+                  offline
+                      ? 'Connect to book a clinic visit.'
+                      : 'Book a clinic visit when you are ready.',
                   textAlign: stackContent ? TextAlign.center : TextAlign.start,
                   style: context.dawaCaption,
                 ),
@@ -1081,11 +1127,12 @@ class _NoUpcomingAppointment extends StatelessWidget {
                     ],
                   ),
                 const SizedBox(height: DawaSpacing.sm),
-                DawaPrimaryButton(
-                  label: 'Book a visit',
-                  icon: Icons.add_circle_outline_rounded,
-                  onPressed: onBook,
-                ),
+                if (!offline)
+                  DawaPrimaryButton(
+                    label: 'Book a visit',
+                    icon: Icons.add_circle_outline_rounded,
+                    onPressed: onBook,
+                  ),
                 Align(
                   alignment: Alignment.center,
                   child: DawaTextButton(
@@ -1114,7 +1161,7 @@ class _UpcomingAppointmentCard extends StatelessWidget {
   final Appointment appointment;
   final Future<DawaAppointmentReminder> reminder;
   final bool cancelling;
-  final VoidCallback onOpen;
+  final VoidCallback? onOpen;
   final VoidCallback onReminder;
   final VoidCallback? onCancel;
 
@@ -1173,11 +1220,14 @@ class _UpcomingAppointmentCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: DawaSpacing.sm),
-          DawaPrimaryButton(
-            label: 'View visit',
-            icon: Icons.arrow_forward_rounded,
-            onPressed: onOpen,
-          ),
+          if (onOpen != null)
+            DawaPrimaryButton(
+              label: 'View visit',
+              icon: Icons.arrow_forward_rounded,
+              onPressed: onOpen,
+            )
+          else
+            const _OfflineAppointmentActionNotice(),
           const SizedBox(height: DawaSpacing.sm),
           _VisitFact(
             icon: Icons.calendar_month_outlined,
@@ -1238,11 +1288,12 @@ class _UpcomingAppointmentCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                DawaTextButton(
-                  label: 'Prepare',
-                  compact: true,
-                  onPressed: onOpen,
-                ),
+                if (onOpen != null)
+                  DawaTextButton(
+                    label: 'Prepare',
+                    compact: true,
+                    onPressed: onOpen,
+                  ),
               ],
             ),
           ),
@@ -1345,7 +1396,7 @@ class _ClinicCard extends StatelessWidget {
 
   final ClinicOption clinic;
   final VoidCallback onView;
-  final VoidCallback onBook;
+  final VoidCallback? onBook;
   final VoidCallback? onCall;
   final VoidCallback? onDirections;
 
@@ -1405,18 +1456,20 @@ class _ClinicCard extends StatelessWidget {
                   onPressed: onView,
                 ),
               ),
-              if (constraints.maxWidth >= 300)
-                const Spacer()
-              else
-                const SizedBox(width: DawaSpacing.xs),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 88),
-                child: DawaCompactButton(
-                  label: 'Book',
-                  filled: true,
-                  onPressed: onBook,
+              if (onBook != null) ...[
+                if (constraints.maxWidth >= 300)
+                  const Spacer()
+                else
+                  const SizedBox(width: DawaSpacing.xs),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 88),
+                  child: DawaCompactButton(
+                    label: 'Book',
+                    filled: true,
+                    onPressed: onBook,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         );
@@ -1558,11 +1611,13 @@ class _ClinicDetailsSheet extends StatelessWidget {
     required this.clinic,
     required this.onCall,
     required this.onDirections,
+    required this.allowBooking,
   });
 
   final ClinicOption clinic;
   final VoidCallback? onCall;
   final VoidCallback? onDirections;
+  final bool allowBooking;
 
   @override
   Widget build(BuildContext context) => Align(
@@ -1653,11 +1708,14 @@ class _ClinicDetailsSheet extends StatelessWidget {
                     label: clinic.accessibility.join(', '),
                   ),
                 const SizedBox(height: DawaSpacing.md),
-                DawaPrimaryButton(
-                  label: 'Book at this clinic',
-                  icon: Icons.add_circle_outline_rounded,
-                  onPressed: () => Navigator.pop(context, true),
-                ),
+                if (allowBooking)
+                  DawaPrimaryButton(
+                    label: 'Book at this clinic',
+                    icon: Icons.add_circle_outline_rounded,
+                    onPressed: () => Navigator.pop(context, true),
+                  )
+                else
+                  const _OfflineAppointmentActionNotice(),
                 if (onCall != null || onDirections != null) ...[
                   const SizedBox(height: DawaSpacing.xs),
                   Wrap(
@@ -1697,7 +1755,7 @@ class _CareHistoryCard extends StatelessWidget {
 
   final Appointment appointment;
   final String actionLabel;
-  final VoidCallback onOpen;
+  final VoidCallback? onOpen;
   final VoidCallback? onBookFollowUp;
 
   @override
@@ -1807,11 +1865,11 @@ class _HistoryPrimaryAction extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => Semantics(
-        button: true,
+        button: onPressed != null,
         label: label,
         child: TextButton.icon(
           onPressed: onPressed,
@@ -1822,6 +1880,38 @@ class _HistoryPrimaryAction extends StatelessWidget {
           ),
           icon: const Icon(Icons.chevron_right_rounded, size: 18),
           label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      );
+}
+
+class _OfflineAppointmentActionNotice extends StatelessWidget {
+  const _OfflineAppointmentActionNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: DawaSpacing.sm,
+          vertical: DawaSpacing.xs,
+        ),
+        decoration: BoxDecoration(
+          color: DawaColors.warningSurface,
+          borderRadius: BorderRadius.circular(DawaRadii.small),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 20,
+              color: DawaColors.warning,
+            ),
+            const SizedBox(width: DawaSpacing.xs),
+            Expanded(
+              child: Text(
+                'Connect to view the latest visit details.',
+                style: context.dawaCaption,
+              ),
+            ),
+          ],
         ),
       );
 }
@@ -1908,9 +1998,10 @@ class _EmptyClinics extends StatelessWidget {
 }
 
 class _EmptyHistory extends StatelessWidget {
-  const _EmptyHistory({required this.onBook});
+  const _EmptyHistory({required this.onBook, this.offline = false});
 
   final VoidCallback onBook;
+  final bool offline;
 
   @override
   Widget build(BuildContext context) => DawaCard(
@@ -1943,11 +2034,12 @@ class _EmptyHistory extends StatelessWidget {
               style: context.dawaBody,
             ),
             const SizedBox(height: DawaSpacing.md),
-            DawaPrimaryButton(
-              label: 'Book appointment',
-              icon: Icons.add_circle_outline_rounded,
-              onPressed: onBook,
-            ),
+            if (!offline)
+              DawaPrimaryButton(
+                label: 'Book appointment',
+                icon: Icons.add_circle_outline_rounded,
+                onPressed: onBook,
+              ),
           ],
         ),
       );

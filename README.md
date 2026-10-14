@@ -46,21 +46,25 @@ Supabase is initialized from `lib/backend/supabase/supabase_config.dart`. The pr
 flutter run --dart-define=SUPABASE_URL="https://project.supabase.co" --dart-define=SUPABASE_ANON_KEY="..."
 ```
 
-Voice playback uses the Supabase `elevenlabs-tts` Edge Function by default. The ElevenLabs API key belongs in Supabase secrets, not in the Flutter app:
+Voice playback uses the Supabase `sahara-tts` Edge Function by default. The
+Sahara/Intron API key belongs in Supabase secrets, not in the Flutter app:
 
 ```powershell
-supabase secrets set ELEVENLABS_API_KEY="<elevenlabs-api-key>" --project-ref himbfndvsuwiudtzjojh
-supabase secrets set ELEVENLABS_VOICE_ID="EXAVITQu4vr4xnSDxMaL" ELEVENLABS_MODEL_ID="eleven_multilingual_v2" --project-ref himbfndvsuwiudtzjojh
-supabase functions deploy elevenlabs-tts --project-ref himbfndvsuwiudtzjojh
+supabase secrets set SAHARA_API_KEY="<sahara-api-key>" --project-ref himbfndvsuwiudtzjojh
+supabase functions deploy sahara-tts --project-ref himbfndvsuwiudtzjojh
 ```
 
-For local Flutter runs, no ElevenLabs key is needed in the app. You can optionally make the provider explicit:
+For local Flutter runs, no Sahara key is needed in the app. You can optionally
+make the provider explicit:
 
 ```powershell
-flutter run --dart-define=TTS_PROVIDER=elevenlabs --dart-define=ELEVENLABS_VOICE_ID="EXAVITQu4vr4xnSDxMaL"
+flutter run --dart-define=TTS_PROVIDER=sahara
 ```
 
-`ELEVENLABS_EDGE_FUNCTION` defaults to `elevenlabs-tts`, and `ELEVENLABS_MODEL_ID` defaults to `eleven_multilingual_v2`.
+`SAHARA_TTS_EDGE_FUNCTION` defaults to `sahara-tts`. The current verified
+Sahara mappings use its female Zulu accent for English and its female Shona
+accent for Shona; unsupported languages fall back to the device voice. Add a
+new accent only after it has been confirmed by Sahara's supported-voice API.
 
 The fallback OmniVoice-compatible endpoint still uses Dart defines:
 
@@ -69,6 +73,22 @@ flutter run --dart-define=OMNIVOICE_API_URL="https://example.com/tts" --dart-def
 ```
 
 Private Gemini, backend, and service-role keys should stay in Supabase Edge Function secrets or backend environment variables, not in Flutter client code.
+
+## Offline behaviour
+
+DawaMom supports local-first learning progress, reminder preferences, and a
+cached clinic directory. Care also keeps a platform-secured, user-scoped
+snapshot of the last successful appointment list for up to 24 hours. It stores
+only the information needed to identify a visit on screen (date/time, general
+visit type, status, and clinic/health-worker display names); it never caches
+notes, reasons, contacts, payment references, or clinical summaries.
+
+Learning transcripts and the lesson catalogue are bundled for offline reading.
+Cloud-generated lesson audio is not downloaded: it may need a connection, with
+the transcript remaining available when audio cannot play.
+
+Saved Care data is clearly marked and display-only. A connection is always
+required to book, cancel, pay for, confirm, or check availability for a visit.
 
 ## Supabase Notes
 

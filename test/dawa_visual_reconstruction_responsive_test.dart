@@ -369,6 +369,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Save reminder'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
+      if (size.width < 360) {
+        expect(
+          tester.getRect(find.text('Save reminder')).bottom,
+          lessThanOrEqualTo(tester.getRect(find.text('Cancel')).top),
+          reason: 'Reminder actions must stack on narrow screens at $size',
+        );
+      }
       expect(
         find.byKey(const ValueKey('appointment-reminder-when-on-day')),
         findsOneWidget,

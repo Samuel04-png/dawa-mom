@@ -508,6 +508,7 @@ class AppointmentDetailsContent extends StatelessWidget {
                   onTap: () => showModalBottomSheet<void>(
                     context: context,
                     isScrollControlled: true,
+                    useSafeArea: true,
                     backgroundColor: Colors.transparent,
                     builder: (_) => DawaAppointmentReminderSheet(
                       appointment: appointment,

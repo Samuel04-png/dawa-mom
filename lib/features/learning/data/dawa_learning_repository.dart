@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' show ClientException;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -245,6 +246,11 @@ class DawaLearningRepository {
     } on PostgrestException catch (error) {
       debugPrint('Learning sync unavailable; using local state: ${error.code}');
       return local;
+    } on ClientException catch (error) {
+      debugPrint(
+        'Learning sync unavailable; using local state: ${error.runtimeType}',
+      );
+      return local;
     }
   }
 
@@ -311,6 +317,9 @@ class DawaLearningRepository {
     } on PostgrestException catch (error) {
       debugPrint('Learning completion remains local: ${error.code}');
       return local;
+    } on ClientException catch (error) {
+      debugPrint('Learning completion remains local: ${error.runtimeType}');
+      return local;
     }
   }
 
@@ -350,6 +359,9 @@ class DawaLearningRepository {
     } on PostgrestException catch (error) {
       debugPrint('Game progress remains local: ${error.code}');
       return local;
+    } on ClientException catch (error) {
+      debugPrint('Game progress remains local: ${error.runtimeType}');
+      return local;
     }
   }
 
@@ -370,6 +382,10 @@ class DawaLearningRepository {
           .eq('game_id', gameId);
     } on PostgrestException catch (error) {
       debugPrint('Completed game progress cleanup deferred: ${error.code}');
+    } on ClientException catch (error) {
+      debugPrint(
+        'Completed game progress cleanup deferred: ${error.runtimeType}',
+      );
     }
     return local;
   }
@@ -549,6 +565,8 @@ class DawaLearningRepository {
       }, onConflict: 'profile_id');
     } on PostgrestException catch (error) {
       debugPrint('Learning state remains local: ${error.code}');
+    } on ClientException catch (error) {
+      debugPrint('Learning state remains local: ${error.runtimeType}');
     }
   }
 
@@ -580,6 +598,10 @@ class DawaLearningRepository {
         remaining.remove(id);
       } on PostgrestException catch (error) {
         debugPrint('Pending learning completion remains queued: ${error.code}');
+      } on ClientException catch (error) {
+        debugPrint(
+          'Pending learning completion remains queued: ${error.runtimeType}',
+        );
       }
     }
     if (remaining.length != pending.length) {
@@ -605,6 +627,9 @@ class DawaLearningRepository {
     } on PostgrestException catch (error) {
       debugPrint('Remote game progress unavailable: ${error.code}');
       return const <String, DawaGameProgress>{};
+    } on ClientException catch (error) {
+      debugPrint('Remote game progress unavailable: ${error.runtimeType}');
+      return const <String, DawaGameProgress>{};
     }
   }
 
@@ -621,6 +646,10 @@ class DawaLearningRepository {
         updated[progress.gameId] = progress.copyWith(pendingSync: false);
       } on PostgrestException catch (error) {
         debugPrint('Pending game progress remains queued: ${error.code}');
+      } on ClientException catch (error) {
+        debugPrint(
+          'Pending game progress remains queued: ${error.runtimeType}',
+        );
       }
     }
     return state.copyWith(gameProgress: updated);
