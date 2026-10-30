@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../base_auth_user_provider.dart';
+import '/backend/supabase/supabase_session_recovery.dart';
 
 export '../base_auth_user_provider.dart';
 
@@ -75,7 +76,8 @@ Stream<BaseAuthUser> dawaMomSupabaseUserStream() async* {
   currentUser = DawaMomSupabaseUser(client.auth.currentUser);
   yield currentUser!;
 
-  await for (final state in client.auth.onAuthStateChange) {
+  await for (final state
+      in recoverableAuthStateChanges(client.auth.onAuthStateChange)) {
     currentUser = DawaMomSupabaseUser(state.session?.user);
     yield currentUser!;
   }

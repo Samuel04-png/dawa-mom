@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 
 import '/localization/dawa_localized_material.dart';
 import 'package:go_router/go_router.dart';
@@ -842,6 +843,7 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
   DawaLearningState? _completionBefore;
   DawaLearningState? _completionAfter;
   bool _playing = false;
+  int _playbackGeneration = 0;
   bool _showTranscript = true;
   String _language = 'English';
 
@@ -856,6 +858,33 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
       dawaPregnancyBasicsTranscripts[_language] ??
       dawaPregnancyBasicsTranscripts['English']!;
 
+  String get _spokenLanguage =>
+      dawaPregnancyBasicsTranscripts.containsKey(_language)
+          ? _language
+          : 'English';
+
+  /// Plays the pre-generated Mansa recording bundled with the app. If there is
+  /// no file for this language, falls back to live synthesis of the same text.
+  Future<void> _playLesson() async {
+    final language = _spokenLanguage;
+    final path =
+        'assets/audios/lessons/pregnancy_basics_${language.toLowerCase()}.mp3';
+
+    Uint8List? bytes;
+    try {
+      final data = await rootBundle.load(path);
+      bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    } catch (_) {
+      debugPrint('No bundled lesson audio for "$language", using live TTS.');
+    }
+
+    if (bytes != null) {
+      await _voiceService.playAudio(bytes);
+      return;
+    }
+    await _voiceService.speakText(_transcript, language);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -866,22 +895,23 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
 
   @override
   void dispose() {
+    _playbackGeneration++;
     _voiceService.dispose();
     super.dispose();
   }
 
   Future<void> _togglePlayback() async {
     if (_playing) {
+      _playbackGeneration++;
       await _voiceService.stopPlayback();
       if (mounted) setState(() => _playing = false);
       return;
     }
+    final generation = ++_playbackGeneration;
     setState(() => _playing = true);
     try {
-      await _voiceService.speakText(
-        _transcript,
-        _language,
-      );
+      await _playLesson();
+      if (!mounted || generation != _playbackGeneration) return;
       final state = await _state;
       final next =
           await _repository.complete(state, 'pregnancy-basics', rewardCoins: 5);
@@ -906,7 +936,9 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
         );
       }
     } finally {
-      if (mounted) setState(() => _playing = false);
+      if (mounted && generation == _playbackGeneration) {
+        setState(() => _playing = false);
+      }
     }
   }
 
@@ -952,7 +984,7 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
                           style: context.dawaDisplay.copyWith(fontSize: 27),
                         ),
                         const SizedBox(height: 6),
-                        Text(_language, style: context.dawaCaption),
+                        Text(_spokenLanguage, style: context.dawaCaption),
                       ],
                     ),
                   ),
@@ -972,15 +1004,13 @@ class _DawaAudioLessonPageState extends State<DawaAudioLessonPage> {
                           children: [
                             IconButton(
                               tooltip: 'Replay from beginning',
-                              onPressed: _playing
-                                  ? null
-                                  : () => _voiceService.stopPlayback(),
+                              onPressed: _playing ? null : _togglePlayback,
                               icon: const Icon(Icons.replay_rounded),
                             ),
                             const SizedBox(width: 16),
                             Semantics(
                               button: true,
-                              label: _playing ? 'Pause lesson' : 'Play lesson',
+                              label: _playing ? 'Stop lesson' : 'Play lesson',
                               child: FilledButton(
                                 onPressed: _togglePlayback,
                                 style: FilledButton.styleFrom(

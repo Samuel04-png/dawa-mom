@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:dawa_mom/navbar/appointments/appointment_details/appointment_details_widget.dart';
 
@@ -970,8 +969,10 @@ class AIChatModal extends StatefulWidget {
     required this.userName,
     this.onClose,
     this.onMinimize,
+    this.voiceService,
   });
 
+  final VoiceService? voiceService;
   final VoidCallback? onClose;
   final VoidCallback? onMinimize;
 
@@ -987,17 +988,22 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   final Set<String> _messageHashes = {};
-  final VoiceService _voiceService = VoiceService();
+  int _messageRevision = 0;
+  late final VoiceService _voiceService;
   final DawaUserPreferencesRepository _preferencesRepository =
       DawaUserPreferencesRepository();
   late final AnimationController _voiceController;
-  bool _isHandlingVoiceTranscript = false;
+  int? _handlingVoiceGeneration;
+  int _voiceGeneration = 0;
+  Timer? _voiceWaitTimer;
+  int _voiceWaitSeconds = 0;
+  Uint8List? _thinkingAudio;
+  Future<void>? _thinkingPreparation;
 
-  // Sahara's STT/TTS voice list only covers english and shona out of Rudo's
-  // seven supported languages (ndebele, chinyanja, bemba, tonga, lozi are
-  // text-only for now). Gate voice mode on this so unsupported-language
-  // users get a clear message instead of a silently broken mic.
-  static const Set<String> _voiceSupportedLanguages = {'english', 'shona'};
+  // Cloud output languages. Input recognition is checked separately by the
+  // device/browser; no fallback to a different spoken language is made.
+  static const Set<String> _voiceSupportedLanguages =
+      VoiceService.mansaTtsLanguages;
 
   bool _isLoading = false;
   bool _isConnected = true;
@@ -1023,6 +1029,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   @override
   void initState() {
     super.initState();
+    _voiceService = widget.voiceService ?? VoiceService();
     _voiceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
@@ -1043,6 +1050,8 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     DawaUserPreferencesRepository.changes.removeListener(
       _handlePreferencesChanged,
     );
+    _voiceGeneration++;
+    _voiceWaitTimer?.cancel();
     unawaited(_voiceService.dispose());
     _voiceController.dispose();
     _messageController.dispose();
@@ -1115,6 +1124,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
   }
 
   Future<void> _loadMessages() async {
+    final revision = _messageRevision;
     final sessionId = _sessionId;
     if (sessionId == null) {
       return;
@@ -1151,7 +1161,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
         .where((message) => message.text.isNotEmpty)
         .toList();
 
-    if (!mounted) {
+    if (!mounted || sessionId != _sessionId || revision != _messageRevision) {
       return;
     }
 
@@ -1165,7 +1175,8 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     });
   }
 
-  Future<String?> _sendMessage(String message, {String? displayText}) async {
+  Future<String?> _sendMessage(String message,
+      {String? displayText, bool waitForHistory = true}) async {
     if (_isSending || _isInitializing) {
       return null;
     }
@@ -1198,6 +1209,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     _addMessage(localUserMessage);
     _scrollToBottom();
 
+    final responseTimer = Stopwatch()..start();
     try {
       final response = await _database.client.functions.invoke(
         'rudo-chat',
@@ -1214,6 +1226,10 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
         },
       ).timeout(const Duration(seconds: 45));
 
+      if (!waitForHistory) {
+        debugPrint(
+            '[Rudo timing] ai_response_ms=${responseTimer.elapsedMilliseconds}');
+      }
       final responseData = response.data;
       final data = responseData is Map
           ? Map<String, dynamic>.from(responseData)
@@ -1238,7 +1254,12 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
         ));
       }
 
-      await _loadMessages();
+      if (waitForHistory) {
+        await _loadMessages();
+      } else {
+        // Start speech from the reply already received. History is independent.
+        unawaited(_refreshHistoryAfterVoiceReply());
+      }
       if (mounted) {
         setState(() => _isConnected = true);
       }
@@ -1261,10 +1282,18 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
         setState(() {
           _isSending = false;
           _isLoading = false;
-          _voiceState = _VoiceModeState.idle;
+          if (waitForHistory) _voiceState = _VoiceModeState.idle;
         });
       }
       _scrollToBottom();
+    }
+  }
+
+  Future<void> _refreshHistoryAfterVoiceReply() async {
+    try {
+      await _loadMessages();
+    } catch (error) {
+      debugPrint('Voice history refresh deferred: ${error.runtimeType}');
     }
   }
 
@@ -1274,6 +1303,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
       return;
     }
     setState(() {
+      _messageRevision++;
       _messageHashes.add(hash);
       _messages.add(message);
     });
@@ -1301,11 +1331,9 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
       return;
     }
 
+    final generation = ++_voiceGeneration;
     final voiceLang = _currentVoiceLanguage();
     if (!_voiceSupportedLanguages.contains(voiceLang)) {
-      // Mirrors the backend's voice-language gate (see get_voice_unsupported_response
-      // in sahara_client.py) - don't touch the mic or transcript state at all,
-      // just show the unsupported screen with a way back to text.
       setState(() {
         _isVoiceMode = true;
         _voiceState = _VoiceModeState.unsupported;
@@ -1317,20 +1345,37 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
 
     setState(() {
       _isVoiceMode = true;
-      // "listening" now means "recording" - see _buildVoiceMode's status
-      // label. Unlike the old on-device speech_to_text flow, there's no
-      // live transcript while recording; the user taps the orb to stop
-      // and send, and the transcript only appears once Sahara replies.
       _voiceState = _VoiceModeState.listening;
       _voiceTranscriptPreview = '';
       _voiceErrorMessage = null;
     });
     try {
-      await _voiceService.startRecording();
+      _voiceWaitTimer?.cancel();
+      await _voiceService.stopPlayback();
+      await _voiceService.cancelListening();
+      if (!mounted || !_isVoiceMode || generation != _voiceGeneration) return;
+      unawaited(_prepareThinkingAudio(voiceLang));
+      await _voiceService.startListening(
+        language: voiceLang,
+        onRecognitionError: (code) {
+          if (generation == _voiceGeneration) _handleRecognitionError(code);
+        },
+        onPartialResult: (text) {
+          if (mounted && _isVoiceMode && generation == _voiceGeneration) {
+            setState(() => _voiceTranscriptPreview = text);
+          }
+        },
+        onFinalResult: (_) {
+          if (mounted && _isVoiceMode && generation == _voiceGeneration) {
+            unawaited(_stopRecordingAndSend());
+          }
+        },
+      );
     } catch (error) {
-      debugPrint('Voice recording failed to start: $error');
+      if (!mounted || generation != _voiceGeneration) return;
+      debugPrint('Voice recognition failed to start: $error');
       _showVoiceError(
-        'Voice mode could not start. Please check microphone permission.',
+        'Voice could not start. Check microphone permission and device language support, or type your message.',
       );
       if (mounted) {
         setState(() {
@@ -1342,7 +1387,29 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
     }
   }
 
+  void _handleRecognitionError(String code) {
+    if (!mounted || !_isVoiceMode || _voiceState != _VoiceModeState.listening)
+      return;
+    final normalized = code.toLowerCase().replaceAll('_', '-');
+    final message = normalized.contains('not-allowed') ||
+            normalized.contains('permission')
+        ? 'Microphone access was blocked. Allow it in Chrome site settings, then try again.'
+        : normalized.contains('language')
+            ? 'The browser could not recognize this language. Try English in your Rudo language settings, or type your message.'
+            : normalized.contains('network')
+                ? 'Speech recognition could not connect. Check your internet connection, then try again.'
+                : 'No speech was recognized. Tap the mic to try again, or type your message.';
+    setState(() {
+      _voiceState = _VoiceModeState.idle;
+      _voiceErrorMessage = message;
+    });
+    unawaited(_voiceService.cancelListening());
+    _showVoiceError(message);
+  }
+
   Future<void> _exitVoiceMode() async {
+    _voiceGeneration++;
+    _voiceWaitTimer?.cancel();
     if (mounted) {
       setState(() {
         _isVoiceMode = false;
@@ -1352,184 +1419,127 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
       });
     }
     await _voiceService.stopPlayback();
-    await _voiceService.cancelRecording();
+    await _voiceService.cancelListening();
   }
 
-  /// Tap-to-stop handler - called from the orb while _voiceState is
-  /// `listening` (i.e. actively recording). Stops the recording, uploads
-  /// it to Sahara via the rudo-chat edge function's audio_base64 path,
-  /// shows the transcript + reply once they come back, speaks the reply,
-  /// then restarts recording so the conversation can continue hands-free.
-  Future<void> _stopRecordingAndSend() async {
-    if (!mounted || !_isVoiceMode || _voiceState != _VoiceModeState.listening) {
-      return;
-    }
-    if (_isHandlingVoiceTranscript) {
-      return;
-    }
-    _isHandlingVoiceTranscript = true;
-    setState(() {
-      _voiceState = _VoiceModeState.processing;
-      _voiceErrorMessage = null;
+  Future<void> _prepareThinkingAudio(String language) async {
+    // A short optional acknowledgement, prepared without playing while the
+    // microphone is active. Other languages retain visual progress feedback.
+    if (language != 'english' || _thinkingAudio != null) return;
+    if (_thinkingPreparation != null) return _thinkingPreparation;
+    _thinkingPreparation = () async {
+      try {
+        final bytes = await _voiceService.synthesizeSpeech(
+            'Let me think about that.', 'english');
+        if (bytes.isNotEmpty) _thinkingAudio = bytes;
+      } catch (error) {
+        debugPrint('Thinking voice unavailable: $error');
+      }
+    }();
+    await _thinkingPreparation;
+    _thinkingPreparation = null;
+  }
+
+  void _startThinkingFeedback(int generation) {
+    _voiceWaitSeconds = 0;
+    _voiceWaitTimer?.cancel();
+    _voiceWaitTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted ||
+          !_isVoiceMode ||
+          generation != _voiceGeneration ||
+          _voiceState != _VoiceModeState.processing) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _voiceWaitSeconds++);
+      final audio = _thinkingAudio;
+      if (_voiceWaitSeconds == 2 &&
+          _currentVoiceLanguage() == 'english' &&
+          audio != null) {
+        unawaited(_playThinkingAudio(audio, generation));
+      }
     });
+  }
 
+  Future<void> _playThinkingAudio(Uint8List bytes, int generation) async {
+    if (!mounted ||
+        !_isVoiceMode ||
+        generation != _voiceGeneration ||
+        _voiceState != _VoiceModeState.processing) return;
     try {
-      final audioBytes = await _voiceService.stopRecording();
-      if (audioBytes == null || audioBytes.isEmpty) {
-        _showVoiceError('No audio captured - please try again.');
-        if (mounted && _isVoiceMode) {
-          setState(() => _voiceState = _VoiceModeState.listening);
-          await _voiceService.startRecording();
-        }
-        return;
-      }
+      await _voiceService.playAudio(bytes,
+          mimeType: VoiceService.audioMimeType(bytes));
+    } catch (error) {
+      debugPrint('Thinking audio could not play: $error');
+    }
+  }
 
-      final reply = await _sendVoiceNote(audioBytes);
-      if (!mounted || !_isVoiceMode) {
+  /// Partial words stay on screen; only a completed turn is sent to Rudo.
+  Future<void> _stopRecordingAndSend() async {
+    final generation = _voiceGeneration;
+    if (!mounted ||
+        !_isVoiceMode ||
+        _voiceState != _VoiceModeState.listening ||
+        _handlingVoiceGeneration == generation) return;
+    _handlingVoiceGeneration = generation;
+    setState(() => _voiceState = _VoiceModeState.processing);
+    var resumeListening = false;
+    try {
+      final transcript = (await _voiceService.stopAndTranscribe()).trim();
+      if (!mounted || !_isVoiceMode || generation != _voiceGeneration) return;
+      if (transcript.isEmpty) {
+        _showVoiceError(
+            'No speech recognized. Tap the mic to try again, or type your message.');
         return;
       }
+      setState(() => _voiceTranscriptPreview = transcript);
+      _startThinkingFeedback(generation);
+      final reply = await _sendMessage(transcript, waitForHistory: false);
+      if (!mounted || !_isVoiceMode || generation != _voiceGeneration) return;
+      _voiceWaitTimer?.cancel();
       if (reply != null && reply.isNotEmpty) {
-        await _speakVoiceReply(reply);
-      }
-      if (mounted && _isVoiceMode) {
-        setState(() => _voiceState = _VoiceModeState.listening);
-        await _voiceService.startRecording();
+        resumeListening = await _speakVoiceReply(reply, generation);
+      } else {
+        setState(() => _voiceErrorMessage =
+            'Rudo could not reply. Tap the mic to try again, or return to typing.');
       }
     } catch (error) {
-      debugPrint('Voice note send failed: $error');
-      _showVoiceError('Could not send your voice note. Please try again.');
-      if (mounted && _isVoiceMode) {
-        setState(() => _voiceState = _VoiceModeState.listening);
-        try {
-          await _voiceService.startRecording();
-        } catch (_) {
-          setState(() {
-            _isVoiceMode = false;
-            _voiceState = _VoiceModeState.idle;
-          });
+      debugPrint('Voice turn failed: $error');
+      if (mounted && _isVoiceMode && generation == _voiceGeneration) {
+        _showVoiceError(
+            'Voice could not finish. Please try again or type your message.');
+      }
+    } finally {
+      if (_handlingVoiceGeneration == generation)
+        _handlingVoiceGeneration = null;
+      if (mounted && _isVoiceMode && generation == _voiceGeneration) {
+        _voiceWaitTimer?.cancel();
+        if (resumeListening) {
+          await _enterVoiceMode();
+        } else {
+          setState(() => _voiceState = _VoiceModeState.idle);
         }
       }
-    } finally {
-      _isHandlingVoiceTranscript = false;
     }
   }
 
-  /// Uploads a recorded voice note to the rudo-chat edge function
-  /// (audio_base64 path -> Vercel /api/voice -> Sahara STT -> grounded
-  /// text pipeline -> reply). Adds both the transcript and reply as chat
-  /// bubbles, same as _sendMessage does for typed text.
-  Future<String?> _sendVoiceNote(Uint8List audioBytes) async {
-    final userId = currentUserUid;
-    if (userId.isEmpty) {
-      setState(() => _isConnected = false);
-      return null;
-    }
-
-    final clientMessageId =
-        '${DateTime.now().microsecondsSinceEpoch}-$userId-voice';
-
-    setState(() => _isSending = true);
-
-    try {
-      final response = await _database.client.functions.invoke(
-        'rudo-chat',
-        body: {
-          'audio_base64': base64Encode(audioBytes),
-          'filename': 'voice_note.m4a',
-          'mime_type': 'audio/mp4',
-          if (_sessionId != null) 'session_id': _sessionId,
-          'client_message_id': clientMessageId,
-          'metadata': {
-            'phone_number': widget.userPhoneNumber,
-            'user_name': widget.userName,
-            'language': _rudoLanguage,
-            'source': 'flutter_voice',
-          },
-        },
-      ).timeout(const Duration(seconds: 60));
-
-      final responseData = response.data;
-      final data = responseData is Map
-          ? Map<String, dynamic>.from(responseData)
-          : <String, dynamic>{};
-
-      if (data['session_id'] != null) {
-        _sessionId = data['session_id'].toString();
-      }
-
-      final transcript = data['transcript']?.toString().trim() ?? '';
-      final reply = data['reply']?.toString().trim() ?? '';
-
-      if (transcript.isNotEmpty) {
-        _addMessage(ChatMessage(
-          id: '$clientMessageId-user',
-          text: transcript,
-          isUser: true,
-          timestamp: DateTime.now(),
-        ));
-        setState(() => _voiceTranscriptPreview = transcript);
-      }
-      if (reply.isNotEmpty) {
-        _addMessage(ChatMessage(
-          id: '$clientMessageId-assistant',
-          text: reply,
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-      }
-
-      await _loadMessages();
-      if (mounted) {
-        setState(() => _isConnected = true);
-      }
-      return reply.isNotEmpty ? reply : null;
-    } catch (error) {
-      debugPrint('Rudo voice note send failed: $error');
-      _addMessage(ChatMessage(
-        id: '$clientMessageId-error',
-        text:
-            'Rudo is having trouble reaching the assistant service. Please try again.',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-      if (mounted) {
-        setState(() => _isConnected = false);
-      }
-      return null;
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-      }
-      _scrollToBottom();
-    }
-  }
-
-  Future<void> _speakVoiceReply(String reply) async {
-    if (!mounted || !_isVoiceMode) {
-      return;
-    }
+  Future<bool> _speakVoiceReply(String reply, int generation) async {
+    if (!mounted || !_isVoiceMode || generation != _voiceGeneration)
+      return false;
     setState(() => _voiceState = _VoiceModeState.speaking);
     try {
-      await _voiceService.speakText(
-        reply,
-        _currentVoiceLanguage(),
-      );
+      await _voiceService.stopPlayback();
+      if (!mounted || !_isVoiceMode || generation != _voiceGeneration)
+        return false;
+      await _voiceService.speakText(reply, _currentVoiceLanguage());
+      return mounted && _isVoiceMode && generation == _voiceGeneration;
     } catch (error) {
-      debugPrint('Rudo voice playback failed: $error');
-      if (mounted) {
-        setState(() {
-          _voiceState = _VoiceModeState.idle;
-          _voiceErrorMessage =
-              'Rudo replied, but the voice audio could not play yet.';
-        });
+      debugPrint('Rudo cloud voice playback failed: $error');
+      if (mounted && _isVoiceMode && generation == _voiceGeneration) {
+        setState(() => _voiceErrorMessage =
+            'Rudo replied, but the selected voice could not play. Return to typing to read the reply.');
       }
-      _addMessage(ChatMessage(
-        id: 'voice-playback-error-${DateTime.now().microsecondsSinceEpoch}',
-        text:
-            'Rudo answered, but voice playback is not ready yet. Please check the ElevenLabs Supabase function and secret.',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
+      return false;
     }
   }
 
@@ -1643,9 +1653,13 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
 
     final statusLabel = switch (_voiceState) {
       _VoiceModeState.idle => 'Tap the mic to speak',
-      _VoiceModeState.listening => 'Recording... tap to stop',
-      _VoiceModeState.processing => 'Sending to Rudo...',
-      _VoiceModeState.speaking => 'Speaking...',
+      _VoiceModeState.listening => 'Listening…',
+      _VoiceModeState.processing => _voiceWaitSeconds >= 15
+          ? 'Still waiting for a response…'
+          : _voiceWaitSeconds >= 6
+              ? 'Putting your reply together…'
+              : 'Thinking…',
+      _VoiceModeState.speaking => 'Speaking… tap to interrupt',
       _VoiceModeState.unsupported => '', // handled above
     };
     final voiceDetail = _voiceErrorMessage ?? _voiceTranscriptPreview.trim();
@@ -1666,7 +1680,10 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
                     GestureDetector(
                       onTap: _voiceState == _VoiceModeState.listening
                           ? _stopRecordingAndSend
-                          : null,
+                          : _voiceState == _VoiceModeState.idle ||
+                                  _voiceState == _VoiceModeState.speaking
+                              ? _enterVoiceMode
+                              : null,
                       child: _VoiceOrb(
                         controller: _voiceController,
                         state: _voiceState,
@@ -1785,7 +1802,7 @@ class _SupabaseAIChatModalState extends State<AIChatModal>
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 300),
                       child: Text(
-                        'Please continue by typing, or switch your Rudo language to English or Shona to use voice.',
+                        'Please continue by typing, or choose English, Shona, Bemba, Nyanja or Ndebele in your Rudo language settings. Browser recognition support varies by language.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: FlutterFlowTheme.of(context).secondaryText,

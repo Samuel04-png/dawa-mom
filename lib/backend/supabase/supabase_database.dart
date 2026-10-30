@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'supabase_session_recovery.dart';
 
 import 'package:collection/collection.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -41,21 +42,10 @@ class SupabaseDatabase {
     }
   }
 
-  Future<void> _forceRefreshSession() async {
-    try {
-      final response = await client.auth
-          .refreshSession()
-          .timeout(const Duration(seconds: 8));
-      if (response.session == null) {
-        await client.auth.signOut(scope: SignOutScope.local);
-      }
-    } catch (_) {
-      await client.auth.signOut(scope: SignOutScope.local);
-      rethrow;
-    }
-  }
+  Future<void> _forceRefreshSession() => refreshSupabaseSession(client.auth);
 
   bool _isExpiredJwtError(Object error) {
+    if (isTemporaryAuthFailure(error)) return false;
     if (error is PostgrestException) {
       final message = error.message.toLowerCase();
       return error.code == 'PGRST303' || message.contains('jwt expired');

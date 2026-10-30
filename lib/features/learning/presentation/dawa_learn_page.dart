@@ -41,6 +41,7 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
     super.initState();
     _repository = widget.repository ?? DawaLearningRepository();
     _state = _repository.load();
+    DawaLearningRepository.changes.addListener(_refreshProgress);
     _featuredVisual = DawaVisualRotationService().select(
       const DawaVisualRotationRequest(
         placement: DawaAssetPlacement.featuredBanner,
@@ -48,6 +49,21 @@ class _DawaLearnPageState extends State<DawaLearnPage> {
         cadence: DawaRotationCadence.weekly,
       ),
     );
+  }
+
+  void _refreshProgress() {
+    if (mounted) {
+      final next = _repository.load();
+      setState(() {
+        _state = next;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    DawaLearningRepository.changes.removeListener(_refreshProgress);
+    super.dispose();
   }
 
   List<DawaLearningItem> get _filtered {

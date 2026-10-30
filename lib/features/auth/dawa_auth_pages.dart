@@ -327,20 +327,19 @@ class _DawaLoginPageState extends State<DawaLoginPage> {
   Future<void> _login() async {
     if (_formKey.currentState?.validate() != true) return;
     setState(() => _busy = true);
-    final value = _identifier.text.trim();
-    final user = value.contains('@')
-        ? await authManager.signInWithEmail(context, value, _password.text)
-        : await authManager.signInWithPhonePassword(
-            context,
-            normalizeZambianPhone(value),
-            _password.text,
-          );
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (user == null) return;
-    final shouldShow = await AppWalkthroughService().shouldShow();
-    if (!mounted) return;
-    context.go(shouldShow ? '/onboarding' : '/home');
+    try {
+      final value = _identifier.text.trim();
+      final user = value.contains('@')
+          ? await authManager.signInWithEmail(context, value, _password.text)
+          : await authManager.signInWithPhonePassword(
+              context, normalizeZambianPhone(value), _password.text);
+      if (!mounted || user == null) return;
+      final shouldShow = await AppWalkthroughService().shouldShow();
+      if (!mounted) return;
+      context.go(shouldShow ? '/onboarding' : '/home');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override

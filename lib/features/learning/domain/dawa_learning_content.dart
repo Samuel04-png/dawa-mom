@@ -107,7 +107,7 @@ abstract final class DawaLearningCatalog {
           'Learn what happens in your body and how to care for yourself and your growing baby.',
       category: 'Pregnancy basics',
       type: DawaLearningType.audio,
-      durationMinutes: 11,
+      durationMinutes: 2,
       asset: DawaArtwork.pregnancyPhone,
       visualAssetId: 'pregnancy_basics_01',
       icon: Icons.headphones_rounded,

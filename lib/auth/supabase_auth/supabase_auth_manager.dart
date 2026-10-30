@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../auth_manager.dart';
 import '/backend/backend.dart';
 import '/backend/supabase/supabase_config.dart';
+import '/backend/supabase/supabase_session_recovery.dart';
 import 'supabase_user_provider.dart';
 
 export '../base_auth_user_provider.dart';
@@ -364,6 +365,12 @@ class SupabaseAuthManager extends AuthManager
     } on supabase.AuthException catch (e) {
       _showAuthError(context, _friendlyError(e));
       return null;
+    } on TimeoutException {
+      _showAuthError(context, authServiceUnavailableMessage);
+      return null;
+    } on http.ClientException {
+      _showAuthError(context, authServiceUnavailableMessage);
+      return null;
     }
   }
 
@@ -415,6 +422,7 @@ class SupabaseAuthManager extends AuthManager
   }
 
   String _friendlyError(supabase.AuthException e) {
+    if (isTemporaryAuthFailure(e)) return authServiceUnavailableMessage;
     final message = e.message.toLowerCase();
     if (message.contains('already registered') ||
         message.contains('already exists')) {

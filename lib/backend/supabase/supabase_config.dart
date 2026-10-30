@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
+import 'supabase_session_recovery.dart';
 
 const supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
@@ -28,12 +30,9 @@ Future<void> _refreshPersistedSession() async {
   }
 
   try {
-    final response =
-        await auth.refreshSession().timeout(const Duration(seconds: 8));
-    if (response.session == null) {
-      await auth.signOut(scope: SignOutScope.local);
-    }
-  } catch (_) {
-    await auth.signOut(scope: SignOutScope.local);
+    await refreshSupabaseSession(auth);
+  } catch (error) {
+    // Invalid refresh tokens are cleared by GoTrue. An outage is not a logout.
+    debugPrint('Persisted session refresh unavailable (${error.runtimeType}).');
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '/backend/backend.dart';
+import '/backend/supabase/supabase_session_recovery.dart';
 import 'supabase_auth_manager.dart';
 
 export 'supabase_auth_manager.dart';
@@ -35,7 +36,8 @@ bool get currentUserEmailVerified => currentUser?.emailVerified ?? false;
 String? _currentJwtToken =
     supabase.Supabase.instance.client.auth.currentSession?.accessToken;
 
-final jwtTokenStream = supabase.Supabase.instance.client.auth.onAuthStateChange
+final jwtTokenStream = recoverableAuthStateChanges(
+        supabase.Supabase.instance.client.auth.onAuthStateChange)
     .map((state) => _currentJwtToken = state.session?.accessToken)
     .asBroadcastStream();
 
@@ -50,8 +52,8 @@ Stream<UserRecord?> _authenticatedUserStream() async* {
   final initialUser = supabase.Supabase.instance.client.auth.currentUser;
   yield await _loadUserRecord(initialUser);
 
-  await for (final state
-      in supabase.Supabase.instance.client.auth.onAuthStateChange) {
+  await for (final state in recoverableAuthStateChanges(
+      supabase.Supabase.instance.client.auth.onAuthStateChange)) {
     yield await _loadUserRecord(state.session?.user);
   }
 }
