@@ -7,13 +7,24 @@ import 'package:dawa_mom/components/responsive/responsive_home_dashboard.dart';
 import 'package:dawa_mom/design_system/dawa_design_tokens.dart';
 import 'package:dawa_mom/features/appointments/data/appointment_repository.dart';
 import 'package:dawa_mom/features/appointments/domain/appointment.dart';
+import 'package:dawa_mom/features/appointments/presentation/dawa_care_page.dart';
 import 'package:dawa_mom/features/care_plan/data/dawa_care_plan_repository.dart';
 import 'package:dawa_mom/features/learning/data/dawa_learning_repository.dart';
+import 'package:dawa_mom/features/learning/presentation/dawa_learn_page.dart';
+import 'package:dawa_mom/features/period_tracker/presentation/dawa_cycle_tracker_page.dart';
 import 'package:dawa_mom/features/profile/data/health_profile_repository.dart';
+import 'package:dawa_mom/navbar/home/home_widget.dart' show AIChatModal;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() => runApp(const _HomeBatchTwoCaptureApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'http://127.0.0.1:54321',
+    anonKey: 'local-anon-key-for-demo-capture',
+  );
+  runApp(const _HomeBatchTwoCaptureApp());
+}
 
 final _client = SupabaseClient(
   'http://localhost:54321',
@@ -21,7 +32,7 @@ final _client = SupabaseClient(
   authOptions: const AuthClientOptions(autoRefreshToken: false),
 );
 
-enum _PreviewState { period, pregnancy, appointment, general }
+enum _PreviewState { period, cycle, pregnancy, appointment, general }
 
 class _HomeBatchTwoCaptureApp extends StatelessWidget {
   const _HomeBatchTwoCaptureApp();
@@ -29,15 +40,24 @@ class _HomeBatchTwoCaptureApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = switch (Uri.base.queryParameters['state']) {
+      'cycle' => _PreviewState.cycle,
       'pregnancy' => _PreviewState.pregnancy,
       'appointment' => _PreviewState.appointment,
       'general' => _PreviewState.general,
       _ => _PreviewState.period,
     };
+    final page = Uri.base.queryParameters['page'] ?? 'home';
+    final pageIndex = switch (page) {
+      'track' => 1,
+      'care' => 2,
+      'learn' => 3,
+      _ => 0,
+    };
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       theme: DawaTheme.light(),
       home: DawaMomResponsiveShell(
-        currentIndex: 0,
+        currentIndex: pageIndex,
         destinations: const [
           DawaMomShellDestination(
             label: 'Home',
@@ -67,14 +87,51 @@ class _HomeBatchTwoCaptureApp extends StatelessWidget {
         ],
         onDestinationSelected: (_) {},
         onLogout: () async {},
-        child: DawaMomResponsiveDashboard(
-          onOpenRudo: () {},
-          appointmentRepository: _PreviewAppointments(state),
-          carePlanRepository: _PreviewCarePlan(),
-          healthProfileRepository: _PreviewProfile(state),
-          periodTrackerService: _PreviewPeriods(state),
-          learningRepository: _PreviewLearning(),
+        rudoChatBuilder: (_, controller) => AIChatModal(
+          userPhoneNumber: '+260 97 000 0000',
+          userName: 'Chipo Banda',
+          onClose: controller.close,
+          onMinimize: controller.minimize,
         ),
+        child: switch (page) {
+          'track' => DawaCycleTrackerPage(
+              service: _PreviewPeriods(state),
+              profileRepository: _PreviewProfile(state),
+            ),
+          'care' => DawaCarePage(
+              initialAppointments: state == _PreviewState.appointment
+                  ? [
+                      Appointment(
+                        id: 'visit-1',
+                        motherId: 'mother-1',
+                        patientId: 'patient-1',
+                        clinicianId: 'clinician-1',
+                        clinicId: 'clinic-1',
+                        date: DateTime.now().add(const Duration(days: 5)),
+                        startTime: '10:00',
+                        endTime: '10:30',
+                        appointmentType: 'antenatal_checkup',
+                        status: 'confirmed',
+                        source: 'dawa_mom',
+                        createdAt: DateTime.now(),
+                        integrationStatus: 'confirmed',
+                        clinicName: 'Kalingalinga Clinic',
+                      ),
+                    ]
+                  : const [],
+              initialClinics: const [],
+              initialCareItems: const [],
+            ),
+          'learn' => DawaLearnPage(repository: _PreviewLearning()),
+          _ => DawaMomResponsiveDashboard(
+              onOpenRudo: () {},
+              appointmentRepository: _PreviewAppointments(state),
+              carePlanRepository: _PreviewCarePlan(),
+              healthProfileRepository: _PreviewProfile(state),
+              periodTrackerService: _PreviewPeriods(state),
+              learningRepository: _PreviewLearning(),
+            ),
+        },
       ),
     );
   }
@@ -163,6 +220,21 @@ class _PreviewPeriods extends PeriodTrackerService {
   _PreviewPeriods(this.state);
 
   final _PreviewState state;
+
+  @override
+  Future<Map<String, dynamic>?> loadUserSettings() async {
+    if (state == _PreviewState.general) return null;
+    final now = DateTime.now();
+    final periodStart = state == _PreviewState.period
+        ? DateTime(now.year, now.month, now.day - 2)
+        : DateTime(now.year, now.month, now.day - 14);
+    return {
+      'averageCycleLength': 28,
+      'periodLength': 5,
+      'isRegular': true,
+      'lastPeriodStart': periodStart,
+    };
+  }
 
   @override
   Future<List<PeriodRecord>> loadPeriodHistory() async {
